@@ -1,0 +1,87 @@
+{% extends "shell/base.html" %}
+
+{% block title %}ParkOps / Registro{% endblock %}
+{% block page_title %}Parking{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h6 mb-0">Registro de entrada</h2>
+    <a href="{% url 'search_plate' %}" class="btn btn-dark rounded-pill">
+        <i class="bi bi-arrow-left"></i>
+        Ir atrás
+    </a>
+</div>
+
+<!-- Card principal -->
+<div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+
+    <div class="card-body p-4">
+
+        <!-- Mensual -->
+        {% if is_monthly %}
+        <div class="alert alert-success d-flex align-items-center">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            <div>Suscripción mensual activa</div>
+        </div>
+        {% endif %}
+
+        <!-- Placa -->
+        <div class="text-center mb-3">
+            <div class="text-muted small">Vehículo</div>
+            <div class="display-6 fw-bold tracking-wide">
+                {{ plate|default:form.initial.plate }}
+            </div>
+        </div>
+
+<!-- Hora de entrada -->
+<div class="bg-black-custom rounded-4 p-3 text-center mb-3">
+    <!-- Fecha -->
+    <div class="text-muted small mb-1">
+        {% now "d/m/Y" %}
+    </div>
+
+    <!-- Hora destacada -->
+    <div class="fw-bold display-5 text-success">
+        {% now "h:i A" %}
+    </div>
+</div>
+
+
+        <!-- Form -->
+        <form method="POST">
+            {% csrf_token %}
+
+            <!-- Tarifa (select real) -->
+            {% if form.fee %}
+            <div class="mb-3">
+                <label class="form-label small text-muted">
+                    Tarifa aplicada
+                </label>
+
+                <div class="bg-black-custom rounded-3 p-2 d-flex align-items-center input-group-lg">
+                    <i class="bi bi-cash-coin fs-5 text-success me-2"></i>
+                    {{ form.fee }}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Hidden placa -->
+            <input type="hidden" name="plate" value="{{ plate|default:form.initial.plate }}">
+
+            <button class="btn btn-success w-100 rounded-pill shadow-sm">
+                <i class="bi bi-box-arrow-in-right me-1"></i>
+                Confirmar entrada
+            </button>
+        </form>
+
+    </div>
+</div>
+
+<!-- Tip -->
+<div class="text-center small text-muted mt-3">
+    Seleccione la tarifa si aplica y toque para registrar la entrada
+</div>
+
+{% endblock %}

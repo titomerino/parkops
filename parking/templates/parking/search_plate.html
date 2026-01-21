@@ -1,0 +1,92 @@
+{% extends "shell/base.html" %}
+
+{% block title %}ParkOps / Buscar Vehículo{% endblock %}
+{% block page_title %}Parking{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h6 mb-0">Buscar vehículo</h2>
+    <a href="{% url 'dashboard' %}" class="btn btn-dark rounded-pill">
+        <i class="bi bi-arrow-left"></i>
+        Ir atras
+    </a>
+</div>
+
+<!-- Card principal -->
+<div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+
+    <div class="card-body p-4">
+
+        <!-- Icono -->
+        <div class="text-center mb-3">
+            <i class="bi bi-car-front-fill display-5 text-info"></i>
+        </div>
+
+        <!-- Input -->
+        <form method="POST">
+            {% csrf_token %}
+
+            <div class="mb-3">
+                <label class="form-label small text-muted">
+                    Placa del vehículo
+                </label>
+
+                <div class="input-group input-group-lg">
+                    <span class="input-group-text bg-black-custom border-0 text-info">
+                        <i class="bi bi-upc-scan"></i>
+                    </span>
+                    {{ form.plate }}
+                </div>
+
+                {% if form.plate.help_text %}
+                <div class="form-text text-muted mt-1">
+                    {{ form.plate.help_text }}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Botón -->
+            <button type="submit"
+                    class="btn btn-success w-100 rounded-pill shadow-sm">
+                <i class="bi bi-search me-1"></i>
+                Buscar vehículo
+            </button>
+
+        </form>
+
+    </div>
+</div>
+
+<!-- Barra inferior -->
+<div class="card bg-dark text-light border-0 shadow-lg rounded-4 mt-3">
+    <div class="card-body py-2 px-3">
+
+        <div class="d-flex justify-content-between align-items-center">
+
+            <!-- Historial -->
+            <a href="{% url 'record' %}"
+               class="d-flex flex-column align-items-center text-decoration-none text-light w-100">
+
+                <i class="bi bi-clock-history fs-4 text-info"></i>
+                <span class="small mt-1">Historial</span>
+            </a>
+
+            <!-- Separador -->
+            <div class="vr bg-secondary"></div>
+
+            <!-- Configuración -->
+            <a href="{% url 'search_plate' %}"
+               class="d-flex flex-column align-items-center text-decoration-none text-light w-100">
+
+                <i class="bi bi-gear-fill fs-4 text-warning"></i>
+                <span class="small mt-1">Configuración</span>
+            </a>
+
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}

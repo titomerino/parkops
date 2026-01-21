@@ -1,0 +1,232 @@
+{% extends "shell/base.html" %}
+
+{% block title %}ParkOps / Historial{% endblock %}
+{% block page_title %}Historial de Parqueo{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <small class="text-muted">Registros del día</small>
+        <h2 class="h5 mb-0">{{ today }}</h2>
+    </div>
+
+    <a href="{% url 'search_plate' %}" class="btn btn-dark rounded-pill">
+        <i class="bi bi-arrow-left"></i>
+        Ir atras
+    </a>
+</div>
+
+<!-- 🎛️ Filtros (Tarjeta estilo wallet) -->
+<div class="card bg-dark text-light border-0 shadow-lg rounded-4 mb-4">
+
+    <div class="card-body py-2 px-3">
+
+        <div class="dropdown w-100">
+            <button class="btn btn-outline-light w-100 rounded-3"
+                    type="button"
+                    id="filterDropdown"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false">
+                <i class="bi bi-sliders me-1"></i>
+                Filtros de búsqueda
+            </button>
+
+            <div class="dropdown-menu dropdown-menu-dark p-3 w-100">
+
+                <form method="get">
+
+                    <!-- Placa -->
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">
+                            Placa del vehículo
+                        </label>
+                        <input type="text"
+                               name="plate"
+                               class="form-control form-control-sm"
+                               placeholder="Ej: P123ABC"
+                               value="{{ request.GET.plate }}">
+                    </div>
+
+                    <!-- Fecha -->
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">
+                            Fecha exacta
+                        </label>
+                        <input type="date"
+                               name="date"
+                               class="form-control form-control-sm"
+                               value="{{ request.GET.date }}">
+                    </div>
+
+                    <!-- Rango -->
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">
+                            Rango de fechas
+                        </label>
+
+                        <div class="row g-2">
+                            <div class="col">
+                                <input type="date"
+                                       name="start"
+                                       class="form-control form-control-sm"
+                                       placeholder="Desde"
+                                       value="{{ request.GET.start }}">
+                            </div>
+
+                            <div class="col">
+                                <input type="date"
+                                       name="end"
+                                       class="form-control form-control-sm"
+                                       placeholder="Hasta"
+                                       value="{{ request.GET.end }}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Estado -->
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">
+                            Estado del registro
+                        </label>
+                        <select name="state" class="form-select form-select-sm">
+                            <option value="">Todos</option>
+                            <option value="1" {% if request.GET.state == "1" %}selected{% endif %}>
+                                En parqueo
+                            </option>
+                            <option value="0" {% if request.GET.state == "0" %}selected{% endif %}>
+                                Finalizado
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'record' %}"
+                           class="btn btn-sm btn-outline-secondary">
+                            Limpiar
+                        </a>
+                        <button type="submit"
+                                class="btn btn-sm btn-primary">
+                            Aplicar filtros
+                        </button>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- 🚗 Lista de historial -->
+<div class="row g-3">
+{% for entry in entries %}
+    <div class="col-12">
+
+        <div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+
+            <!-- Card táctil -->
+            <div class="card-body py-2 px-3"
+                 role="button"
+                 data-bs-toggle="collapse"
+                 data-bs-target="#details-{{ entry.id }}"
+                 aria-expanded="false">
+
+                <!-- Fila principal -->
+                <div class="d-flex align-items-center justify-content-between">
+
+                    <!-- Izquierda -->
+                    <div class="d-flex align-items-center">
+                        <div class="bg-info bg-opacity-10 rounded-circle p-2 me-2">
+                            <i class="bi bi-car-front-fill text-info"></i>
+                        </div>
+
+                        <div>
+                            <div class="d-flex align-items-center">
+                                <strong class="me-2">{{ entry.plate }}</strong>
+
+                                <span class="rounded-circle d-inline-block"
+                                      style="width:8px; height:8px;
+                                      background-color: {% if entry.state %}#facc15{% else %}#6b7280{% endif %};">
+                                </span>
+
+                                {% if entry.amount == 0 %}
+                                    <span class="badge bg-success ms-2">
+                                        Mensual
+                                    </span>
+                                {% endif %}
+                            </div>
+
+                            <small class="text-muted">
+                                {% if entry.state %}En parqueo{% else %}Finalizado{% endif %}
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Derecha -->
+                    <div class="text-end">
+                        <small class="text-muted">Monto</small>
+                        <div class="fw-bold fs-5">
+                            {% if entry.amount == 0 %}
+                                $0.00
+                            {% else %}
+                                ${{ entry.amount|floatformat:2 }}
+                            {% endif %}
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Detalles -->
+                <div class="collapse mt-2" id="details-{{ entry.id }}">
+                    <div class="d-flex justify-content-between small flex-wrap pt-2 border-top">
+
+                        <div class="me-3">
+                            <span class="text-muted">Entrada</span><br>
+                            <strong>
+                                {{ entry.entry_date_hour|date:"H:i d/m/Y" }}
+                            </strong>
+                        </div>
+
+                        <div class="me-3">
+                            <span class="text-muted">Salida</span><br>
+                            <strong>
+                                {% if entry.departure_date_hour %}
+                                    {{ entry.departure_date_hour|date:"H:i d/m/Y" }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span class="text-muted">Tiempo</span><br>
+                            <strong>
+                                {% if entry.hours %}
+                                    {{ entry.hours }}h
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </strong>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+{% empty %}
+    <div class="col-12">
+        <div class="card bg-dark text-light border-0 shadow-sm rounded-4">
+            <div class="card-body text-center text-muted">
+                No hay registros para los filtros seleccionados
+            </div>
+        </div>
+    </div>
+{% endfor %}
+</div>
+
+{% endblock %}

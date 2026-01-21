@@ -1,0 +1,9 @@
+# Archivos de caché de Python
+*.pyc
+__pycache__/
+
+# Archivos estáticos generados y bases de datos locales
+static/
+media/
+data/
+.env

@@ -1,0 +1,32 @@
+Django==6.0
+djangorestframework==3.16.1
+
+# Autenticación JWT
+djangorestframework-simplejwt>=5.3
+
+# CORS (para que Angular/Ionic pueda llamar tu API)
+django-cors-headers>=4.3
+
+# Leer variables de entorno
+python-dotenv>=1.0
+
+# Base de datos
+psycopg2-binary>=2.9       # PostgreSQL
+# mysqlclient>=2.2        # MySQL (si usas esa DB)
+# SQLite no necesita driver extra
+
+# Utilidades
+requests>=2.32
+Pillow>=10.0              # manejo de imágenes, thumbnails
+
+# Filtros para DRF (opcional)
+django-filter>=24.2
+
+# Deployment / producción
+gunicorn>=22.0
+whitenoise>=6.7
+
+# Desarrollo y testing
+pytest>=8.0
+pytest-django>=4.8
+coverage>=7.5

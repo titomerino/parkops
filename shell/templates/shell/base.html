@@ -1,0 +1,90 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ParkOps{% endblock %}</title>
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="{% static 'bootstrap/css/bootstrap.min.css' %}">
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css"
+      rel="stylesheet"
+    >
+    <style>
+      .card.bg-black-custom { background-color: #1f2a44 !important;}
+      .card {background-color: #0d1117;}
+    </style>
+
+    {% block extra_css %}{% endblock %}
+  </head>
+  <body style="background-color: #0d1117; color: white;">
+
+   <!-- Navbar -->
+<nav class="navbar navbar-dark shadow-sm px-3 py-2 border-bottom border-dark"
+     style="background: linear-gradient(180deg, #0d1117 0%, #0b0f14 100%);">
+
+    <div class="container-fluid d-flex align-items-center justify-content-between">
+
+        <!-- 🏷️ Título -->
+        <div class="d-flex align-items-center">
+            <i class="bi bi-grid-1x2-fill text-info me-2 fs-5"></i>
+            <span class="fw-semibold fs-6 tracking-wide">
+                {% block page_title %}{% endblock %}
+            </span>
+        </div>
+
+        <!-- 👤 Usuario -->
+        <div class="dropdown">
+            <button class="btn btn-dark rounded-pill d-flex align-items-center px-3 py-1"
+                    type="button"
+                    id="userMenu"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false">
+
+                <i class="bi bi-person-fill text-info"></i>
+
+                <span class="d-none d-md-inline small fw-semibold">
+                    {{ request.user.username|default:"Usuario" }}
+                </span>
+
+                <i class="bi bi-chevron-down ms-2 small"></i>
+            </button>
+
+            <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark shadow-lg rounded-3">
+
+                <li class="dropdown-header small text-muted">
+                    Sesión activa
+                </li>
+
+                <li>
+                    <hr class="dropdown-divider">
+                </li>
+
+                <li>
+                    <a class="dropdown-item d-flex align-items-center text-danger"
+                       href="{% url 'search_plate' %}">
+                        <i class="bi bi-box-arrow-right me-2"></i>
+                        Cerrar sesión
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+    </div>
+</nav>
+<!-- Navbar end -->
+
+
+    <div class="container mt-4 px-4">
+      {% block content %}{% endblock %}
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+    <script src="{% static 'htmx/htmx.min.js' %}"></script>
+
+    {% block extra_js %}{% endblock %}
+  </body>
+</html>

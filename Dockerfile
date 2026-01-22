@@ -1,24 +1,46 @@
-# Imagen base oficial de Python
-FROM python:3.12-slim
+# ======================
+# Base
+# ======================
+FROM python:3.12-slim AS base
 
-# Evitar que Python genere archivos .pyc y usar bufferizado
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+# Variables de entorno Python
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-# Crear directorio de la app
+# Directorio de trabajo
 WORKDIR /app
 
-# Instalar dependencias del sistema necesarias
+# Dependencias del sistema
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
+    postgresql-client \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements
+# Instalar dependencias Python
 COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Instalar dependencias de Python
-RUN pip install --upgrade pip && pip install -r requirements.txt
-
-# Copiar el resto del código
+# Copiar proyecto
 COPY . .
+
+# ======================
+# Local (Docker Compose)
+# ======================
+FROM base AS local
+EXPOSE 8000
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+
+# ======================
+# Production (Railway)
+# ======================
+FROM base AS production
+
+# Copiar entrypoint
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 8000
+CMD ["/entrypoint.sh"]

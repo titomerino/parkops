@@ -3,8 +3,7 @@
 __pycache__/
 
 # Archivos estáticos generados y bases de datos locales
-static/
 media/
 data/
 .env
-staticfiles
+staticfiles/

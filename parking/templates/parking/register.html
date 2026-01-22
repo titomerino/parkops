@@ -14,6 +14,8 @@
     </a>
 </div>
 
+{% include 'parking/partials/_parking_messages_alert.html' with messages=messages %}
+
 <!-- Card principal -->
 <div class="card bg-dark text-light border-0 shadow-lg rounded-4">
 
@@ -21,7 +23,7 @@
 
         <!-- Mensual -->
         {% if is_monthly %}
-        <div class="alert alert-success d-flex align-items-center">
+        <div class="alert alert-warning d-flex align-items-center">
             <i class="bi bi-check-circle-fill me-2"></i>
             <div>Suscripción mensual activa</div>
         </div>
@@ -35,25 +37,24 @@
             </div>
         </div>
 
-<!-- Hora de entrada -->
-<div class="bg-black-custom rounded-4 p-3 text-center mb-3">
-    <!-- Fecha -->
-    <div class="text-muted small mb-1">
-        {% now "d/m/Y" %}
-    </div>
+        <!-- Hora de entrada -->
+        <div class="bg-black-custom rounded-4 p-3 text-center mb-3">
+            <!-- Fecha -->
+            <div class="text-muted small mb-1">
+                {% now "d/m/Y" %}
+            </div>
 
-    <!-- Hora destacada -->
-    <div class="fw-bold display-5 text-success">
-        {% now "h:i A" %}
-    </div>
-</div>
-
+            <!-- Hora destacada -->
+            <div class="fw-bold display-5 text-success">
+                {% now "h:i A" %}
+            </div>
+        </div>
 
         <!-- Form -->
         <form method="POST">
             {% csrf_token %}
 
-            <!-- Tarifa (select real) -->
+            <!-- Tarifa -->
             {% if form.fee %}
             <div class="mb-3">
                 <label class="form-label small text-muted">

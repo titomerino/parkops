@@ -55,7 +55,8 @@ class Entry(models.Model):
             active=True
         ).exists()
 
-        end_time = now()
+        # Determinar el tiempo final
+        end_time = self.departure_date_hour if self.departure_date_hour else now()
         delta = end_time - self.entry_date_hour
 
         # Horas redondeadas hacia arriba

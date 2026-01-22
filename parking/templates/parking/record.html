@@ -119,6 +119,8 @@
     </div>
 </div>
 
+{% include 'parking/partials/_parking_messages_alert.html' with messages=messages %}
+
 <!-- 🚗 Lista de historial -->
 <div class="row g-3">
 {% for entry in entries %}

@@ -1,6 +1,9 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.timezone import now, localtime
 from django.db.models import F, ExpressionWrapper, DurationField
+from django.db.models import Sum
+from django.contrib import messages
+
 from math import ceil
 
 from .models import Fee, Entry, Configuration, MonthlyPlate
@@ -9,6 +12,10 @@ from .forms import EntryForm, PlateSearchForm, EntryExitForm
 
 def register(request, plate):
     """Vista que nos lleva a la pantalla de registro de entradas"""
+
+    if not plate:
+        messages.error(request, "No se proporcionó ninguna placa para registrar.")
+        return redirect('search_plate')
 
     # Verifica si la placa tiene suscripción activa
     is_monthly = MonthlyPlate.objects.filter(
@@ -19,25 +26,21 @@ def register(request, plate):
     if request.method == 'POST':
         form = EntryForm(request.POST)
 
-        # Por seguridad: si es mensual, ignora fee aunque venga en POST
         if is_monthly and 'fee' in form.fields:
             form.fields.pop('fee')
 
         if form.is_valid():
             entry = form.save(commit=False)
 
-            # Limpia fee si es mensual
             if is_monthly:
                 entry.fee = None
 
             entry.save()
+            messages.success(request, f"La entrada para {entry.plate} se guardó correctamente.")
             return redirect('search_plate')
     else:
-        form = EntryForm(initial={
-            'plate': plate
-        })
+        form = EntryForm(initial={'plate': plate})
 
-        # Oculta fee si es mensual
         if is_monthly and 'fee' in form.fields:
             form.fields.pop('fee')
 
@@ -75,6 +78,7 @@ def departure(request, pk):
             entry.fee = None
 
         entry.save()
+        messages.success(request, f"La salida para {entry.plate} se guardó correctamente.")
         return redirect('search_plate')
 
     # Mostrar datos en solo lectura
@@ -129,22 +133,18 @@ def record(request):
 
     today = localtime(now()).date()
 
-    # Traer todas las entradas del día
     entries = Entry.objects.filter(
         entry_date_hour__date=today
     ).order_by('-entry_date_hour')
 
-    # Calcular horas y monto
     current_time = now()
 
     for e in entries:
-        # Usa hora actual si aún no ha salido
         end_time = e.departure_date_hour or current_time
 
         delta = end_time - e.entry_date_hour
         e.hours = ceil(delta.total_seconds() / 3600)
 
-        # Si no hay tarifa, monto es 0
         if e.fee:
             e.amount = e.hours * float(e.fee.amount)
         else:
@@ -154,3 +154,31 @@ def record(request):
         'entries': entries,
         'today': today
     })
+
+
+def get_daily_income():
+    """
+    Retorna un diccionario con los ingresos del día:
+    - total_daily_income: ingresos de entradas normales
+    - total_monthly_income: ingresos de suscripciones activas
+    """
+    today = localtime(now()).date()
+
+    # Entradas normales (no mensuales)
+    normal_entries = Entry.objects.filter(
+        entry_date_hour__date=today
+    ).exclude(
+        plate__in=MonthlyPlate.objects.filter(active=True).values_list('plate', flat=True)
+    )
+
+    total_daily_income = sum(e.calculate_amount()[1] for e in normal_entries)
+
+    # Ingresos por suscripciones activas
+    total_monthly_income = MonthlyPlate.objects.filter(active=True).aggregate(
+        total=Sum('monthly_amount')
+    )['total'] or 0
+
+    return {
+        "total_daily_income": total_daily_income,
+        "total_monthly_income": total_monthly_income
+    }

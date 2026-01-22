@@ -14,6 +14,8 @@
     </a>
 </div>
 
+{% include 'parking/partials/_parking_messages_alert.html' with messages=messages %}
+
 <!-- Card principal -->
 <div class="card bg-dark text-light border-0 shadow-lg rounded-4">
 
@@ -21,7 +23,7 @@
 
         <!-- Mensual -->
         {% if is_monthly %}
-        <div class="alert alert-success d-flex align-items-center">
+        <div class="alert alert-warning d-flex align-items-center">
             <i class="bi bi-check-circle-fill me-2"></i>
             <div>Suscripción mensual activa</div>
         </div>

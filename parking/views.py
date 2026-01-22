@@ -1,8 +1,8 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.timezone import now, localtime
-from django.db.models import F, ExpressionWrapper, DurationField
 from django.db.models import Sum
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 
 from math import ceil
 
@@ -10,7 +10,8 @@ from .models import Fee, Entry, Configuration, MonthlyPlate
 from .forms import EntryForm, PlateSearchForm, EntryExitForm
 
 
-def register(request, plate):
+@login_required(login_url='login')
+def register(request, plate=None):
     """Vista que nos lleva a la pantalla de registro de entradas"""
 
     if not plate:
@@ -51,6 +52,7 @@ def register(request, plate):
     })
 
 
+@login_required(login_url='login')
 def departure(request, pk):
     """ Salida del parqueo """
     entry = get_object_or_404(Entry, pk=pk)
@@ -100,6 +102,7 @@ def departure(request, pk):
     })
 
 
+@login_required(login_url='login')
 def search_plate(request):
     """Vista principal: buscar placa y decidir flujo"""
 
@@ -128,6 +131,7 @@ def search_plate(request):
     })
 
 
+@login_required(login_url='login')
 def record(request):
     """ Pagina de historial """
 

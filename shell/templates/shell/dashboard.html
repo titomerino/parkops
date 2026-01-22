@@ -17,19 +17,7 @@
 <div class="row g-3 mb-4">
 
     <!-- Parqueo diario -->
-    <div class="col-6 col-lg-4">
-        <div class="card bg-dark text-light border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body d-flex align-items-center justify-content-between py-3 px-3">
-                <div>
-                    <small class="text-muted">Parqueo</small>
-                    <div class="fw-semibold fs-5">
-                        ${{ parking_total|default:"0.00" }}
-                    </div>
-                </div>
-                <i class="bi bi-car-front fs-4 text-info"></i>
-            </div>
-        </div>
-    </div>
+    {% include 'parking/partials/_parking_total_today_card.html' with parking_total=total_daily_income %}
 
     <!-- Baños diarios -->
     <div class="col-6 col-lg-4">
@@ -47,19 +35,7 @@
     </div>
 
     <!-- Ingreso mensual parqueo -->
-    <div class="col-6 col-lg-4">
-        <div class="card bg-dark text-light border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body d-flex align-items-center justify-content-between py-3 px-3">
-                <div>
-                    <small class="text-muted">Parqueo (Mensual)</small>
-                    <div class="fw-semibold fs-5">
-                        ${{ parking_month_total|default:"0.00" }}
-                    </div>
-                </div>
-                <i class="bi bi-calendar-month fs-4 text-warning"></i>
-            </div>
-        </div>
-    </div>
+    {% include 'parking/partials/_parking_total_month_card.html' with parking_month_total=total_monthly_income %}
 
     <!-- Ingreso mensual baños -->
     <div class="col-6 col-lg-4">
@@ -86,18 +62,7 @@
 <div class="row g-3">
 
     <!-- Parking -->
-    <div class="col-12 col-md-6 col-lg-4">
-        <a href="{% url 'search_plate' %}"
-           class="card bg-success bg-opacity-75 text-light border-0 shadow-sm rounded-4 text-decoration-none h-100">
-            <div class="card-body d-flex align-items-center py-2 px-3">
-                <i class="bi bi-p-square fs-4 me-3"></i>
-                <div>
-                    <div class="fw-semibold">Parqueo</div>
-                    <small class="opacity-75">Entradas y salidas</small>
-                </div>
-            </div>
-        </a>
-    </div>
+    {% include 'parking/partials/_parking_principal_access_button.html' %}
 
     <!-- Baños -->
     <div class="col-12 col-md-6 col-lg-4">

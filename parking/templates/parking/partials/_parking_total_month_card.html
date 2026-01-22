@@ -2,12 +2,12 @@
     <div class="card bg-dark text-light border-0 shadow-sm rounded-4 h-100">
         <div class="card-body d-flex align-items-center justify-content-between py-3 px-3">
             <div>
-                <small class="text-muted">Parqueo</small>
+                <small class="text-muted">Parqueo (Mensual)</small>
                 <div class="fw-semibold fs-5">
-                    ${{ parking_total|floatformat:2|default:"0.00" }}
+                    ${{ parking_month_total|default:"0.00" }}
                 </div>
             </div>
-            <i class="bi bi-car-front fs-4 text-info"></i>
+            <i class="bi bi-calendar-month fs-4 text-warning"></i>
         </div>
     </div>
 </div>

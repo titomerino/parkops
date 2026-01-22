@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 
 urlpatterns = [
+    path('', include('shell.urls')),   # 👈 raíz del sistema
     path('admin/', admin.site.urls),
     path('parking/', include('parking.urls')),
-    path('dashboard/', include('shell.urls')),   # 👈 raíz del sistema
 ]

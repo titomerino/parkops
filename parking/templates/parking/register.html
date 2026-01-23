@@ -8,10 +8,6 @@
 <!-- Header -->
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="h6 mb-0">Registro de entrada</h2>
-    <a href="{% url 'search_plate' %}" class="btn btn-dark rounded-pill">
-        <i class="bi bi-arrow-left"></i>
-        Ir atrás
-    </a>
 </div>
 
 {% include 'shell/partials/_messages_alert.html' with messages=messages %}
@@ -85,4 +81,8 @@
     Seleccione la tarifa si aplica y toque para registrar la entrada
 </div>
 
+{% endblock %}
+
+{% block menu_bottom %}
+    {% include 'parking/partials/_parking_menu_bottom.html' %}
 {% endblock %}

@@ -140,7 +140,7 @@ const cameraBox = document.querySelector("[role='button']");
 let stream = null;
 
 // Formato placa genérico
-const plateRegex = /[A-Z]{2,3}[- ]?[0-9]{3,4}/;
+const plateRegex = /[A-Z]{1,4}-?[0-9]{3,5}/;
 
 // -----------------------------
 // UI BASE
@@ -332,13 +332,12 @@ async function runOCR(imageData) {
 
         const rawText = result.data.text
             .toUpperCase()
-            .replace(/[^A-Z0-9- ]/g, " ")
-            .replace(/\s+/g, " ");
+            .replace(/[^A-Z0-9-]/g, "")   // elimina TODO menos letras/números/guiones
 
-        const match = rawText.match(plateRegex);
+        const match = rawText.match(new RegExp(plateRegex, "g"));
 
-        if (match) {
-            const plate = match[0].replace(/\s/g, "").replace("--", "-");
+        if (match && match.length) {
+            const plate = match.sort((a, b) => b.length - a.length)[0];
             plateInput.value = plate;
 
             if (navigator.vibrate) {

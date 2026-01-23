@@ -11,24 +11,69 @@
 <div class="card bg-dark text-light border-0 shadow-lg rounded-4">
 
     <div class="card-body">
-        <!-- Área de cámara 16:9 -->
-        <div class="mb-3">
-            <div class="ratio ratio-16x9">
-                <div class="bg-black-custom border border-secondary rounded-4
-                            d-flex flex-column justify-content-center align-items-center
-                            text-center"
-                    role="button"
-                    style="cursor: pointer;">
+<!-- Área de cámara -->
+<div class="mb-3">
 
-                    <i class="bi bi-camera-video-fill fs-1 text-info mb-2"></i>
+    <div id="cameraBox"
+        class="bg-black-custom border border-secondary rounded-4
+               d-flex flex-column justify-content-center align-items-center
+               text-center position-relative overflow-hidden"
+        role="button"
+        style="cursor: pointer; height: 300px;">
 
-                    <div class="small text-muted">
-                        Toca aquí para escanear con cámara
-                    </div>
-
-                </div>
+        <!-- Placeholder -->
+        <div id="cameraPlaceholder">
+            <i class="bi bi-camera-video-fill fs-1 text-info mb-2"></i>
+            <div class="small text-muted">
+                Toca aquí para activar la cámara
             </div>
         </div>
+
+        <!-- Video -->
+        <video id="cameraVideo"
+               autoplay
+               playsinline
+               class="w-100 h-100 d-none"
+               style="object-fit: cover;">
+        </video>
+
+        <!-- Imagen capturada -->
+        <img id="capturedImage"
+             class="w-100 h-100 d-none"
+             style="object-fit: cover;" />
+
+        <!-- Botón capturar -->
+        <button id="captureBtn"
+                type="button"
+                class="btn btn-success rounded-circle position-absolute bottom-0 start-50 translate-middle-x mb-3 d-none shadow-lg"
+                style="width: 56px; height: 56px;">
+            <i class="bi bi-camera-fill fs-4"></i>
+        </button>
+
+        <!-- Botón reset -->
+        <button id="resetBtn"
+                type="button"
+                class="btn btn-danger rounded-circle position-absolute top-0 end-0 m-2 d-none shadow"
+                style="width: 42px; height: 42px;"
+                title="Reiniciar">
+            <i class="bi bi-arrow-counterclockwise"></i>
+        </button>
+
+        <!-- Botón apagar cámara -->
+        <button id="stopBtn"
+                type="button"
+                class="btn btn-warning rounded-circle position-absolute top-0 start-0 m-2 d-none shadow"
+                style="width: 42px; height: 42px;"
+                title="Desactivar cámara">
+            <i class="bi bi-camera-video-off"></i>
+        </button>
+
+    </div>
+</div>
+
+<canvas id="cameraCanvas" class="d-none"></canvas>
+
+
 
         <!-- Input -->
         <form method="POST">
@@ -49,6 +94,7 @@
                     <!-- Campo -->
                     <input type="text"
                         name="plate"
+                        id="plateInput"
                         value="{{ form.plate.value|default_if_none:'' }}"
                         class="form-control bg-dark border border-white text-light rounded-end-3"
                         placeholder="Escanear o escribir placa..."
@@ -78,4 +124,267 @@
 
 {% block menu_bottom %}
     {% include 'parking/partials/_parking_menu_bottom.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const video = document.createElement("video");
+video.setAttribute("playsinline", "");
+
+const canvas = document.createElement("canvas");
+const ctx = canvas.getContext("2d");
+
+const plateInput = document.querySelector("input[name='plate']");
+const cameraBox = document.querySelector("[role='button']");
+
+let stream = null;
+
+// Formato placa genérico
+const plateRegex = /[A-Z]{2,3}[- ]?[0-9]{3,4}/;
+
+// -----------------------------
+// UI BASE
+// -----------------------------
+function renderPlaceholder(text = "Toca aquí para activar la cámara") {
+    cameraBox.innerHTML = `
+        <div class="d-flex flex-column justify-content-center align-items-center h-100 text-center">
+            <i class="bi bi-camera-video-fill fs-1 text-info mb-2"></i>
+            <div class="small text-muted">${text}</div>
+        </div>
+    `;
+}
+
+// -----------------------------
+// INICIAR CÁMARA
+// -----------------------------
+async function startCamera() {
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: { ideal: "environment" },
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            },
+            audio: false
+        });
+
+        video.srcObject = stream;
+        await video.play();
+
+        cameraBox.innerHTML = `
+            <video autoplay class="w-100 h-100 rounded-4" style="object-fit:cover"></video>
+
+            <!-- Capturar -->
+            <button id="captureBtn"
+                class="btn btn-success position-absolute bottom-0 start-50 translate-middle-x mb-3 rounded-circle shadow"
+                style="width:56px;height:56px;">
+                <i class="bi bi-camera-fill fs-4"></i>
+            </button>
+
+            <!-- Apagar cámara -->
+            <button id="stopBtn"
+                class="btn btn-warning position-absolute top-0 start-0 m-2 rounded-circle shadow"
+                style="width:42px;height:42px;">
+                <i class="bi bi-camera-video-off"></i>
+            </button>
+
+            <!-- Reset -->
+            <button id="resetBtn"
+                class="btn btn-danger position-absolute top-0 end-0 m-2 rounded-circle shadow"
+                style="width:42px;height:42px;">
+                <i class="bi bi-arrow-counterclockwise"></i>
+            </button>
+        `;
+
+        cameraBox.querySelector("video").replaceWith(video);
+
+        document.getElementById("captureBtn")
+            .addEventListener("click", e => {
+                e.stopPropagation();
+                captureImage();
+            });
+
+        document.getElementById("stopBtn")
+            .addEventListener("click", e => {
+                e.stopPropagation();
+                stopCamera(true);
+            });
+
+        document.getElementById("resetBtn")
+            .addEventListener("click", e => {
+                e.stopPropagation();
+                resetCamera();
+            });
+
+    } catch (err) {
+        console.error(err);
+        renderPlaceholder("❌ Cámara no disponible");
+    }
+}
+
+// -----------------------------
+// CAPTURAR IMAGEN
+// -----------------------------
+function captureImage() {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = canvas.toDataURL("image/png");
+
+    stopCamera();
+    runOCR(imageData);
+}
+
+// -----------------------------
+// DETENER CÁMARA
+// -----------------------------
+function stopCamera(keepUI = false) {
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+    }
+
+    if (keepUI) {
+        renderPlaceholder("Cámara apagada — toca para reactivar");
+    }
+}
+
+// -----------------------------
+// RESET TOTAL
+// -----------------------------
+function resetCamera() {
+    stopCamera();
+    renderPlaceholder();
+}
+
+// -----------------------------
+// PREPROCESAMIENTO OCR
+// -----------------------------
+function preprocessImage(imgDataUrl) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = imgDataUrl;
+
+        img.onload = () => {
+            const c = document.createElement("canvas");
+            const x = c.getContext("2d");
+
+            const cropWidth = img.width * 0.7;
+            const cropHeight = img.height * 0.4;
+            const startX = (img.width - cropWidth) / 2;
+            const startY = (img.height - cropHeight) / 2;
+
+            c.width = cropWidth;
+            c.height = cropHeight;
+
+            x.drawImage(
+                img,
+                startX,
+                startY,
+                cropWidth,
+                cropHeight,
+                0,
+                0,
+                cropWidth,
+                cropHeight
+            );
+
+            const imgData = x.getImageData(0, 0, c.width, c.height);
+            const d = imgData.data;
+
+            for (let i = 0; i < d.length; i += 4) {
+                const gray = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
+                const bw = gray > 140 ? 255 : 0;
+                d[i] = bw;
+                d[i + 1] = bw;
+                d[i + 2] = bw;
+            }
+
+            x.putImageData(imgData, 0, 0);
+            resolve(c.toDataURL("image/png"));
+        };
+    });
+}
+
+// -----------------------------
+// OCR PRINCIPAL
+// -----------------------------
+async function runOCR(imageData) {
+    cameraBox.innerHTML = `
+        <div class="d-flex flex-column justify-content-center align-items-center h-100">
+            <div class="spinner-border text-info mb-2"></div>
+            <div class="small text-muted">Detectando placa...</div>
+        </div>
+    `;
+
+    try {
+        const processedImage = await preprocessImage(imageData);
+
+        const result = await Tesseract.recognize(
+            processedImage,
+            "eng",
+            {
+                tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-",
+                psm: 6
+            }
+        );
+
+        const rawText = result.data.text
+            .toUpperCase()
+            .replace(/[^A-Z0-9- ]/g, " ")
+            .replace(/\s+/g, " ");
+
+        const match = rawText.match(plateRegex);
+
+        if (match) {
+            const plate = match[0].replace(/\s/g, "").replace("--", "-");
+            plateInput.value = plate;
+
+            if (navigator.vibrate) {
+                navigator.vibrate([150, 80, 150]);
+            }
+
+            cameraBox.innerHTML = `
+                <div class="d-flex flex-column justify-content-center align-items-center h-100 text-center">
+                    <i class="bi bi-check-circle-fill fs-1 text-success mb-2"></i>
+                    <div class="fw-bold text-success">Placa detectada</div>
+                    <div class="small text-light mt-1">${plate}</div>
+                </div>
+            `;
+        } else {
+            cameraBox.innerHTML = `
+                <div class="d-flex flex-column justify-content-center align-items-center h-100 text-center">
+                    <i class="bi bi-exclamation-circle-fill fs-1 text-warning mb-2"></i>
+                    <div class="fw-bold text-warning">No se detectó placa</div>
+                    <div class="small text-muted mt-1">
+                        Acerca la cámara y centra la placa
+                    </div>
+                </div>
+            `;
+        }
+
+    } catch (err) {
+        console.error(err);
+        cameraBox.innerHTML = `
+            <div class="text-danger small text-center">
+                Error procesando imagen
+            </div>
+        `;
+    }
+}
+
+// -----------------------------
+// EVENTO CLICK
+// -----------------------------
+renderPlaceholder();
+
+cameraBox.addEventListener("click", () => {
+    if (!stream) {
+        startCamera();
+    }
+});
+</script>
+
+
 {% endblock %}

@@ -6,12 +6,8 @@
 {% block content %}
 
 <!-- Header -->
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="h6 mb-0">Buscar vehículo</h2>
-    <a href="{% url 'dashboard' %}" class="btn btn-dark rounded-pill">
-        <i class="bi bi-arrow-left"></i>
-        Ir atras
-    </a>
+<div class="text-center mb-3">
+    <h2 class="h6 mb-0">Escanear placa de vehículo</h2>
 </div>
 
 {% include 'shell/partials/_messages_alert.html' with messages=messages %}
@@ -19,10 +15,24 @@
 <!-- Card principal -->
 <div class="card bg-dark text-light border-0 shadow-lg rounded-4">
 
-    <div class="card-body p-4">
-        <!-- Icono -->
-        <div class="text-center mb-3">
-            <i class="bi bi-car-front-fill display-5 text-info"></i>
+    <div class="card-body">
+        <!-- Área de cámara 16:9 -->
+        <div class="mb-3">
+            <div class="ratio ratio-16x9">
+                <div class="bg-black-custom border border-secondary rounded-4
+                            d-flex flex-column justify-content-center align-items-center
+                            text-center"
+                    role="button"
+                    style="cursor: pointer;">
+
+                    <i class="bi bi-camera-video-fill fs-1 text-info mb-2"></i>
+
+                    <div class="small text-muted">
+                        Toca aquí para escanear con cámara
+                    </div>
+
+                </div>
+            </div>
         </div>
 
         <!-- Input -->
@@ -34,11 +44,22 @@
                     Placa del vehículo
                 </label>
 
-                <div class="input-group input-group-lg">
-                    <span class="input-group-text bg-black-custom border-0 text-info">
-                        <i class="bi bi-upc-scan"></i>
+                <div class="input-group mb-2">
+
+                    <!-- Icono / Cámara -->
+                    <span class="input-group-text bg-dark border border-white text-light rounded-start-3">
+                        <i class="bi bi-upc-scan text-light opacity-75"></i>
                     </span>
-                    {{ form.plate }}
+
+                    <!-- Campo -->
+                    <input type="text"
+                        name="plate"
+                        value="{{ form.plate.value|default_if_none:'' }}"
+                        class="form-control bg-dark border border-white text-light rounded-end-3"
+                        placeholder="Escanear o escribir placa..."
+                        style="box-shadow:none;"
+                        required>
+
                 </div>
 
                 {% if form.plate.help_text %}
@@ -51,15 +72,15 @@
             <!-- Botón -->
             <button type="submit"
                     class="btn btn-success w-100 rounded-pill shadow-sm">
-                <i class="bi bi-search me-1"></i>
-                Buscar vehículo
+                <i class="bi bi-upc-scan me-1"></i>
+                Escanear placa
             </button>
-
         </form>
-
     </div>
 </div>
 
-{% include 'parking/partials/_parking_menu_buttons.html' %}
+{% endblock %}
 
+{% block menu_bottom %}
+    {% include 'parking/partials/_parking_menu_bottom.html' %}
 {% endblock %}

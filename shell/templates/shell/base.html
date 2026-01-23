@@ -22,12 +22,11 @@
   <body style="background-color: #0d1117; color: white;" class="d-flex flex-column min-vh-100">
 
     <!-- Navbar -->
-    <nav class="navbar navbar-dark shadow-sm px-3 py-2 border-bottom border-dark"
+    <nav class="navbar navbar-dark shadow-sm px-3 py-3 border-bottom border-dark"
         style="background: linear-gradient(180deg, #0d1117 0%, #0b0f14 100%);">
 
         <div class="container-fluid d-flex align-items-center justify-content-between">
 
-            <!-- 🏷️ Título -->
             <div class="d-flex align-items-center">
                 <i class="bi bi-grid-1x2-fill text-info me-2 fs-5"></i>
                 <span class="fw-semibold fs-6 tracking-wide">
@@ -46,7 +45,7 @@
 
                     <i class="bi bi-person-fill text-info"></i>
 
-                    <span class="d-none d-md-inline small fw-semibold">
+                    <span class="d-none d-md-inline small fw-semibold ms-1">
                         {{ request.user.username|default:"Usuario" }}
                     </span>
 
@@ -59,9 +58,7 @@
                         Sesión activa
                     </li>
 
-                    <li>
-                        <hr class="dropdown-divider">
-                    </li>
+                    <li><hr class="dropdown-divider"></li>
 
                     <li>
                         <a class="dropdown-item d-flex align-items-center text-danger"
@@ -78,11 +75,14 @@
     </nav>
     <!-- Navbar end -->
 
+
     <div class="container mb-3 mt-4 px-4">
       {% block content %}{% endblock %}
     </div>
 
-    {% include 'shell/partials/_footer.html' %}
+    {% block menu_bottom %}{% endblock %}
+   
+    {% block footer %}{% endblock %}
 
     <!-- Bootstrap JS -->
     <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}"></script>

@@ -115,69 +115,87 @@
 
 {% block extra_js %}
 <script>
+document.addEventListener("DOMContentLoaded", () => {
+
 const plateInput = document.getElementById("plateInput");
-const cameraBox = document.getElementById("cameraBox");
-const placeholder = document.getElementById("cameraPlaceholder");
+const scannerCard = document.getElementById("scannerCard");
 const video = document.getElementById("cameraVideo");
-const canvas = document.getElementById("cameraCanvas");
-const ctx = canvas.getContext("2d");
-const captureBtn = document.getElementById("captureBtn");
-const stopBtn = document.getElementById("stopBtn");
-const resetBtn = document.getElementById("resetBtn");
 const plateGuide = document.getElementById("plateGuide");
+const placeholder = document.getElementById("cameraPlaceholder");
+const statusBar = document.getElementById("scannerStatus");
+const statusText = document.getElementById("statusText");
+const resetBtn = document.getElementById("resetBtn");
+const stopBtn = document.getElementById("stopBtn");
+const canvas = document.getElementById("cameraCanvas");
+
+if (!scannerCard || !video || !canvas) {
+  console.warn("⚠️ Scanner DOM no encontrado");
+  return;
+}
+
+const ctx = canvas.getContext("2d");
 
 let stream = null;
 let scanning = false;
 let detecting = false;
 
-// Regex placas (con o sin espacios / guión / motos / provisionales / CD)
-const plateRegex = /\b(P|M|N|C|A|CD)\s?[0-9]{1,3}[A-Z]?\s?-?\s?[0-9]{2,3}\b/;
+// Formatos soportados:
+// P 123-456 | P 12A-345 | M 123-456 | N 12-345 | CD 12-345 | C 123-456 | A 12-345
+// Espacios opcionales
+const plateRegex = /\b(P|M|N|C|A|CD)\s?[0-9]{1,3}[A-Z]?\s?[0-9]{2,3}\b/;
 
-// ----------------------
-// UI helpers
-// ----------------------
+// ---------------- UI ----------------
+function showStatus(text) {
+  if (!statusBar) return;
+  statusText.textContent = text;
+  statusBar.style.display = "block";
+}
+
+function hideStatus() {
+  if (!statusBar) return;
+  statusBar.style.display = "none";
+}
+
 function showInitial() {
-  placeholder.classList.remove("d-none");
+  placeholder.style.display = "block";
   video.classList.add("d-none");
   plateGuide.style.display = "none";
-  captureBtn.style.display = "none";
   stopBtn.style.display = "none";
-  resetBtn.style.display = "none";
+  hideStatus();
 }
 
 function showScanning() {
-  placeholder.classList.add("d-none");
+  placeholder.style.display = "none";
   video.classList.remove("d-none");
   plateGuide.style.display = "block";
-  captureBtn.style.display = "block";
   stopBtn.style.display = "block";
-  resetBtn.style.display = "none";
+  showStatus("Escaneando placa...");
 }
 
-function showResult(plate) {
-  stopCamera();
-  cameraBox.innerHTML = `
-    <div class="d-flex flex-column justify-content-center align-items-center h-100 text-center">
-      <i class="bi bi-check-circle-fill fs-1 text-success mb-2"></i>
-      <div class="fw-bold text-success">Placa detectada</div>
-      <div class="small text-light mt-1">${plate}</div>
-    </div>
+function showDetected(plate) {
+  scanning = false;
+  stopStream();
 
-    <button id="resetBtn"
-      class="btn btn-warning position-absolute top-0 end-0 m-2 rounded-circle shadow"
-      style="width:56px; height:56px;">
-      <i class="bi bi-arrow-clockwise fs-4"></i>
-    </button>
+  hideStatus();
+  plateGuide.style.display = "none";
+  stopBtn.style.display = "none";
+  video.classList.add("d-none");
+
+  placeholder.innerHTML = `
+    <i class="bi bi-check-circle-fill fs-1 text-success"></i>
+    <div class="fw-bold text-success">Placa detectada</div>
+    <div class="small text-light mt-1">${plate}</div>
   `;
-
-  document.getElementById("resetBtn").onclick = resetCamera;
+  placeholder.style.display = "block";
 }
 
-// ----------------------
-// Cámara
-// ----------------------
+// ---------------- CAMERA ----------------
 async function startCamera() {
+  if (stream) return;
+
   try {
+    showStatus("Iniciando cámara...");
+
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false
@@ -186,41 +204,47 @@ async function startCamera() {
     video.srcObject = stream;
     await video.play();
 
-    showScanning();
     scanning = true;
     detecting = false;
-
+    showScanning();
     requestAnimationFrame(scanLoop);
 
   } catch (err) {
-    placeholder.innerHTML = "❌ Cámara no disponible";
+    showStatus("❌ No se pudo acceder a la cámara");
     console.error(err);
   }
 }
 
-function stopCamera() {
-  scanning = false;
+function stopStream() {
   if (stream) {
     stream.getTracks().forEach(t => t.stop());
     stream = null;
   }
+}
+
+function stopCamera(e) {
+  e?.stopPropagation();
+  scanning = false;
+  stopStream();
   showInitial();
 }
 
-// ----------------------
-// Reset
-// ----------------------
-function resetCamera() {
-  plateInput.value = "";
-  location.reload(); // limpio, rápido, sin estados raros
+// ---------------- RESET ----------------
+function resetScanner(e) {
+  e?.stopPropagation();
+  if (plateInput) plateInput.value = "";
+
+  placeholder.innerHTML = `
+    <i class="bi bi-camera-video-fill fs-1 text-info"></i>
+    <div class="small text-muted">Toca para escanear placa</div>
+  `;
+
+  stopCamera();
 }
 
-// ----------------------
-// OCR rápido
-// ----------------------
+// ---------------- OCR LOOP ----------------
 async function scanLoop() {
   if (!scanning || detecting) return;
-
   if (!video.videoWidth) {
     requestAnimationFrame(scanLoop);
     return;
@@ -228,28 +252,24 @@ async function scanLoop() {
 
   detecting = true;
 
-  // Canvas reducido = OCR más rápido
   const scale = 0.5;
   const w = video.videoWidth * scale;
   const h = video.videoHeight * scale;
 
   canvas.width = w;
   canvas.height = h;
-
   ctx.drawImage(video, 0, 0, w, h);
 
-  // Recorte del área guía
   const rx = w * 0.2;
   const ry = h * 0.4;
   const rw = w * 0.6;
-  const rh = h * 0.2;
+  const rh = h * 0.22;
 
   const frame = ctx.getImageData(rx, ry, rw, rh);
 
-  // Pre-procesado blanco/negro (clave para velocidad y precisión)
   for (let i = 0; i < frame.data.length; i += 4) {
     const avg = (frame.data[i] + frame.data[i+1] + frame.data[i+2]) / 3;
-    const bw = avg > 140 ? 255 : 0;
+    const bw = avg > 150 ? 255 : 0;
     frame.data[i] = bw;
     frame.data[i+1] = bw;
     frame.data[i+2] = bw;
@@ -261,51 +281,49 @@ async function scanLoop() {
   tempCanvas.getContext("2d").putImageData(frame, 0, 0);
 
   try {
-    const result = await Tesseract.recognize(
-      tempCanvas,
-      "eng",
-      {
-        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ",
-        psm: 7
-      }
-    );
+    const result = await Tesseract.recognize(tempCanvas, "eng", {
+      tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ",
+      psm: 7
+    });
 
     let text = result.data.text
       .toUpperCase()
-      .replace(/[^A-Z0-9\- ]/g, " ")
+      .replace(/[^A-Z0-9 ]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
 
     const match = text.match(plateRegex);
 
     if (match) {
-      const plate = match[0].trim();
-      plateInput.value = plate;
+      const plate = match[0].replace(/\s+/g, " ");
+      if (plateInput) plateInput.value = plate;
       navigator.vibrate?.([100, 50, 100]);
-      showResult(plate);
+      showDetected(plate);
       return;
     }
 
   } catch (e) {
-    console.warn("OCR fail", e);
+    console.warn("OCR error", e);
   }
 
   detecting = false;
   requestAnimationFrame(scanLoop);
 }
 
-// ----------------------
-// Eventos
-// ----------------------
-cameraBox.addEventListener("click", () => {
+// ---------------- EVENTS ----------------
+scannerCard.addEventListener("click", () => {
   if (!stream) startCamera();
 });
 
-stopBtn.addEventListener("click", e => {
-  e.stopPropagation();
-  stopCamera();
+stopBtn.addEventListener("click", stopCamera);
+resetBtn.addEventListener("click", resetScanner);
+
+// INIT
+showInitial();
+
 });
 </script>
+
 
 
 {% endblock %}

@@ -13,63 +13,56 @@
 
         <!-- Área de cámara -->
         <div class="mb-3" style="height:300px;">
-            <div id="cameraBox" class="bg-black-custom border border-secondary rounded-4
-                       d-flex justify-content-center align-items-center
-                       position-relative overflow-hidden"
-                 style="cursor:pointer; height:100%; width:100%;">
+<!-- Área cámara -->
+<div id="scannerCard" class="bg-dark border border-secondary rounded-4 shadow-lg p-2"
+     style="height:300px; position:relative; overflow:hidden; cursor:pointer;">
 
-                <!-- Placeholder inicial -->
-                <div id="cameraPlaceholder" class="position-absolute bottom-0 mb-3 text-center w-100">
-                    <i class="bi bi-camera-video-fill fs-1 text-info mb-1"></i>
-                    <div class="small text-muted">Toca aquí para activar la cámara</div>
-                </div>
+    <!-- Video -->
+    <video id="cameraVideo"
+           autoplay
+           playsinline
+           class="w-100 h-100 d-none rounded-4"
+           style="object-fit:cover;"></video>
 
-                <!-- Video -->
-                <video id="cameraVideo"
-                       autoplay
-                       playsinline
-                       class="w-100 h-100 d-none"
-                       style="object-fit: cover;">
-                </video>
+    <!-- Guía placa -->
+    <div id="plateGuide"
+         class="position-absolute rounded"
+         style="border:2px dashed #0d6efd; width:60%; height:22%; top:39%; left:20%; display:none; pointer-events:none;">
+    </div>
 
-                <!-- Overlay de guía para placa -->
-                <div id="plateGuide"
-                     class="position-absolute"
-                     style="
-                        border: 2px dashed #0d6efd; 
-                        width: 60%; 
-                        height: 20%; 
-                        top: 40%; 
-                        left: 20%; 
-                        pointer-events: none;
-                        display:none;
-                     ">
-                </div>
+    <!-- Placeholder -->
+    <div id="cameraPlaceholder"
+         class="position-absolute bottom-0 w-100 text-center pb-3">
+        <i class="bi bi-camera-video-fill fs-1 text-info"></i>
+        <div class="small text-muted">Toca para escanear placa</div>
+    </div>
 
-                <!-- Botones -->
-                <button id="captureBtn"
-                        class="btn btn-success position-absolute bottom-0 start-0 m-2 rounded-circle shadow"
-                        style="width:56px; height:56px; display:none;">
-                    <i class="bi bi-camera-fill fs-4"></i>
-                </button>
+    <!-- Estado -->
+    <div id="scannerStatus"
+         class="position-absolute bottom-0 w-100 text-center py-1"
+         style="background:rgba(0,0,0,.6); display:none;">
+        <span class="small text-light" id="statusText">Iniciando cámara...</span>
+    </div>
 
-                <button id="stopBtn"
-                        class="btn btn-danger position-absolute bottom-0 end-0 m-2 rounded-circle shadow"
-                        style="width:56px; height:56px; display:none;">
-                    <i class="bi bi-x-circle-fill fs-4"></i>
-                </button>
+    <!-- Reset -->
+    <button id="resetBtn"
+            class="btn btn-warning btn-sm position-absolute top-0 end-0 m-2 rounded-circle shadow"
+            style="width:42px; height:42px;">
+        <i class="bi bi-arrow-clockwise"></i>
+    </button>
 
-                <!-- Botón Reset -->
-                <button id="resetBtn"
-                        class="btn btn-warning position-absolute top-0 end-0 m-2 rounded-circle shadow"
-                        style="width:56px; height:56px; display:none;">
-                    <i class="bi bi-arrow-clockwise fs-4"></i>
-                </button>
-            </div>
-        </div>
+    <!-- Stop -->
+    <button id="stopBtn"
+            class="btn btn-danger btn-sm position-absolute bottom-0 end-0 m-2 rounded-circle shadow"
+            style="width:42px; height:42px; display:none;">
+        <i class="bi bi-x-lg"></i>
+    </button>
 
-        <!-- Canvas oculto para procesar frames -->
-        <canvas id="cameraCanvas" class="d-none"></canvas>
+</div>
+
+</div>
+
+<canvas id="cameraCanvas" class="d-none"></canvas>
 
         <!-- Input -->
         <form method="POST">
@@ -123,155 +116,136 @@
 {% block extra_js %}
 <script>
 const plateInput = document.querySelector("input[name='plate']");
-const cameraBox = document.getElementById("cameraBox");
-const placeholder = document.getElementById("cameraPlaceholder");
+const card = document.getElementById("scannerCard");
 const video = document.getElementById("cameraVideo");
-const canvas = document.getElementById("cameraCanvas");
-const ctx = canvas.getContext("2d");
-const captureBtn = document.getElementById("captureBtn");
+const placeholder = document.getElementById("cameraPlaceholder");
+const plateGuide = document.getElementById("plateGuide");
 const stopBtn = document.getElementById("stopBtn");
 const resetBtn = document.getElementById("resetBtn");
-const plateGuide = document.getElementById("plateGuide");
+const statusBox = document.getElementById("scannerStatus");
+const statusText = document.getElementById("statusText");
+const canvas = document.getElementById("cameraCanvas");
+const ctx = canvas.getContext("2d");
 
 let stream = null;
 let ocrInterval = null;
 
-// Regex placas: autos, provisionales y motos (ej: P111 111, P98F04, M1234)
-const plateRegex = /\b([A-Z]{1}[0-9]{3}\s?[0-9]{3}|P[0-9]{2}[A-Z][0-9]{2}|M[0-9]{4})\b/;
+// Formatos soportados
+const plateRegex = /\b(P\s?\d{1,3}[A-Z]?\-\d{3}|M\s?\d{3}-\d{3}|N\s?\d{2}-\d{3}|CD\s?\d{2}-\d{3}|C\s?\d{3}-\d{3}|A\s?\d{2}-\d{3}|P\s?\d{2}[A-Z]\d{2})\b/;
 
-// -----------------------------
-// INICIAR CÁMARA
-// -----------------------------
+function setStatus(text, show = true) {
+    statusText.innerText = text;
+    statusBox.style.display = show ? "block" : "none";
+}
+
+// -------------------
+// Iniciar cámara
+// -------------------
 async function startCamera() {
     try {
+        setStatus("Iniciando cámara...");
+        placeholder.style.display = "none";
+
         stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: "environment" }, width: { ideal:1280 }, height:{ ideal:720 } },
+            video: { facingMode: { ideal: "environment" }, width:{ideal:1280}, height:{ideal:720} },
             audio: false
         });
+
         video.srcObject = stream;
         await video.play();
 
         video.classList.remove("d-none");
-        placeholder.classList.add("d-none");
-        captureBtn.style.display = "block";
-        stopBtn.style.display = "block";
         plateGuide.style.display = "block";
-        resetBtn.style.display = "none";
+        stopBtn.style.display = "block";
 
-        // OCR cada 1 segundo
-        ocrInterval = setInterval(runOCRFrame, 1000);
+        setStatus("Escaneando placa...");
+        ocrInterval = setInterval(runOCRFrame, 400);
 
     } catch (err) {
         console.error(err);
-        placeholder.innerHTML = "❌ Cámara no disponible";
+        placeholder.style.display = "block";
+        setStatus("No se pudo acceder a la cámara");
     }
 }
 
-// -----------------------------
-// DETENER CÁMARA
-// -----------------------------
+// -------------------
+// Detener cámara
+// -------------------
 function stopCamera() {
     if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach(t => t.stop());
         stream = null;
     }
-    video.classList.add("d-none");
-    placeholder.classList.remove("d-none");
-    captureBtn.style.display = "none";
-    stopBtn.style.display = "none";
-    plateGuide.style.display = "none";
+
     clearInterval(ocrInterval);
+    video.classList.add("d-none");
+    plateGuide.style.display = "none";
+    stopBtn.style.display = "none";
+    placeholder.style.display = "block";
+    setStatus("", false);
 }
 
-// -----------------------------
-// RESET
-// -----------------------------
-function resetCamera() {
+// -------------------
+// Reset total
+// -------------------
+function resetScanner() {
     plateInput.value = "";
-    cameraBox.innerHTML = `
-        <div id="cameraPlaceholder" class="position-absolute bottom-0 mb-3 text-center w-100">
-            <i class="bi bi-camera-video-fill fs-1 text-info mb-1"></i>
-            <div class="small text-muted">Toca aquí para activar la cámara</div>
-        </div>
-        <video id="cameraVideo" autoplay playsinline class="w-100 h-100 d-none" style="object-fit: cover;"></video>
-        <div id="plateGuide" class="position-absolute"
-             style="border: 2px dashed #0d6efd; width: 60%; height: 20%; top: 40%; left: 20%; pointer-events: none;"></div>
-        <button id="captureBtn" class="btn btn-success position-absolute bottom-0 start-0 m-2 rounded-circle shadow" style="width:56px; height:56px; display:none;">
-            <i class="bi bi-camera-fill fs-4"></i>
-        </button>
-        <button id="stopBtn" class="btn btn-danger position-absolute bottom-0 end-0 m-2 rounded-circle shadow" style="width:56px; height:56px; display:none;">
-            <i class="bi bi-x-circle-fill fs-4"></i>
-        </button>
-        <button id="resetBtn" class="btn btn-warning position-absolute top-0 end-0 m-2 rounded-circle shadow" style="width:56px; height:56px; display:none;">
-            <i class="bi bi-arrow-clockwise fs-4"></i>
-        </button>
-    `;
-    // Reasignar referencias
-    Object.assign(window, {
-        plateInput,
-        cameraBox,
-        video: document.getElementById("cameraVideo"),
-        captureBtn: document.getElementById("captureBtn"),
-        stopBtn: document.getElementById("stopBtn"),
-        resetBtn: document.getElementById("resetBtn"),
-        plateGuide: document.getElementById("plateGuide")
-    });
+    stopCamera();
+    setStatus("Listo para escanear", true);
+    setTimeout(() => setStatus("", false), 1500);
 }
 
-// -----------------------------
-// OCR EN TIEMPO REAL
-// -----------------------------
+// -------------------
+// OCR Frame
+// -------------------
 async function runOCRFrame() {
-    if (!video.videoWidth || !video.videoHeight) return;
+    if (!video.videoWidth) return;
 
-    canvas.width = 300; // resolución reducida para velocidad
-    canvas.height = 100;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    const rectX = video.videoWidth * 0.2;
-    const rectY = video.videoHeight * 0.4;
-    const rectW = video.videoWidth * 0.6;
-    const rectH = video.videoHeight * 0.2;
+    const x = canvas.width * 0.2;
+    const y = canvas.height * 0.4;
+    const w = canvas.width * 0.6;
+    const h = canvas.height * 0.22;
 
-    ctx.drawImage(video, rectX, rectY, rectW, rectH, 0, 0, canvas.width, canvas.height);
-
-    const imageDataUrl = canvas.toDataURL("image/png");
+    const crop = ctx.getImageData(x, y, w, h);
+    const temp = document.createElement("canvas");
+    temp.width = w;
+    temp.height = h;
+    temp.getContext("2d").putImageData(crop, 0, 0);
 
     try {
-        const result = await Tesseract.recognize(imageDataUrl, "eng", { tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ", psm:6 });
-        let text = result.data.text.toUpperCase().replace(/[^A-Z0-9 ]/g," ").replace(/\s+/g," ");
+        const res = await Tesseract.recognize(temp.toDataURL(), "eng", {
+            tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -",
+            psm: 6
+        });
+
+        const text = res.data.text.toUpperCase().replace(/[^A-Z0-9 -]/g, " ");
         const match = text.match(plateRegex);
 
         if (match) {
-            const plate = match[0].replace(" ","");
+            const plate = match[0].replace(/\s+/g, "");
             plateInput.value = plate;
 
-            if (navigator.vibrate) navigator.vibrate([100,50,100]);
+            navigator.vibrate?.([100, 50, 100]);
 
+            setStatus("Placa detectada: " + plate);
             stopCamera();
-
-            // Mostrar resultado y botón reset
-            cameraBox.innerHTML = `
-                <div class="d-flex flex-column justify-content-center align-items-center h-100 text-center">
-                    <i class="bi bi-check-circle-fill fs-1 text-success mb-2"></i>
-                    <div class="fw-bold text-success">Placa detectada</div>
-                    <div class="small text-light mt-1">${plate}</div>
-                </div>
-            `;
-
-            resetBtn.style.display = "block";
         }
-    } catch(err) {
-        console.error(err);
-    }
+
+    } catch(e) { console.error(e); }
 }
 
-// -----------------------------
-// EVENTOS
-// -----------------------------
-cameraBox.addEventListener("click", () => { if(!stream) startCamera(); });
+// -------------------
+// Eventos
+// -------------------
+card.addEventListener("click", () => {
+    if (!stream) startCamera();
+});
 stopBtn.addEventListener("click", stopCamera);
-resetBtn.addEventListener("click", () => { resetCamera(); startCamera(); });
+resetBtn.addEventListener("click", resetScanner);
 </script>
-
 
 {% endblock %}

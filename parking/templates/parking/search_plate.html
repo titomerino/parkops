@@ -115,6 +115,9 @@
 
 {% block extra_js %}
 <script>
+/* ==========================
+   ELEMENTOS DOM
+========================== */
 const video = document.getElementById("cameraVideo");
 const scannerCard = document.getElementById("scannerCard");
 const plateGuide = document.getElementById("plateGuide");
@@ -125,20 +128,36 @@ const stopBtn = document.getElementById("stopBtn");
 const resetBtn = document.getElementById("resetBtn");
 const plateInput = document.getElementById("plateInput");
 
+/* ==========================
+   CANVAS
+========================== */
 const canvas = document.createElement("canvas");
 const ctx = canvas.getContext("2d");
 
+/* ==========================
+   ESTADO
+========================== */
 let stream = null;
 let model = null;
 let scanning = false;
+let lastOCR = 0;
+let lastIA = 0;
+let iaValid = true;
+
+/* ==========================
+   CONFIGURACIÓN
+========================== */
+const OCR_INTERVAL = 350;   // ms entre OCR
+const IA_INTERVAL = 1000;  // ms entre detección IA
 
 // FORMATOS:
-// P 123-456 | P 12A-345 | M 123-456 | N 12-345 | CD 12-345 | C 123-456 | A 12-345 | P 98 F04
+// P 123-456 | P 12A-345 | M 123-456 | N 12-345
+// CD 12-345 | C 123-456 | A 12-345 | P 98 F04
 const plateRegex = /\b(P|M|N|CD|C|A)\s?[0-9]{1,3}\s?[A-Z]?\s?[0-9]{2,4}\b/;
 
-// ----------------------------
-// INIT MODELO IA
-// ----------------------------
+/* ==========================
+   CARGA MODELO IA
+========================== */
 async function loadModel() {
   statusText.innerText = "Cargando IA...";
   statusBar.style.display = "block";
@@ -146,14 +165,18 @@ async function loadModel() {
   statusBar.style.display = "none";
 }
 
-// ----------------------------
-// CÁMARA
-// ----------------------------
+/* ==========================
+   INICIAR CÁMARA
+========================== */
 async function startCamera() {
   if (!model) await loadModel();
 
   stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+    video: {
+      facingMode: { ideal: "environment" },
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    },
     audio: false
   });
 
@@ -165,20 +188,27 @@ async function startCamera() {
   plateGuide.style.display = "block";
   stopBtn.style.display = "block";
   resetBtn.style.display = "none";
+
   statusBar.style.display = "block";
-  statusText.innerText = "Buscando placa...";
+  statusText.innerText = "Apunta la placa al recuadro";
 
   scanning = true;
-  detectLoop();
+  lastOCR = 0;
+  lastIA = 0;
+
+  requestAnimationFrame(detectLoop);
 }
 
-// ----------------------------
-// STOP
-// ----------------------------
+/* ==========================
+   DETENER CÁMARA
+========================== */
 function stopCamera() {
   scanning = false;
-  if (stream) stream.getTracks().forEach(t => t.stop());
-  stream = null;
+
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
 
   video.classList.add("d-none");
   plateGuide.style.display = "none";
@@ -187,86 +217,106 @@ function stopCamera() {
   placeholder.style.display = "block";
 }
 
-// ----------------------------
-// RESET
-// ----------------------------
+/* ==========================
+   RESET
+========================== */
 function resetScanner() {
   plateInput.value = "";
   resetBtn.style.display = "none";
   startCamera();
 }
 
-// ----------------------------
-// LOOP IA
-// ----------------------------
-async function detectLoop() {
+/* ==========================
+   LOOP PRINCIPAL
+========================== */
+function detectLoop(time = 0) {
   if (!scanning) return;
 
-  const predictions = await model.detect(video);
+  // IA solo cada 1 segundo
+  if (time - lastIA > IA_INTERVAL && model) {
+    lastIA = time;
+    model.detect(video).then(predictions => {
+      iaValid = predictions.some(p =>
+        p.score > 0.4 &&
+        (p.class.includes("tv") ||
+         p.class.includes("book") ||
+         p.class.includes("cell phone"))
+      );
+    });
+  }
 
-  const best = predictions.find(p =>
-    p.score > 0.4 &&
-    (p.class.includes("book") || p.class.includes("tv") || p.class.includes("cell phone"))
-  );
-
-  if (best) {
-    scanBoundingBox(best.bbox);
+  // OCR solo cada 350ms
+  if (time - lastOCR > OCR_INTERVAL && iaValid) {
+    lastOCR = time;
+    scanROI();
   }
 
   requestAnimationFrame(detectLoop);
 }
 
-// ----------------------------
-// PROCESAMIENTO IMAGEN
-// ----------------------------
-function scanBoundingBox(bbox) {
-  const [x, y, w, h] = bbox;
+/* ==========================
+   REGIÓN DE ESCANEO
+========================== */
+function scanROI() {
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (!vw || !vh) return;
 
-  canvas.width = w;
-  canvas.height = h;
+  // Región central
+  const rx = vw * 0.2;
+  const ry = vh * 0.4;
+  const rw = vw * 0.6;
+  const rh = vh * 0.22;
 
-  ctx.drawImage(video, x, y, w, h, 0, 0, w, h);
+  canvas.width = rw;
+  canvas.height = rh;
+
+  ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
 
   preprocessImage();
   runOCR();
 }
 
-// ----------------------------
-// FILTROS VISIÓN
-// ----------------------------
+/* ==========================
+   PREPROCESAMIENTO VISIÓN
+========================== */
 function preprocessImage() {
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const d = img.data;
 
   for (let i = 0; i < d.length; i += 4) {
     let gray = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
-    gray = gray > 140 ? 255 : 0;
+    gray = gray > 130 ? 255 : 0; // contraste binario
     d[i] = d[i + 1] = d[i + 2] = gray;
   }
+
   ctx.putImageData(img, 0, 0);
 }
 
-// ----------------------------
-// OCR RÁPIDO
-// ----------------------------
+/* ==========================
+   OCR
+========================== */
 async function runOCR() {
   statusText.innerText = "Leyendo placa...";
 
   const imgUrl = canvas.toDataURL("image/png");
-
   const result = await Tesseract.recognize(imgUrl, "eng", {
     tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ",
     psm: 7
   });
 
-  let text = result.data.text.toUpperCase().replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ");
+  let text = result.data.text
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .replace(/\s+/g, " ");
+
   const match = text.match(plateRegex);
 
   if (match) {
     const plate = match[0].trim();
     plateInput.value = plate;
 
-    if (navigator.vibrate) navigator.vibrate([150, 50, 150]);
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
 
     scanning = false;
     stopCamera();
@@ -277,9 +327,9 @@ async function runOCR() {
   }
 }
 
-// ----------------------------
-// EVENTOS
-// ----------------------------
+/* ==========================
+   EVENTOS
+========================== */
 scannerCard.addEventListener("click", () => {
   if (!stream) startCamera();
 });
@@ -294,8 +344,5 @@ resetBtn.addEventListener("click", e => {
   resetScanner();
 });
 </script>
-
-
-
 
 {% endblock %}

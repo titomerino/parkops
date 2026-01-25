@@ -137,25 +137,23 @@ const ctx = canvas.getContext("2d");
 
 let stream = null;
 let scanning = false;
-let detecting = false;
+let lastScan = 0;
 
-// Formatos soportados:
-// P 123-456 | P 12A-345 | M 123-456 | N 12-345 | CD 12-345 | C 123-456 | A 12-345
-// Espacios opcionales
-const plateRegex = /\b(P|M|N|C|A|CD)\s?[0-9]{1,3}\s?[A-Z]?\s?[0-9]{2,3}\b/;
+// CONFIRMACIÓN DOBLE
+let lastPlate = "";
+let plateHits = 0;
+
+// REGEX UNIFICADO
+const plateRegex = /\b((CD|P|M|N|C|A)\s?-?\s?([0-9]{1,4}|[0-9]{1,3}[A-Z])\s?-?\s?([0-9A-Z]{1,4})\s?-?\s?([0-9A-Z]{0,4}))\b/;
 
 // ---------------- UI ----------------
 function showStatus(text) {
-  if (!statusBar) return;
   statusText.textContent = text;
   statusBar.style.display = "block";
 }
-
 function hideStatus() {
-  if (!statusBar) return;
   statusBar.style.display = "none";
 }
-
 function showInitial() {
   placeholder.style.display = "block";
   video.classList.add("d-none");
@@ -163,19 +161,16 @@ function showInitial() {
   stopBtn.style.display = "none";
   hideStatus();
 }
-
 function showScanning() {
   placeholder.style.display = "none";
   video.classList.remove("d-none");
   plateGuide.style.display = "block";
   stopBtn.style.display = "block";
-  showStatus("Escaneando placa...");
+  showStatus("🔍 Buscando placa...");
 }
-
 function showDetected(plate) {
   scanning = false;
   stopStream();
-
   hideStatus();
   plateGuide.style.display = "none";
   stopBtn.style.display = "none";
@@ -190,27 +185,42 @@ function showDetected(plate) {
 }
 
 // ---------------- CAMERA ----------------
+async function applyZoom(track, level = 3) {
+  const caps = track.getCapabilities();
+  if (caps.zoom) {
+    await track.applyConstraints({
+      advanced: [{ zoom: Math.min(level, caps.zoom.max) }]
+    });
+  }
+}
+
 async function startCamera() {
   if (stream) return;
 
   try {
-    showStatus("Iniciando cámara...");
+    showStatus("📷 Iniciando cámara...");
 
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: {
+        facingMode: "environment",
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
+      },
       audio: false
     });
 
     video.srcObject = stream;
     await video.play();
 
+    const track = stream.getVideoTracks()[0];
+    await applyZoom(track, 3);
+
     scanning = true;
-    detecting = false;
     showScanning();
     requestAnimationFrame(scanLoop);
 
   } catch (err) {
-    showStatus("❌ No se pudo acceder a la cámara");
+    showStatus("❌ Cámara no disponible");
     console.error(err);
   }
 }
@@ -232,27 +242,29 @@ function stopCamera(e) {
 // ---------------- RESET ----------------
 function resetScanner(e) {
   e?.stopPropagation();
-  if (plateInput) plateInput.value = "";
-
+  plateInput.value = "";
   placeholder.innerHTML = `
     <i class="bi bi-camera-video-fill fs-1 text-info"></i>
     <div class="small text-muted">Toca para escanear placa</div>
   `;
-
   stopCamera();
 }
 
 // ---------------- OCR LOOP ----------------
-async function scanLoop() {
-  if (!scanning || detecting) return;
+async function scanLoop(timestamp) {
+  if (!scanning) return;
+  if (timestamp - lastScan < 350) {
+    requestAnimationFrame(scanLoop);
+    return;
+  }
+  lastScan = timestamp;
+
   if (!video.videoWidth) {
     requestAnimationFrame(scanLoop);
     return;
   }
 
-  detecting = true;
-
-  const scale = 0.5;
+  const scale = 0.7;
   const w = video.videoWidth * scale;
   const h = video.videoHeight * scale;
 
@@ -260,23 +272,25 @@ async function scanLoop() {
   canvas.height = h;
   ctx.drawImage(video, 0, 0, w, h);
 
-  const rx = w * 0.2;
-  const ry = h * 0.4;
-  const rw = w * 0.6;
-  const rh = h * 0.22;
+  // ZONA CENTRAL AMPLIA
+  const rx = w * 0.12;
+  const ry = h * 0.38;
+  const rw = w * 0.76;
+  const rh = h * 0.28;
 
   const frame = ctx.getImageData(rx, ry, rw, rh);
 
-    for (let i = 0; i < frame.data.length; i += 4) {
+  // PREPROCESAMIENTO PRO
+  for (let i = 0; i < frame.data.length; i += 4) {
     const r = frame.data[i];
     const g = frame.data[i+1];
     const b = frame.data[i+2];
-    const gray = (0.3 * r + 0.59 * g + 0.11 * b);
-    const bw = gray > 135 ? 255 : 0;
-    frame.data[i] = bw;
-    frame.data[i+1] = bw;
-    frame.data[i+2] = bw;
-    }
+    let gray = (0.299*r + 0.587*g + 0.114*b);
+    gray = gray > 145 ? 255 : 0;
+    frame.data[i] = gray;
+    frame.data[i+1] = gray;
+    frame.data[i+2] = gray;
+  }
 
   const tempCanvas = document.createElement("canvas");
   tempCanvas.width = rw;
@@ -285,31 +299,49 @@ async function scanLoop() {
 
   try {
     const result = await Tesseract.recognize(tempCanvas, "eng", {
-      tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-      psm: 6
+      tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-",
+      psm: 7
     });
 
     let text = result.data.text
       .toUpperCase()
-      .replace(/[^A-Z0-9 ]/g, " ")
+      .replace(/[^A-Z0-9\- ]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
 
     const match = text.match(plateRegex);
-
     if (match) {
-      const plate = match[0].replace(/\s+/g, " ");
-      if (plateInput) plateInput.value = plate;
-      navigator.vibrate?.([100, 50, 100]);
-      showDetected(plate);
-      return;
+      let plate = match[0];
+
+      // NORMALIZACIÓN OCR
+      plate = plate
+        .replace(/O/g, "0")
+        .replace(/I/g, "1")
+        .replace(/Z/g, "2")
+        .replace(/S/g, "5");
+
+      // CONFIRMACIÓN DOBLE
+      if (plate === lastPlate) {
+        plateHits++;
+      } else {
+        lastPlate = plate;
+        plateHits = 1;
+      }
+
+      if (plateHits >= 2) {
+        plateInput.value = plate;
+        navigator.vibrate?.([100, 50, 100]);
+        showDetected(plate);
+        return;
+      } else {
+        showStatus("✔️ Placa detectada, confirmando...");
+      }
     }
 
   } catch (e) {
     console.warn("OCR error", e);
   }
 
-  detecting = false;
   requestAnimationFrame(scanLoop);
 }
 
@@ -317,16 +349,11 @@ async function scanLoop() {
 scannerCard.addEventListener("click", () => {
   if (!stream) startCamera();
 });
-
 stopBtn.addEventListener("click", stopCamera);
 resetBtn.addEventListener("click", resetScanner);
 
 // INIT
 showInitial();
-
 });
 </script>
-
-
-
 {% endblock %}

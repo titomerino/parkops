@@ -127,6 +127,7 @@ const statusText = document.getElementById("statusText");
 const resetBtn = document.getElementById("resetBtn");
 const stopBtn = document.getElementById("stopBtn");
 const canvas = document.getElementById("cameraCanvas");
+const logPanel = document.getElementById("logPanel"); // DIV opcional para ver logs en celular
 
 if (!scannerCard || !video || !canvas) {
   console.warn("⚠️ Scanner DOM no encontrado");
@@ -138,63 +139,55 @@ const ctx = canvas.getContext("2d");
 let stream = null;
 let scanning = false;
 let detecting = false;
+
 let goodFrames = 0;
 let lastPlate = "";
 let lastLog = 0;
 
-// ---------------- FORMATO PLACAS ----------------
-// Soporta:
-// P123 122 | P 123 122 | M123123 | M123 123 | P 12 8F2
-// A123 123 | A 123 123
-// + antiguos: P 123-456 | CD 12-345 | N 12-345 | C 123-456
+let ocrBuffer = [];
+let lastFrameOCR = "";
+
+// ---------------- CONFIG ----------------
+const OCR_CONFIRM = 3;
+const MIN_EDGES = 0.17;
+const MIN_CONTRAST = 15;
+const LOG_INTERVAL = 120;
+
+// Soporta placas LATAM tipo:
+// P123 123 | P 12 8F2 | M123123 | A123 123 | CD 12-345
 const plateRegex = /\b(P|M|N|C|A|CD)\s?[0-9]{1,3}\s?[A-Z0-9]?\s?[0-9]{2,3}\b/;
 
-// ---------------- HUD LOG PANEL ----------------
-const hud = document.createElement("div");
-
-hud.style.position = "absolute";
-hud.style.top = "10px";
-hud.style.left = "10px";
-hud.style.width = "90%";
-hud.style.maxHeight = "45%";
-hud.style.overflowY = "auto";
-hud.style.background = "rgba(0,0,0,0.75)";
-hud.style.color = "#00ff99";
-hud.style.fontSize = "11px";
-hud.style.fontFamily = "monospace";
-hud.style.padding = "8px";
-hud.style.borderRadius = "10px";
-hud.style.zIndex = "9999";
-hud.style.display = "none";
-hud.style.boxShadow = "0 0 10px rgba(0,255,150,0.4)";
-
-scannerCard.appendChild(hud);
-
-let hudVisible = false;
-let hudLines = [];
-
-function hudLog(msg) {
-  const time = new Date().toLocaleTimeString();
-  const line = `[${time}] ${msg}`;
-
-  hudLines.push(line);
-  if (hudLines.length > 40) hudLines.shift();
-
-  hud.innerHTML = hudLines.join("<br>");
-  hud.scrollTop = hud.scrollHeight;
-}
-
-// ---------------- UI + LOG ----------------
+// ---------------- LOGS ----------------
 function log(msg) {
   const now = performance.now();
-  if (now - lastLog > 150) {
-    const full = `[PARKOPS] ${msg}`;
-    console.log(full);
-    hudLog(full);
-    lastLog = now;
+  if (now - lastLog < LOG_INTERVAL) return;
+
+  const line = `[PARKOPS] ${msg}`;
+  console.log(line);
+  lastLog = now;
+
+  if (logPanel) {
+    const p = document.createElement("div");
+    p.textContent = line;
+    p.style.fontSize = "11px";
+    p.style.borderBottom = "1px solid #333";
+    logPanel.prepend(p);
+    while (logPanel.children.length > 20) {
+      logPanel.removeChild(logPanel.lastChild);
+    }
   }
 }
 
+// ---------------- UTILS ----------------
+function normalizePlate(p) {
+  return p
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// ---------------- UI ----------------
 function showStatus(text) {
   statusText.textContent = text;
   statusBar.style.display = "block";
@@ -249,7 +242,8 @@ async function startCamera() {
       video: {
         facingMode: "environment",
         width: { ideal: 1920 },
-        height: { ideal: 1080 }
+        height: { ideal: 1080 },
+        frameRate: { ideal: 30 }
       },
       audio: false
     });
@@ -260,6 +254,7 @@ async function startCamera() {
     scanning = true;
     detecting = false;
     goodFrames = 0;
+    ocrBuffer = [];
     showScanning();
 
     requestAnimationFrame(scanLoop);
@@ -297,7 +292,7 @@ function resetScanner(e) {
   stopCamera();
 }
 
-// ---------------- ANALISIS FRAME ----------------
+// ---------------- ANALISIS VISUAL ----------------
 function analyzeFrame(frame) {
   let edges = 0;
   let contrast = 0;
@@ -308,7 +303,7 @@ function analyzeFrame(frame) {
   for (let i = 0; i < d.length; i += 16) {
     const gray = d[i] * 0.3 + d[i+1] * 0.59 + d[i+2] * 0.11;
     contrast += Math.abs(gray - last);
-    if (Math.abs(gray - last) > 20) edges++;
+    if (Math.abs(gray - last) > 25) edges++;
     last = gray;
   }
 
@@ -316,7 +311,7 @@ function analyzeFrame(frame) {
   const edgeDensity = edges / px;
   const avgContrast = contrast / px;
 
-  const stable = edgeDensity > 0.07 && avgContrast > 7.5;
+  const stable = edgeDensity > MIN_EDGES && avgContrast > MIN_CONTRAST;
 
   log(`[DETECT] edges=${edgeDensity.toFixed(2)} contrast=${avgContrast.toFixed(1)} stable=${stable}`);
 
@@ -344,27 +339,41 @@ async function runOCR(ocrFrame, rw, rh) {
       .replace(/\s+/g, " ")
       .trim();
 
+    lastFrameOCR = text.replace(/\s/g, "");
     log(`[OCR] RAW = "${text}"`);
 
     const match = text.match(plateRegex);
 
-    if (match) {
-      const plate = match[0].replace(/\s+/g, " ");
+    if (!match) return;
 
-      if (plate !== lastPlate) {
-        lastPlate = plate;
-        plateInput.value = plate;
-        navigator.vibrate?.([100, 50, 100]);
-        showDetected(plate);
-        log(`[OCR] MATCH = ${plate}`);
-      }
-      return true;
+    const plate = normalizePlate(match[0]);
+    const cleanPlate = plate.replace(/\s/g, "");
+
+    // Debe existir en este frame real
+    if (!lastFrameOCR.includes(cleanPlate)) {
+      log(`[OCR] HOLD (not in frame) = ${plate}`);
+      return;
     }
+
+    ocrBuffer.push(plate);
+    if (ocrBuffer.length > 4) ocrBuffer.shift();
+
+    log(`[OCR] BUFFER = ${ocrBuffer.join(" | ")}`);
+
+    const hits = ocrBuffer.filter(p => p === plate).length;
+
+    if (hits >= OCR_CONFIRM && plate !== lastPlate) {
+      lastPlate = plate;
+      plateInput.value = plate;
+      navigator.vibrate?.([100, 50, 100]);
+      showDetected(plate);
+      log(`[OCR] CONFIRMED = ${plate}`);
+      ocrBuffer = [];
+    }
+
   } catch (e) {
     console.warn("OCR error", e);
   }
-
-  return false;
 }
 
 // ---------------- LOOP PRINCIPAL ----------------
@@ -386,22 +395,22 @@ async function scanLoop() {
   canvas.height = h;
   ctx.drawImage(video, 0, 0, w, h);
 
-  // Región placa (centrada)
+  // ROI centrado para placa (ambiente real)
   const rx = w * 0.2;
-  const ry = h * 0.4;
+  const ry = h * 0.42;
   const rw = w * 0.6;
   const rh = h * 0.22;
 
   const rawFrame = ctx.getImageData(rx, ry, rw, rh);
   const ocrFrame = ctx.getImageData(rx, ry, rw, rh);
 
-  // Binarización SOLO para OCR (agresiva, real-world)
+  // Binarización OCR
   for (let i = 0; i < ocrFrame.data.length; i += 4) {
     const r = ocrFrame.data[i];
     const g = ocrFrame.data[i+1];
     const b = ocrFrame.data[i+2];
     let gray = (0.299*r + 0.587*g + 0.114*b);
-    gray = gray > 135 ? 255 : 0;
+    gray = gray > 145 ? 255 : 0;
     ocrFrame.data[i] = gray;
     ocrFrame.data[i+1] = gray;
     ocrFrame.data[i+2] = gray;
@@ -411,9 +420,9 @@ async function scanLoop() {
 
   if (good) {
     goodFrames++;
-    log(`[DETECT] good frame (${goodFrames}/2)`);
+    log(`[DETECT] good frame (${goodFrames}/3)`);
 
-    if (goodFrames >= 2) {
+    if (goodFrames >= 3) {
       await runOCR(ocrFrame, rw, rh);
       goodFrames = 0;
     }
@@ -430,21 +439,16 @@ scannerCard.addEventListener("click", () => {
   if (!stream) startCamera();
 });
 
-scannerCard.addEventListener("dblclick", () => {
-  hudVisible = !hudVisible;
-  hud.style.display = hudVisible ? "block" : "none";
-  hudLog(hudVisible ? "HUD ON" : "HUD OFF");
-});
-
 stopBtn.addEventListener("click", stopCamera);
 resetBtn.addEventListener("click", resetScanner);
 
-// ---------------- INIT ----------------
+// INIT
 showInitial();
 log("SYSTEM ready");
 
 });
 </script>
+
 
 
 {% endblock %}

@@ -68,19 +68,6 @@
   animation: pulse 1.8s infinite;
 }
 
-.scanner-header {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.8);
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  z-index: 5;
-  color: #00ffcc;
-}
-
 .scanner-status {
   position: absolute;
   bottom: 10px;
@@ -137,11 +124,6 @@
 
   <div id="plateGuide" class="scanner-frame">
     <div class="scan-line"></div>
-  </div>
-
-  <div class="scanner-header">
-    <i class="bi bi-car-front-fill me-1"></i>
-    <span id="scannerTitle">ParkOps Live Scanner</span>
   </div>
 
   <div id="cameraPlaceholder" class="scanner-placeholder">
@@ -230,91 +212,162 @@
 
 {% block extra_js %}
 <script>
+document.addEventListener("DOMContentLoaded", () => {
+
+/* ==============================
+   PARKOPS – CLEAN SCANNER
+   CANCEL RESETS VIEW
+============================== */
+
+console.log("[PARKOPS] SYSTEM ready");
+
 /* ==============================
    DOM
 ============================== */
-const video = document.getElementById("cameraVideo");
+const plateInput = document.getElementById("plateInput");
 const scannerCard = document.getElementById("scannerCard");
+const video = document.getElementById("cameraVideo");
 const plateGuide = document.getElementById("plateGuide");
 const placeholder = document.getElementById("cameraPlaceholder");
 const statusBar = document.getElementById("scannerStatus");
 const statusText = document.getElementById("statusText");
-
 const stopBtn = document.getElementById("stopBtn");
 const captureBtn = document.getElementById("captureBtn");
-
 const canvas = document.getElementById("cameraCanvas");
-const ctx = canvas.getContext("2d");
+
+if (!scannerCard || !video || !canvas || !captureBtn || !stopBtn) {
+  console.warn("⚠️ Scanner DOM incompleto");
+  return;
+}
+
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+/* ==============================
+   CONFIG
+============================== */
+const BUFFER_SIZE = 4;
+const MIN_SCORE = 1.1;
+const LEARN_KEY = "parkops_learn";
+const MAX_LOGS = 60;
+
+/* ==============================
+   PLATE FORMAT
+============================== */
+const plateRegex = /\b(P|M|N|C|A|CD)\s?[0-9]{1,3}\s?[A-Z]?\s?[0-9]{2,3}\b/;
+
+/* ==============================
+   WORD BLACKLIST
+============================== */
+const BLOCK_WORDS = [
+  "EL SALVADOR",
+  "CENTRO AMERICA",
+  "PROVISIONAL",
+  "PROVISION",
+  "REPUBLICA"
+];
+
+/* ==============================
+   DEBUG OVERLAY (DOUBLE TAP)
+============================== */
+const debugBox = document.createElement("div");
+Object.assign(debugBox.style, {
+  position: "fixed",
+  top: "10px",
+  left: "5%",
+  width: "90%",
+  maxHeight: "45%",
+  overflowY: "auto",
+  background: "rgba(0,0,0,0.9)",
+  color: "#00ff90",
+  fontSize: "11px",
+  fontFamily: "monospace",
+  padding: "8px",
+  borderRadius: "10px",
+  zIndex: "9999",
+  display: "none"
+});
+document.body.appendChild(debugBox);
+
+let debugEnabled = false;
+let lastTap = 0;
+let logs = [];
+
+function log(msg) {
+  const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  console.log("[PARKOPS]", msg);
+  if (!debugEnabled) return;
+  logs.push(line);
+  if (logs.length > MAX_LOGS) logs.shift();
+  debugBox.textContent = logs.join("\n");
+  debugBox.scrollTop = debugBox.scrollHeight;
+}
+
+/* ==============================
+   LEARNING DB
+============================== */
+let learnDB = JSON.parse(localStorage.getItem(LEARN_KEY) || "{}");
+
+function saveLearn() {
+  localStorage.setItem(LEARN_KEY, JSON.stringify(learnDB));
+}
+
+function learnAccept(plate) {
+  log(`[LEARN] ACCEPT ${plate}`);
+  learnDB[plate] = learnDB[plate] || { ok: 0, bad: 0 };
+  learnDB[plate].ok++;
+  saveLearn();
+  stopCamera();
+}
+
+function learnReject(plate) {
+  log(`[LEARN] REJECT ${plate}`);
+  learnDB[plate] = learnDB[plate] || { ok: 0, bad: 0 };
+  learnDB[plate].bad++;
+  saveLearn();
+}
 
 /* ==============================
    STATE
 ============================== */
 let stream = null;
 let scanning = false;
-let lastFrame = null;
-
-let logsVisible = false;
-let tapCount = 0;
-let tapTimer = null;
-
-/* ==============================
-   LOG PANEL
-============================== */
-const logPanel = document.createElement("div");
-logPanel.style = `
-  position:absolute;
-  inset:10px;
-  background:rgba(0,0,0,0.85);
-  color:#0f0;
-  font-family:monospace;
-  font-size:11px;
-  padding:10px;
-  overflow:auto;
-  border-radius:10px;
-  display:none;
-  z-index:99;
-`;
-scannerCard.appendChild(logPanel);
-
-function log(msg) {
-  const line = document.createElement("div");
-  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-  logPanel.appendChild(line);
-  logPanel.scrollTop = logPanel.scrollHeight;
-}
-
-/* ==============================
-   DOUBLE TAP TOGGLE LOGS
-============================== */
-scannerCard.addEventListener("click", () => {
-  tapCount++;
-  clearTimeout(tapTimer);
-
-  tapTimer = setTimeout(() => {
-    if (tapCount >= 2) {
-      logsVisible = !logsVisible;
-      logPanel.style.display = logsVisible ? "block" : "none";
-      log("LOG PANEL TOGGLED");
-    }
-    tapCount = 0;
-  }, 300);
-});
+let lastPlate = "";
+let buffer = [];
 
 /* ==============================
    UI
 ============================== */
 function showStatus(text) {
-  statusBar.style.display = "block";
   statusText.textContent = text;
+  statusBar.style.display = "block";
+}
+
+function hideStatus() {
+  statusBar.style.display = "none";
+}
+
+function restorePlaceholder() {
+  placeholder.innerHTML = `
+    <div class="scanner-icon">
+      <i class="bi bi-camera-video-fill"></i>
+    </div>
+    <div class="scanner-text">
+      Toca para escanear placa
+    </div>
+    <div class="scanner-subtext">
+      Coloca la placa dentro del marco
+    </div>
+  `;
 }
 
 function showInitial() {
+  restorePlaceholder();
   placeholder.style.display = "flex";
   video.classList.add("d-none");
   plateGuide.style.display = "none";
   stopBtn.style.display = "none";
   captureBtn.style.display = "none";
-  showStatus("Toca para iniciar cámara");
+  hideStatus();
 }
 
 function showScanning() {
@@ -323,15 +376,44 @@ function showScanning() {
   plateGuide.style.display = "block";
   stopBtn.style.display = "block";
   captureBtn.style.display = "block";
-  showStatus("Alinea la placa y presiona CAPTURAR");
+  showStatus("Alinea placa y presiona 📸");
+}
+
+/* ==============================
+   RESULT UI
+============================== */
+function showCandidate(plate, score) {
+  placeholder.innerHTML = `
+    <div class="text-warning fw-bold mb-1">Candidato detectado</div>
+    <div class="fs-4">${plate}</div>
+    <div class="small text-muted">Confianza: ${score.toFixed(2)}</div>
+    <div class="mt-2 d-flex gap-2 justify-content-center">
+      <button id="btnOk" class="btn btn-success btn-sm">✔ Confirmar</button>
+      <button id="btnBad" class="btn btn-danger btn-sm">✖ Rechazar</button>
+    </div>
+  `;
+  placeholder.style.display = "flex";
+
+  document.getElementById("btnOk").onclick = () => {
+    plateInput.value = plate;
+    learnAccept(plate);
+  };
+
+  document.getElementById("btnBad").onclick = () => {
+    learnReject(plate);
+    showScanning();
+  };
 }
 
 /* ==============================
    CAMERA
 ============================== */
 async function startCamera() {
+  if (stream) return;
   try {
-    log("Requesting camera...");
+    log("CAMERA start");
+    showStatus("Iniciando cámara...");
+
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "environment",
@@ -345,212 +427,183 @@ async function startCamera() {
     await video.play();
 
     scanning = true;
+    buffer = [];
+    lastPlate = "";
+
     showScanning();
-    scanLoop();
-    log("Camera started");
-  } catch (err) {
-    showStatus("❌ Cámara no disponible");
-    log("Camera error: " + err.message);
+  } catch (e) {
+    showStatus("❌ No se pudo abrir cámara");
+    console.error(e);
   }
 }
 
 function stopStream() {
-  if (!stream) return;
-  stream.getTracks().forEach(t => t.stop());
-  stream = null;
-  log("Camera stopped");
-}
-
-/* ==============================
-   SCAN LOOP (NO OCR)
-============================== */
-function scanLoop() {
-  if (!scanning) return;
-
-  const scale = 0.5;
-  const w = video.videoWidth * scale;
-  const h = video.videoHeight * scale;
-
-  if (!w || !h) {
-    requestAnimationFrame(scanLoop);
-    return;
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
   }
+}
 
-  canvas.width = w;
-  canvas.height = h;
-  ctx.drawImage(video, 0, 0, w, h);
-
-  // Región central (placa)
-  const rx = w * 0.15;
-  const ry = h * 0.4;
-  const rw = w * 0.7;
-  const rh = h * 0.22;
-
-  lastFrame = ctx.getImageData(rx, ry, rw, rh);
-
-  requestAnimationFrame(scanLoop);
+function stopCamera(e) {
+  e?.stopPropagation();
+  log("CAMERA stop");
+  scanning = false;
+  stopStream();
+  showInitial();
 }
 
 /* ==============================
-   PREPROCESS (LUZ DÍA + PLACAS BLANCAS)
+   BUFFER ENGINE
 ============================== */
-function preprocess(img) {
-  const d = img.data;
+function pushBuffer(plate) {
+  buffer.push(plate);
+  if (buffer.length > BUFFER_SIZE) buffer.shift();
+
+  const counts = {};
+  buffer.forEach(p => counts[p] = (counts[p] || 0) + 1);
+
+  for (const p in counts) {
+    if (counts[p] >= 2) return p;
+  }
+  return null;
+}
+
+/* ==============================
+   PREPROCESS (SUNLIGHT + WHITE PLATES)
+============================== */
+function preprocess(imgData) {
+  const d = imgData.data;
+  let sum = 0;
 
   for (let i = 0; i < d.length; i += 4) {
-    let r = d[i];
-    let g = d[i + 1];
-    let b = d[i + 2];
-
-    // Grayscale
-    let gray = (r * 0.3 + g * 0.59 + b * 0.11);
-
-    // Boost contraste
-    gray = (gray - 128) * 1.4 + 128;
-
-    // Threshold dinámico
-    const val = gray > 140 ? 255 : 0;
-
-    d[i] = d[i + 1] = d[i + 2] = val;
+    const g = d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
+    sum += g;
   }
 
-  return img;
+  const avg = sum / (d.length / 4);
+  const boost = avg > 160 ? 2.4 : 1.7;
+
+  for (let i = 0; i < d.length; i += 4) {
+    let g = d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
+    g = (g - avg) * boost + 128;
+    g = Math.max(0, Math.min(255, g));
+    d[i] = d[i+1] = d[i+2] = g;
+  }
 }
 
 /* ==============================
    OCR
 ============================== */
-async function runOCR(frame, w, h) {
-  const temp = document.createElement("canvas");
-  temp.width = w;
-  temp.height = h;
-  temp.getContext("2d").putImageData(frame, 0, 0);
+async function runOCR(frame, rw, rh) {
+  showStatus("Leyendo imagen...");
+  log("[OCR] running");
 
-  const dataUrl = temp.toDataURL("image/png");
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = rw;
+  tempCanvas.height = rh;
+  tempCanvas.getContext("2d").putImageData(frame, 0, 0);
 
   try {
-    log("OCR started");
-
-    const result = await Tesseract.recognize(dataUrl, "eng", {
-      tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-",
-      logger: m => log(`OCR ${Math.round(m.progress * 100)}%`)
+    const result = await Tesseract.recognize(tempCanvas, "eng", {
+      tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+      psm: 6
     });
 
     let text = result.data.text
-      .replace(/[^A-Z0-9-]/g, "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
 
-    if (text.length >= 4) {
-      showStatus("✅ Detectado: " + text);
-      log("PLATE FOUND: " + text);
-      beep();
-      showConfirm(text);
-    } else {
-      showStatus("⚠️ No se detectó placa clara");
-      log("NO PLATE FOUND");
+    BLOCK_WORDS.forEach(w => {
+      text = text.replace(new RegExp(w, "g"), "");
+    });
+
+    log(`[OCR] RAW = "${text}"`);
+
+    const match = text.match(plateRegex);
+    if (!match) {
+      showStatus("No se detectó placa, reintenta");
+      return;
     }
-  } catch (err) {
-    log("OCR ERROR: " + err.message);
-    showStatus("❌ Error OCR");
+
+    const plate = match[0].replace(/\s+/g, " ");
+    const mem = learnDB[plate];
+
+    let score = 1;
+    if (mem) score += mem.ok * 0.6 - mem.bad;
+
+    if (score < MIN_SCORE) {
+      showStatus("Lectura poco confiable");
+      return;
+    }
+
+    const confirmed = pushBuffer(plate);
+    if (confirmed && confirmed !== lastPlate) {
+      lastPlate = confirmed;
+      navigator.vibrate?.([100, 50, 100]);
+      log(`[OCR] MATCH = "${confirmed}"`);
+      showCandidate(confirmed, score);
+    }
+
+  } catch (e) {
+    showStatus("Error leyendo imagen");
+    console.warn("OCR error", e);
   }
 }
 
 /* ==============================
-   CONFIRM UI
+   CAPTURE
 ============================== */
-function showConfirm(plate) {
-  const box = document.createElement("div");
-  box.style = `
-    position:absolute;
-    bottom:60px;
-    left:50%;
-    transform:translateX(-50%);
-    background:#000;
-    padding:12px 20px;
-    border-radius:12px;
-    display:flex;
-    gap:10px;
-    z-index:50;
-  `;
+async function captureFrame(e) {
+  e?.stopPropagation();
+  if (!scanning || !video.videoWidth) return;
 
-  box.innerHTML = `
-    <button id="okBtn" style="background:#198754;color:white;border:none;padding:6px 14px;border-radius:8px;">✔ Confirmar</button>
-    <button id="badBtn" style="background:#dc3545;color:white;border:none;padding:6px 14px;border-radius:8px;">✖ Reintentar</button>
-  `;
+  const scale = 0.5;
+  const w = video.videoWidth * scale;
+  const h = video.videoHeight * scale;
 
-  scannerCard.appendChild(box);
+  canvas.width = w;
+  canvas.height = h;
+  ctx.drawImage(video, 0, 0, w, h);
 
-  document.getElementById("okBtn").onclick = () => {
-    log("CONFIRMED: " + plate);
-    showStatus("🚗 Registrado: " + plate);
-    box.remove();
-  };
+  const rx = w * 0.15;
+  const ry = h * 0.4;
+  const rw = w * 0.7;
+  const rh = h * 0.22;
 
-  document.getElementById("badBtn").onclick = () => {
-    log("REJECTED: " + plate);
-    showStatus("Reintenta captura");
-    box.remove();
-  };
-}
-
-/* ==============================
-   SOUND
-============================== */
-function beep() {
-  const ctxAudio = new AudioContext();
-  const osc = ctxAudio.createOscillator();
-  const gain = ctxAudio.createGain();
-
-  osc.connect(gain);
-  gain.connect(ctxAudio.destination);
-
-  osc.frequency.value = 1200;
-  gain.gain.value = 0.05;
-
-  osc.start();
-  osc.stop(ctxAudio.currentTime + 0.15);
+  const frame = ctx.getImageData(rx, ry, rw, rh);
+  preprocess(frame);
+  await runOCR(frame, rw, rh);
 }
 
 /* ==============================
    EVENTS
 ============================== */
 scannerCard.addEventListener("click", () => {
-  if (!scanning) startCamera();
+  if (!stream) startCamera();
 });
 
-stopBtn.addEventListener("click", e => {
-  e.stopPropagation();
-  scanning = false;
-  stopStream();
-  showInitial();
-});
-
-captureBtn.addEventListener("click", async e => {
-  e.stopPropagation();
-
-  if (!lastFrame) {
-    showStatus("📷 No hay imagen aún");
-    return;
+scannerCard.addEventListener("touchend", () => {
+  const now = Date.now();
+  if (now - lastTap < 350) {
+    debugEnabled = !debugEnabled;
+    debugBox.style.display = debugEnabled ? "block" : "none";
+    log("DEBUG " + (debugEnabled ? "ON" : "OFF"));
   }
-
-  showStatus("🔍 Analizando placa...");
-  log("CAPTURE pressed");
-
-  const frame = new ImageData(
-    new Uint8ClampedArray(lastFrame.data),
-    lastFrame.width,
-    lastFrame.height
-  );
-
-  preprocess(frame);
-  await runOCR(frame, frame.width, frame.height);
+  lastTap = now;
 });
+
+stopBtn.addEventListener("click", stopCamera);
+captureBtn.addEventListener("click", captureFrame);
 
 /* ==============================
    INIT
 ============================== */
 showInitial();
-log("Scanner ready");
+
+});
 </script>
+
 
 {% endblock %}

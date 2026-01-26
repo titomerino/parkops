@@ -265,8 +265,7 @@
 document.addEventListener("DOMContentLoaded", () => {
 
 /* ==============================
-   PARKOPS LPR ENGINE v3.0
-   Day/Night Adaptive + Learning
+   SYSTEM
 ============================== */
 console.log("[PARKOPS] SYSTEM ready");
 
@@ -292,19 +291,16 @@ if (!scannerCard || !video || !canvas) {
 const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
 /* ==============================
-   CONFIG
+   CONFIG (CAMPO REAL)
 ============================== */
-const OCR_INTERVAL_DAY = 1200;
-const OCR_INTERVAL_NIGHT = 450;
-const MIN_EDGES_DAY = 0.22;
-const MIN_EDGES_NIGHT = 0.15;
-const MIN_CONTRAST = 10;
-const BUFFER_SIZE = 3;
-const MAX_LOGS = 60;
-const LEARN_KEY = "parkops_learn_v3";
+const STILL_THRESHOLD = 6;   // sensibilidad movimiento
+const STILL_FRAMES = 4;     // frames quietos = snap
+const BUFFER_SIZE = 4;
+const MAX_LOGS = 50;
+const LEARN_KEY = "parkops_learn";
 
 /* ==============================
-   DEBUG OVERLAY (DOUBLE TAP)
+   DEBUG OVERLAY (DOBLE TAP)
 ============================== */
 const debugBox = document.createElement("div");
 Object.assign(debugBox.style, {
@@ -380,20 +376,14 @@ function learnReject(plate) {
 let stream = null;
 let scanning = false;
 let detecting = false;
-let goodFrames = 0;
 let lastPlate = "";
 let buffer = [];
-let lastOCRTime = 0;
-let stableCount = 0;
+let stillCount = 0;
+let lastFrameData = null;
+let snapLock = false;
 
 /* ==============================
-   OCR CANVAS (REUSE)
-============================== */
-const ocrCanvas = document.createElement("canvas");
-const ocrCtx = ocrCanvas.getContext("2d", { willReadFrequently: true });
-
-/* ==============================
-   PLATE FORMAT
+   FORMATO PLACA
 ============================== */
 const plateRegex = /\b(P|M|N|C|A|CD)\s?[0-9]{1,3}\s?[A-Z0-9]?\s?[0-9]{2,3}\b/;
 
@@ -422,9 +412,12 @@ function showScanning() {
   video.classList.remove("d-none");
   plateGuide.style.display = "block";
   stopBtn.style.display = "block";
-  showStatus("Escaneando placa...");
+  showStatus("📷 Esperando que el vehículo se detenga...");
 }
 
+/* ==============================
+   RESULTADO
+============================== */
 function showDetected(plate) {
   scanning = false;
   stopStream();
@@ -470,10 +463,10 @@ async function startCamera() {
 
     scanning = true;
     detecting = false;
-    goodFrames = 0;
+    stillCount = 0;
     buffer = [];
     lastPlate = "";
-    stableCount = 0;
+    lastFrameData = null;
 
     showScanning();
     requestAnimationFrame(scanLoop);
@@ -512,41 +505,38 @@ function resetScanner(e) {
 }
 
 /* ==============================
-   BRIGHTNESS
+   MOTION DETECTOR
 ============================== */
-function getBrightness(frame) {
-  let sum = 0;
-  for (let i = 0; i < frame.data.length; i += 16) {
-    sum += frame.data[i];
+function frameDelta(a, b) {
+  if (!a || !b) return 999;
+  let diff = 0;
+  for (let i = 0; i < a.data.length; i += 16) {
+    diff += Math.abs(a.data[i] - b.data[i]);
   }
-  return sum / (frame.data.length / 16);
+  return diff / (a.data.length / 16);
 }
 
 /* ==============================
-   FRAME ANALYSIS
+   PREPROCESS (SOL + PLACA BLANCA)
 ============================== */
-function analyzeFrame(frame, dayMode) {
-  let edges = 0;
-  let contrast = 0;
-  let last = 0;
-  const d = frame.data;
+function preprocess(imgData) {
+  const d = imgData.data;
+  let min = 255, max = 0;
 
-  for (let i = 0; i < d.length; i += 16) {
-    const gray = d[i]*0.3 + d[i+1]*0.59 + d[i+2]*0.11;
-    contrast += Math.abs(gray - last);
-    if (Math.abs(gray - last) > 22) edges++;
-    last = gray;
+  for (let i = 0; i < d.length; i += 4) {
+    const g = d[i]*0.3 + d[i+1]*0.59 + d[i+2]*0.11;
+    min = Math.min(min, g);
+    max = Math.max(max, g);
   }
 
-  const px = d.length / 16;
-  const edgeDensity = edges / px;
-  const avgContrast = contrast / px;
+  const range = max - min || 1;
 
-  const edgeLimit = dayMode ? MIN_EDGES_DAY : MIN_EDGES_NIGHT;
-  const stable = edgeDensity > edgeLimit && avgContrast > MIN_CONTRAST;
-
-  log(`[DETECT] mode=${dayMode?"DAY":"NIGHT"} edges=${edgeDensity.toFixed(2)} contrast=${avgContrast.toFixed(1)} stable=${stable}`);
-  return stable;
+  for (let i = 0; i < d.length; i += 4) {
+    let g = d[i]*0.3 + d[i+1]*0.59 + d[i+2]*0.11;
+    g = ((g - min) / range) * 255;
+    g = g > 155 ? 255 : 0;
+    d[i] = d[i+1] = d[i+2] = g;
+  }
 }
 
 /* ==============================
@@ -566,33 +556,18 @@ function pushBuffer(plate) {
 }
 
 /* ==============================
-   PREPROCESS
-============================== */
-function preprocess(imgData, dayMode) {
-  const d = imgData.data;
-  for (let i = 0; i < d.length; i += 4) {
-    let g = (d[i]*0.3 + d[i+1]*0.59 + d[i+2]*0.11);
-    if (dayMode) {
-      g = Math.min(255, Math.max(0, (g - 128) * 1.4 + 128));
-    } else {
-      g = g > 140 ? 255 : 0;
-    }
-    d[i] = d[i+1] = d[i+2] = g;
-  }
-}
-
-/* ==============================
    OCR
 ============================== */
-async function runOCR(frame, rw, rh, dayMode) {
+async function runOCR(frame, rw, rh) {
   log("[OCR] running");
 
-  ocrCanvas.width = rw;
-  ocrCanvas.height = rh;
-  ocrCtx.putImageData(frame, 0, 0);
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = rw;
+  tempCanvas.height = rh;
+  tempCanvas.getContext("2d").putImageData(frame, 0, 0);
 
   try {
-    const result = await Tesseract.recognize(ocrCanvas, "eng", {
+    const result = await Tesseract.recognize(tempCanvas, "eng", {
       tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
       psm: 6
     });
@@ -638,26 +613,18 @@ async function runOCR(frame, rw, rh, dayMode) {
 }
 
 /* ==============================
-   MAIN LOOP
+   MAIN LOOP (STOP & SNAP)
 ============================== */
 async function scanLoop() {
-  if (!scanning || detecting) return;
+  if (!scanning || detecting || snapLock) return;
   if (!video.videoWidth) {
     requestAnimationFrame(scanLoop);
     return;
   }
 
-  const now = Date.now();
-  const ocrInterval = window.DAY_MODE ? OCR_INTERVAL_DAY : OCR_INTERVAL_NIGHT;
-  if (now - lastOCRTime < ocrInterval) {
-    requestAnimationFrame(scanLoop);
-    return;
-  }
-  lastOCRTime = now;
-
   detecting = true;
 
-  const scale = 0.6;
+  const scale = 0.7;
   const w = video.videoWidth * scale;
   const h = video.videoHeight * scale;
 
@@ -670,24 +637,33 @@ async function scanLoop() {
   const rw = w * 0.6;
   const rh = h * 0.22;
 
-  const rawFrame = ctx.getImageData(rx, ry, rw, rh);
-  const brightness = getBrightness(rawFrame);
-  window.DAY_MODE = brightness > 160;
+  const frame = ctx.getImageData(rx, ry, rw, rh);
 
-  const stable = analyzeFrame(rawFrame, window.DAY_MODE);
+  const delta = frameDelta(frame, lastFrameData);
+  lastFrameData = frame;
 
-  if (stable) {
-    stableCount++;
-    log(`[DETECT] stable frame (${stableCount}/3)`);
+  log(`[MOTION] delta=${delta.toFixed(1)}`);
+
+  if (delta < STILL_THRESHOLD) {
+    stillCount++;
   } else {
-    stableCount = Math.max(0, stableCount - 1);
+    stillCount = 0;
   }
 
-  if (stableCount >= 3) {
-    const ocrFrame = ctx.getImageData(rx, ry, rw, rh);
-    preprocess(ocrFrame, window.DAY_MODE);
-    await runOCR(ocrFrame, rw, rh, window.DAY_MODE);
-    stableCount = 0;
+  if (stillCount >= STILL_FRAMES) {
+    snapLock = true;
+    showStatus("📸 Capturando placa...");
+    log("SNAP!");
+
+    preprocess(frame);
+
+    for (let i = 0; i < 3; i++) {
+      await runOCR(frame, rw, rh);
+      await new Promise(r => setTimeout(r, 150));
+    }
+
+    snapLock = false;
+    stillCount = 0;
   }
 
   detecting = false;
@@ -721,6 +697,7 @@ showInitial();
 
 });
 </script>
+
 
 
 {% endblock %}

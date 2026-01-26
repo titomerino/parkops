@@ -158,13 +158,21 @@
     <span id="statusText">Listo</span>
   </div>
 
-  <button id="resetBtn" class="scanner-btn left">
-    <i class="bi bi-arrow-clockwise"></i>
-  </button>
+<!-- CAPTURE -->
+<button id="captureBtn"
+        class="scanner-btn left"
+        title="Capturar placa"
+        style="background:rgba(25,135,84,0.9);">
+  <i class="bi bi-camera-fill"></i>
+</button>
 
-  <button id="stopBtn" class="scanner-btn right">
-    <i class="bi bi-x-lg"></i>
-  </button>
+<!-- STOP -->
+<button id="stopBtn"
+        class="scanner-btn right"
+        title="Cancelar"
+        style="display:none;">
+  <i class="bi bi-x-lg"></i>
+</button>
 </div>
 
 <canvas id="cameraCanvas" class="d-none"></canvas>
@@ -222,61 +230,114 @@
 
 {% block extra_js %}
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-
+/* ==============================
+   DOM
+============================== */
 const video = document.getElementById("cameraVideo");
 const scannerCard = document.getElementById("scannerCard");
 const plateGuide = document.getElementById("plateGuide");
 const placeholder = document.getElementById("cameraPlaceholder");
-const statusText = document.getElementById("statusText");
 const statusBar = document.getElementById("scannerStatus");
+const statusText = document.getElementById("statusText");
+
 const stopBtn = document.getElementById("stopBtn");
-const resetBtn = document.getElementById("resetBtn");
-const plateInput = document.getElementById("plateInput");
+const captureBtn = document.getElementById("captureBtn");
+
 const canvas = document.getElementById("cameraCanvas");
+const ctx = canvas.getContext("2d");
 
-const ctx = canvas.getContext("2d", { willReadFrequently: true });
-
+/* ==============================
+   STATE
+============================== */
 let stream = null;
 let scanning = false;
-let stableFrames = 0;
-let lastOCR = 0;
-let buffer = [];
-let lastCandidate = "";
+let lastFrame = null;
 
-const OCR_DELAY = 2500;
-const STABLE_REQUIRED = 8;
-const BUFFER_SIZE = 3;
+let logsVisible = false;
+let tapCount = 0;
+let tapTimer = null;
 
-const plateRegex = /\b(P|M|N|C|A|CD)\s?[0-9]{1,3}\s?[A-Z0-9]?\s?[0-9]{2,3}\b/;
+/* ==============================
+   LOG PANEL
+============================== */
+const logPanel = document.createElement("div");
+logPanel.style = `
+  position:absolute;
+  inset:10px;
+  background:rgba(0,0,0,0.85);
+  color:#0f0;
+  font-family:monospace;
+  font-size:11px;
+  padding:10px;
+  overflow:auto;
+  border-radius:10px;
+  display:none;
+  z-index:99;
+`;
+scannerCard.appendChild(logPanel);
 
-// ---------------- UI ----------------
-function showStatus(txt) {
-  statusText.textContent = txt;
+function log(msg) {
+  const line = document.createElement("div");
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  logPanel.appendChild(line);
+  logPanel.scrollTop = logPanel.scrollHeight;
+}
+
+/* ==============================
+   DOUBLE TAP TOGGLE LOGS
+============================== */
+scannerCard.addEventListener("click", () => {
+  tapCount++;
+  clearTimeout(tapTimer);
+
+  tapTimer = setTimeout(() => {
+    if (tapCount >= 2) {
+      logsVisible = !logsVisible;
+      logPanel.style.display = logsVisible ? "block" : "none";
+      log("LOG PANEL TOGGLED");
+    }
+    tapCount = 0;
+  }, 300);
+});
+
+/* ==============================
+   UI
+============================== */
+function showStatus(text) {
   statusBar.style.display = "block";
+  statusText.textContent = text;
 }
 
 function showInitial() {
   placeholder.style.display = "flex";
+  video.classList.add("d-none");
   plateGuide.style.display = "none";
   stopBtn.style.display = "none";
-  showStatus("Toca para iniciar escaneo");
+  captureBtn.style.display = "none";
+  showStatus("Toca para iniciar cámara");
 }
 
 function showScanning() {
   placeholder.style.display = "none";
+  video.classList.remove("d-none");
   plateGuide.style.display = "block";
   stopBtn.style.display = "block";
-  showStatus("Apunta a la placa y detén el vehículo");
+  captureBtn.style.display = "block";
+  showStatus("Alinea la placa y presiona CAPTURAR");
 }
 
-// ---------------- CAMERA ----------------
+/* ==============================
+   CAMERA
+============================== */
 async function startCamera() {
-  if (stream) return;
-
   try {
+    log("Requesting camera...");
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 }},
+      video: {
+        facingMode: "environment",
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
       audio: false
     });
 
@@ -284,152 +345,212 @@ async function startCamera() {
     await video.play();
 
     scanning = true;
-    stableFrames = 0;
-    buffer = [];
-    lastCandidate = "";
-
     showScanning();
-    requestAnimationFrame(scanLoop);
-
-  } catch {
+    scanLoop();
+    log("Camera started");
+  } catch (err) {
     showStatus("❌ Cámara no disponible");
+    log("Camera error: " + err.message);
   }
 }
 
-function stopCamera() {
-  scanning = false;
-  if (stream) {
-    stream.getTracks().forEach(t => t.stop());
-    stream = null;
-  }
-  showInitial();
+function stopStream() {
+  if (!stream) return;
+  stream.getTracks().forEach(t => t.stop());
+  stream = null;
+  log("Camera stopped");
 }
 
-// ---------------- FAST DETECTOR ----------------
-function detectStable(frame) {
-  let edges = 0;
-  for (let i = 0; i < frame.data.length; i += 16) {
-    const g1 = frame.data[i];
-    const g2 = frame.data[i + 4] || g1;
-    if (Math.abs(g1 - g2) > 40) edges++;
+/* ==============================
+   SCAN LOOP (NO OCR)
+============================== */
+function scanLoop() {
+  if (!scanning) return;
+
+  const scale = 0.5;
+  const w = video.videoWidth * scale;
+  const h = video.videoHeight * scale;
+
+  if (!w || !h) {
+    requestAnimationFrame(scanLoop);
+    return;
   }
-  return edges > 40;
+
+  canvas.width = w;
+  canvas.height = h;
+  ctx.drawImage(video, 0, 0, w, h);
+
+  // Región central (placa)
+  const rx = w * 0.15;
+  const ry = h * 0.4;
+  const rw = w * 0.7;
+  const rh = h * 0.22;
+
+  lastFrame = ctx.getImageData(rx, ry, rw, rh);
+
+  requestAnimationFrame(scanLoop);
 }
 
-// ---------------- BUFFER ----------------
-function pushBuffer(plate) {
-  buffer.push(plate);
-  if (buffer.length > BUFFER_SIZE) buffer.shift();
+/* ==============================
+   PREPROCESS (LUZ DÍA + PLACAS BLANCAS)
+============================== */
+function preprocess(img) {
+  const d = img.data;
 
-  const freq = {};
-  buffer.forEach(p => freq[p] = (freq[p] || 0) + 1);
+  for (let i = 0; i < d.length; i += 4) {
+    let r = d[i];
+    let g = d[i + 1];
+    let b = d[i + 2];
 
-  for (const p in freq) {
-    if (freq[p] >= 2) return p;
+    // Grayscale
+    let gray = (r * 0.3 + g * 0.59 + b * 0.11);
+
+    // Boost contraste
+    gray = (gray - 128) * 1.4 + 128;
+
+    // Threshold dinámico
+    const val = gray > 140 ? 255 : 0;
+
+    d[i] = d[i + 1] = d[i + 2] = val;
   }
+
+  return img;
 }
 
-// ---------------- OCR ----------------
+/* ==============================
+   OCR
+============================== */
 async function runOCR(frame, w, h) {
   const temp = document.createElement("canvas");
   temp.width = w;
   temp.height = h;
   temp.getContext("2d").putImageData(frame, 0, 0);
 
-  const result = await Tesseract.recognize(temp, "eng", {
-    tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-    psm: 7
-  });
+  const dataUrl = temp.toDataURL("image/png");
 
-  let text = result.data.text
-    .toUpperCase()
-    .replace(/[^A-Z0-9 ]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  try {
+    log("OCR started");
 
-  const match = text.match(plateRegex);
-  if (!match) return;
+    const result = await Tesseract.recognize(dataUrl, "eng", {
+      tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-",
+      logger: m => log(`OCR ${Math.round(m.progress * 100)}%`)
+    });
 
-  const plate = match[0].replace(/\s+/g, " ");
-  const confirmed = pushBuffer(plate);
+    let text = result.data.text
+      .replace(/[^A-Z0-9-]/g, "")
+      .trim();
 
-  if (confirmed && confirmed !== lastCandidate) {
-    lastCandidate = confirmed;
-    showCandidate(confirmed);
+    if (text.length >= 4) {
+      showStatus("✅ Detectado: " + text);
+      log("PLATE FOUND: " + text);
+      beep();
+      showConfirm(text);
+    } else {
+      showStatus("⚠️ No se detectó placa clara");
+      log("NO PLATE FOUND");
+    }
+  } catch (err) {
+    log("OCR ERROR: " + err.message);
+    showStatus("❌ Error OCR");
   }
 }
 
-// ---------------- RESULT UI ----------------
-function showCandidate(plate) {
-  placeholder.innerHTML = `
-    <div class="scanner-text text-warning">¿Es esta la placa?</div>
-    <div class="fs-3">${plate}</div>
-    <div class="mt-2 d-flex gap-2 justify-content-center">
-      <button id="okBtn" class="btn btn-success btn-sm">✔ Sí</button>
-      <button id="badBtn" class="btn btn-danger btn-sm">✖ No</button>
-    </div>
+/* ==============================
+   CONFIRM UI
+============================== */
+function showConfirm(plate) {
+  const box = document.createElement("div");
+  box.style = `
+    position:absolute;
+    bottom:60px;
+    left:50%;
+    transform:translateX(-50%);
+    background:#000;
+    padding:12px 20px;
+    border-radius:12px;
+    display:flex;
+    gap:10px;
+    z-index:50;
   `;
-  placeholder.style.display = "flex";
+
+  box.innerHTML = `
+    <button id="okBtn" style="background:#198754;color:white;border:none;padding:6px 14px;border-radius:8px;">✔ Confirmar</button>
+    <button id="badBtn" style="background:#dc3545;color:white;border:none;padding:6px 14px;border-radius:8px;">✖ Reintentar</button>
+  `;
+
+  scannerCard.appendChild(box);
 
   document.getElementById("okBtn").onclick = () => {
-    plateInput.value = plate;
-    stopCamera();
+    log("CONFIRMED: " + plate);
+    showStatus("🚗 Registrado: " + plate);
+    box.remove();
   };
 
   document.getElementById("badBtn").onclick = () => {
-    buffer = [];
-    lastCandidate = "";
-    placeholder.style.display = "none";
-    showStatus("Corrige posición o luz");
+    log("REJECTED: " + plate);
+    showStatus("Reintenta captura");
+    box.remove();
   };
 }
 
-// ---------------- LOOP ----------------
-async function scanLoop() {
-  if (!scanning || !video.videoWidth) {
-    requestAnimationFrame(scanLoop);
+/* ==============================
+   SOUND
+============================== */
+function beep() {
+  const ctxAudio = new AudioContext();
+  const osc = ctxAudio.createOscillator();
+  const gain = ctxAudio.createGain();
+
+  osc.connect(gain);
+  gain.connect(ctxAudio.destination);
+
+  osc.frequency.value = 1200;
+  gain.gain.value = 0.05;
+
+  osc.start();
+  osc.stop(ctxAudio.currentTime + 0.15);
+}
+
+/* ==============================
+   EVENTS
+============================== */
+scannerCard.addEventListener("click", () => {
+  if (!scanning) startCamera();
+});
+
+stopBtn.addEventListener("click", e => {
+  e.stopPropagation();
+  scanning = false;
+  stopStream();
+  showInitial();
+});
+
+captureBtn.addEventListener("click", async e => {
+  e.stopPropagation();
+
+  if (!lastFrame) {
+    showStatus("📷 No hay imagen aún");
     return;
   }
 
-  const w = video.videoWidth * 0.6;
-  const h = video.videoHeight * 0.6;
+  showStatus("🔍 Analizando placa...");
+  log("CAPTURE pressed");
 
-  canvas.width = w;
-  canvas.height = h;
-  ctx.drawImage(video, 0, 0, w, h);
+  const frame = new ImageData(
+    new Uint8ClampedArray(lastFrame.data),
+    lastFrame.width,
+    lastFrame.height
+  );
 
-  const rx = w * 0.15;
-  const ry = h * 0.38;
-  const rw = w * 0.7;
-  const rh = h * 0.25;
-
-  const frame = ctx.getImageData(rx, ry, rw, rh);
-  const stable = detectStable(frame);
-
-  if (stable) stableFrames++;
-  else stableFrames = Math.max(0, stableFrames - 1);
-
-  showStatus(`Estabilidad: ${stableFrames}/${STABLE_REQUIRED}`);
-
-  const now = Date.now();
-  if (stableFrames >= STABLE_REQUIRED && now - lastOCR > OCR_DELAY) {
-    lastOCR = now;
-    showStatus("Leyendo placa...");
-    await runOCR(frame, rw, rh);
-  }
-
-  requestAnimationFrame(scanLoop);
-}
-
-// ---------------- EVENTS ----------------
-scannerCard.addEventListener("click", startCamera);
-stopBtn.addEventListener("click", stopCamera);
-resetBtn.addEventListener("click", stopCamera);
-
-// ---------------- INIT ----------------
-showInitial();
-
+  preprocess(frame);
+  await runOCR(frame, frame.width, frame.height);
 });
+
+/* ==============================
+   INIT
+============================== */
+showInitial();
+log("Scanner ready");
 </script>
 
 {% endblock %}

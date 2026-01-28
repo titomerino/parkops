@@ -6,6 +6,109 @@
 {% block content %}
 
 {% include 'shell/partials/_messages_alert.html' with messages=messages %}
+<style>
+.scanner-shell {
+  position: relative;
+  height: 300px;
+  background: #000;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.scanner-shell video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scanner-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.scanner-frame {
+  position: absolute;
+  width: 70%;
+  height: 25%;
+  top: 38%;
+  left: 15%;
+  border: 2px solid #00ffcc;
+  border-radius: 10px;
+  box-shadow: 0 0 20px rgba(0,255,204,0.7);
+  z-index: 3;
+  display: none;
+}
+
+.scan-line {
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #00ffcc, transparent);
+  animation: scan 1.5s linear infinite;
+}
+
+.scanner-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  color: #ccc;
+  text-align: center;
+}
+
+.scanner-icon {
+  font-size: 3rem;
+  color: #00ffcc;
+  animation: pulse 1.8s infinite;
+}
+
+.scanner-status {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.8);
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  color: #fff;
+  z-index: 5;
+  display: none;
+}
+
+.scanner-btn {
+  position: absolute;
+  bottom: 10px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  z-index: 6;
+  background: rgba(0,0,0,0.9);
+  color: white;
+}
+
+.scanner-btn.left { left: 10px; }
+.scanner-btn.right { right: 10px; background: rgba(220,53,69,0.9); }
+
+@keyframes scan {
+  from { top: 0; }
+  to { top: 100%; }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: .6; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+</style>
 
 <!-- Card principal -->
 <div class="card bg-dark text-light border-0 shadow-lg rounded-4">
@@ -13,57 +116,51 @@
 
         <!-- Área de cámara -->
         <div class="mb-3" style="height:300px;">
-<!-- Área cámara -->
-<div id="scannerCard" class="bg-dark border border-secondary rounded-4 shadow-lg p-2"
-     style="height:300px; position:relative; overflow:hidden; cursor:pointer;">
+<div class="scanner-shell rounded-4 shadow-lg" id="scannerCard">
 
-    <!-- Video -->
-    <video id="cameraVideo"
-           autoplay
-           playsinline
-           class="w-100 h-100 d-none rounded-4"
-           style="object-fit:cover;"></video>
+  <video id="cameraVideo" autoplay playsinline></video>
 
-    <!-- Guía placa -->
-    <div id="plateGuide"
-         class="position-absolute rounded"
-         style="border:2px dashed #0d6efd; width:60%; height:22%; top:39%; left:20%; display:none; pointer-events:none;">
+  <div class="scanner-mask"></div>
+
+  <div id="plateGuide" class="scanner-frame">
+    <div class="scan-line"></div>
+  </div>
+
+  <div id="cameraPlaceholder" class="scanner-placeholder">
+    <div class="scanner-icon">
+      <i class="bi bi-camera-video-fill"></i>
     </div>
-
-    <!-- Placeholder -->
-    <div id="cameraPlaceholder"
-         class="position-absolute bottom-0 w-100 text-center pb-3">
-        <i class="bi bi-camera-video-fill fs-1 text-info"></i>
-        <div class="small text-muted">Toca para escanear placa</div>
+    <div class="scanner-text">Toca para escanear</div>
+    <div class="scanner-subtext">
+      Detén el vehículo a 1–4 metros
     </div>
+  </div>
 
-    <!-- Estado -->
-    <div id="scannerStatus"
-         class="position-absolute bottom-0 w-100 text-center py-1"
-         style="background:rgba(0,0,0,.6); display:none;">
-        <span class="small text-light" id="statusText">Iniciando cámara...</span>
-    </div>
+  <div id="scannerStatus" class="scanner-status">
+    <span id="statusText">Listo</span>
+  </div>
 
-    <!-- Reset -->
-    <button id="resetBtn"
-            class="btn btn-warning btn-sm position-absolute bottom-0 start-0 m-2 rounded-circle shadow"
-            style="width:42px; height:42px;">
-        <i class="bi bi-arrow-clockwise"></i>
-    </button>
+<!-- CAPTURE -->
+<button id="captureBtn"
+        class="scanner-btn left"
+        title="Capturar placa"
+        style="background:rgba(25,135,84,0.9);">
+  <i class="bi bi-camera-fill"></i>
+</button>
 
-    <!-- Stop -->
-    <button id="stopBtn"
-            class="btn btn-danger btn-sm position-absolute bottom-0 end-0 m-2 rounded-circle shadow"
-            style="width:42px; height:42px; display:none;">
-        <i class="bi bi-x-lg"></i>
-    </button>
-
-</div>
-
+<!-- STOP -->
+<button id="stopBtn"
+        class="scanner-btn right"
+        title="Cancelar"
+        style="display:none;">
+  <i class="bi bi-x-lg"></i>
+</button>
 </div>
 
 <canvas id="cameraCanvas" class="d-none"></canvas>
 
+
+        </div>
         <!-- Input -->
         <form method="POST">
             {% csrf_token %}
@@ -117,6 +214,16 @@
 <script>
 document.addEventListener("DOMContentLoaded", () => {
 
+/* ==============================
+   PARKOPS – CLEAN SCANNER
+   CANCEL RESETS VIEW
+============================== */
+
+console.log("[PARKOPS] SYSTEM ready");
+
+/* ==============================
+   DOM
+============================== */
 const plateInput = document.getElementById("plateInput");
 const scannerCard = document.getElementById("scannerCard");
 const video = document.getElementById("cameraVideo");
@@ -124,43 +231,142 @@ const plateGuide = document.getElementById("plateGuide");
 const placeholder = document.getElementById("cameraPlaceholder");
 const statusBar = document.getElementById("scannerStatus");
 const statusText = document.getElementById("statusText");
-const resetBtn = document.getElementById("resetBtn");
 const stopBtn = document.getElementById("stopBtn");
+const captureBtn = document.getElementById("captureBtn");
 const canvas = document.getElementById("cameraCanvas");
 
-if (!scannerCard || !video || !canvas) {
-  console.warn("⚠️ Scanner DOM no encontrado");
+if (!scannerCard || !video || !canvas || !captureBtn || !stopBtn) {
+  console.warn("⚠️ Scanner DOM incompleto");
   return;
 }
 
-const ctx = canvas.getContext("2d");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
-let stream = null;
-let scanning = false;
-let detecting = false;
+/* ==============================
+   CONFIG
+============================== */
+const BUFFER_SIZE = 4;
+const MIN_SCORE = 1.1;
+const LEARN_KEY = "parkops_learn";
+const MAX_LOGS = 60;
 
-// Formatos soportados:
-// P 123-456 | P 12A-345 | M 123-456 | N 12-345 | CD 12-345 | C 123-456 | A 12-345
-// Espacios opcionales
+/* ==============================
+   PLATE FORMAT
+============================== */
 const plateRegex = /\b(P|M|N|C|A|CD)\s?[0-9]{1,3}\s?[A-Z]?\s?[0-9]{2,3}\b/;
 
-// ---------------- UI ----------------
+/* ==============================
+   WORD BLACKLIST
+============================== */
+const BLOCK_WORDS = [
+  "EL SALVADOR",
+  "CENTRO AMERICA",
+  "PROVISIONAL",
+  "PROVISION",
+  "REPUBLICA"
+];
+
+/* ==============================
+   DEBUG OVERLAY (DOUBLE TAP)
+============================== */
+const debugBox = document.createElement("div");
+Object.assign(debugBox.style, {
+  position: "fixed",
+  top: "10px",
+  left: "5%",
+  width: "90%",
+  maxHeight: "45%",
+  overflowY: "auto",
+  background: "rgba(0,0,0,0.9)",
+  color: "#00ff90",
+  fontSize: "11px",
+  fontFamily: "monospace",
+  padding: "8px",
+  borderRadius: "10px",
+  zIndex: "9999",
+  display: "none"
+});
+document.body.appendChild(debugBox);
+
+let debugEnabled = false;
+let lastTap = 0;
+let logs = [];
+
+function log(msg) {
+  const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  console.log("[PARKOPS]", msg);
+  if (!debugEnabled) return;
+  logs.push(line);
+  if (logs.length > MAX_LOGS) logs.shift();
+  debugBox.textContent = logs.join("\n");
+  debugBox.scrollTop = debugBox.scrollHeight;
+}
+
+/* ==============================
+   LEARNING DB
+============================== */
+let learnDB = JSON.parse(localStorage.getItem(LEARN_KEY) || "{}");
+
+function saveLearn() {
+  localStorage.setItem(LEARN_KEY, JSON.stringify(learnDB));
+}
+
+function learnAccept(plate) {
+  log(`[LEARN] ACCEPT ${plate}`);
+  learnDB[plate] = learnDB[plate] || { ok: 0, bad: 0 };
+  learnDB[plate].ok++;
+  saveLearn();
+  stopCamera();
+}
+
+function learnReject(plate) {
+  log(`[LEARN] REJECT ${plate}`);
+  learnDB[plate] = learnDB[plate] || { ok: 0, bad: 0 };
+  learnDB[plate].bad++;
+  saveLearn();
+}
+
+/* ==============================
+   STATE
+============================== */
+let stream = null;
+let scanning = false;
+let lastPlate = "";
+let buffer = [];
+
+/* ==============================
+   UI
+============================== */
 function showStatus(text) {
-  if (!statusBar) return;
   statusText.textContent = text;
   statusBar.style.display = "block";
 }
 
 function hideStatus() {
-  if (!statusBar) return;
   statusBar.style.display = "none";
 }
 
+function restorePlaceholder() {
+  placeholder.innerHTML = `
+    <div class="scanner-icon">
+      <i class="bi bi-camera-video-fill"></i>
+    </div>
+    <div class="scanner-text">
+      Toca para escanear placa
+    </div>
+    <div class="scanner-subtext">
+      Coloca la placa dentro del marco
+    </div>
+  `;
+}
+
 function showInitial() {
-  placeholder.style.display = "block";
+  restorePlaceholder();
+  placeholder.style.display = "flex";
   video.classList.add("d-none");
   plateGuide.style.display = "none";
   stopBtn.style.display = "none";
+  captureBtn.style.display = "none";
   hideStatus();
 }
 
@@ -169,35 +375,51 @@ function showScanning() {
   video.classList.remove("d-none");
   plateGuide.style.display = "block";
   stopBtn.style.display = "block";
-  showStatus("Escaneando placa...");
+  captureBtn.style.display = "block";
+  showStatus("Alinea placa y presiona 📸");
 }
 
-function showDetected(plate) {
-  scanning = false;
-  stopStream();
-
-  hideStatus();
-  plateGuide.style.display = "none";
-  stopBtn.style.display = "none";
-  video.classList.add("d-none");
-
+/* ==============================
+   RESULT UI
+============================== */
+function showCandidate(plate, score) {
   placeholder.innerHTML = `
-    <i class="bi bi-check-circle-fill fs-1 text-success"></i>
-    <div class="fw-bold text-success">Placa detectada</div>
-    <div class="small text-light mt-1">${plate}</div>
+    <div class="text-warning fw-bold mb-1">Candidato detectado</div>
+    <div class="fs-4">${plate}</div>
+    <div class="small text-muted">Confianza: ${score.toFixed(2)}</div>
+    <div class="mt-2 d-flex gap-2 justify-content-center">
+      <button id="btnOk" class="btn btn-success btn-sm">✔ Confirmar</button>
+      <button id="btnBad" class="btn btn-danger btn-sm">✖ Rechazar</button>
+    </div>
   `;
-  placeholder.style.display = "block";
+  placeholder.style.display = "flex";
+
+  document.getElementById("btnOk").onclick = () => {
+    plateInput.value = plate;
+    learnAccept(plate);
+  };
+
+  document.getElementById("btnBad").onclick = () => {
+    learnReject(plate);
+    showScanning();
+  };
 }
 
-// ---------------- CAMERA ----------------
+/* ==============================
+   CAMERA
+============================== */
 async function startCamera() {
   if (stream) return;
-
   try {
+    log("CAMERA start");
     showStatus("Iniciando cámara...");
 
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: {
+        facingMode: "environment",
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
       audio: false
     });
 
@@ -205,13 +427,13 @@ async function startCamera() {
     await video.play();
 
     scanning = true;
-    detecting = false;
-    showScanning();
-    requestAnimationFrame(scanLoop);
+    buffer = [];
+    lastPlate = "";
 
-  } catch (err) {
-    showStatus("❌ No se pudo acceder a la cámara");
-    console.error(err);
+    showScanning();
+  } catch (e) {
+    showStatus("❌ No se pudo abrir cámara");
+    console.error(e);
   }
 }
 
@@ -224,59 +446,57 @@ function stopStream() {
 
 function stopCamera(e) {
   e?.stopPropagation();
+  log("CAMERA stop");
   scanning = false;
   stopStream();
   showInitial();
 }
 
-// ---------------- RESET ----------------
-function resetScanner(e) {
-  e?.stopPropagation();
-  if (plateInput) plateInput.value = "";
+/* ==============================
+   BUFFER ENGINE
+============================== */
+function pushBuffer(plate) {
+  buffer.push(plate);
+  if (buffer.length > BUFFER_SIZE) buffer.shift();
 
-  placeholder.innerHTML = `
-    <i class="bi bi-camera-video-fill fs-1 text-info"></i>
-    <div class="small text-muted">Toca para escanear placa</div>
-  `;
+  const counts = {};
+  buffer.forEach(p => counts[p] = (counts[p] || 0) + 1);
 
-  stopCamera();
+  for (const p in counts) {
+    if (counts[p] >= 2) return p;
+  }
+  return null;
 }
 
-// ---------------- OCR LOOP ----------------
-async function scanLoop() {
-  if (!scanning || detecting) return;
-  if (!video.videoWidth) {
-    requestAnimationFrame(scanLoop);
-    return;
+/* ==============================
+   PREPROCESS (SUNLIGHT + WHITE PLATES)
+============================== */
+function preprocess(imgData) {
+  const d = imgData.data;
+  let sum = 0;
+
+  for (let i = 0; i < d.length; i += 4) {
+    const g = d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
+    sum += g;
   }
 
-  detecting = true;
+  const avg = sum / (d.length / 4);
+  const boost = avg > 160 ? 2.4 : 1.7;
 
-  const scale = 0.5;
-  const w = video.videoWidth * scale;
-  const h = video.videoHeight * scale;
+  for (let i = 0; i < d.length; i += 4) {
+    let g = d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
+    g = (g - avg) * boost + 128;
+    g = Math.max(0, Math.min(255, g));
+    d[i] = d[i+1] = d[i+2] = g;
+  }
+}
 
-  canvas.width = w;
-  canvas.height = h;
-  ctx.drawImage(video, 0, 0, w, h);
-
-  const rx = w * 0.2;
-  const ry = h * 0.4;
-  const rw = w * 0.6;
-  const rh = h * 0.22;
-
-  const frame = ctx.getImageData(rx, ry, rw, rh);
-
-    for (let i = 0; i < frame.data.length; i += 4) {
-    const r = frame.data[i];
-    const g = frame.data[i+1];
-    const b = frame.data[i+2];
-    const gray = (0.3 * r + 0.59 * g + 0.11 * b);
-    const bw = gray > 135 ? 255 : 0;
-    frame.data[i] = bw;
-    frame.data[i+1] = bw;
-    frame.data[i+2] = bw;
-    }
+/* ==============================
+   OCR
+============================== */
+async function runOCR(frame, rw, rh) {
+  showStatus("Leyendo imagen...");
+  log("[OCR] running");
 
   const tempCanvas = document.createElement("canvas");
   tempCanvas.width = rw;
@@ -295,38 +515,95 @@ async function scanLoop() {
       .replace(/\s+/g, " ")
       .trim();
 
-    const match = text.match(plateRegex);
+    BLOCK_WORDS.forEach(w => {
+      text = text.replace(new RegExp(w, "g"), "");
+    });
 
-    if (match) {
-      const plate = match[0].replace(/\s+/g, " ");
-      if (plateInput) plateInput.value = plate;
-      navigator.vibrate?.([100, 50, 100]);
-      showDetected(plate);
+    log(`[OCR] RAW = "${text}"`);
+
+    const match = text.match(plateRegex);
+    if (!match) {
+      showStatus("No se detectó placa, reintenta");
       return;
     }
 
+    const plate = match[0].replace(/\s+/g, " ");
+    const mem = learnDB[plate];
+
+    let score = 1;
+    if (mem) score += mem.ok * 0.6 - mem.bad;
+
+    if (score < MIN_SCORE) {
+      showStatus("Lectura poco confiable");
+      return;
+    }
+
+    const confirmed = pushBuffer(plate);
+    if (confirmed && confirmed !== lastPlate) {
+      lastPlate = confirmed;
+      navigator.vibrate?.([100, 50, 100]);
+      log(`[OCR] MATCH = "${confirmed}"`);
+      showCandidate(confirmed, score);
+    }
+
   } catch (e) {
+    showStatus("Error leyendo imagen");
     console.warn("OCR error", e);
   }
-
-  detecting = false;
-  requestAnimationFrame(scanLoop);
 }
 
-// ---------------- EVENTS ----------------
+/* ==============================
+   CAPTURE
+============================== */
+async function captureFrame(e) {
+  e?.stopPropagation();
+  if (!scanning || !video.videoWidth) return;
+
+  const scale = 0.5;
+  const w = video.videoWidth * scale;
+  const h = video.videoHeight * scale;
+
+  canvas.width = w;
+  canvas.height = h;
+  ctx.drawImage(video, 0, 0, w, h);
+
+  const rx = w * 0.15;
+  const ry = h * 0.4;
+  const rw = w * 0.7;
+  const rh = h * 0.22;
+
+  const frame = ctx.getImageData(rx, ry, rw, rh);
+  preprocess(frame);
+  await runOCR(frame, rw, rh);
+}
+
+/* ==============================
+   EVENTS
+============================== */
 scannerCard.addEventListener("click", () => {
   if (!stream) startCamera();
 });
 
-stopBtn.addEventListener("click", stopCamera);
-resetBtn.addEventListener("click", resetScanner);
+scannerCard.addEventListener("touchend", () => {
+  const now = Date.now();
+  if (now - lastTap < 350) {
+    debugEnabled = !debugEnabled;
+    debugBox.style.display = debugEnabled ? "block" : "none";
+    log("DEBUG " + (debugEnabled ? "ON" : "OFF"));
+  }
+  lastTap = now;
+});
 
-// INIT
+stopBtn.addEventListener("click", stopCamera);
+captureBtn.addEventListener("click", captureFrame);
+
+/* ==============================
+   INIT
+============================== */
 showInitial();
 
 });
 </script>
-
 
 
 {% endblock %}

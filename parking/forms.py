@@ -1,5 +1,6 @@
 from django import forms
 from .models import Fee, Entry, Configuration
+from django.core.validators import RegexValidator
 
 
 class FeeForm(forms.ModelForm):
@@ -110,12 +111,17 @@ class ConfigurationForm(forms.ModelForm):
 
 
 class PlateSearchForm(forms.Form):
-    """ Formulario de busquedas de placa """
     plate = forms.CharField(
         max_length=10,
-        help_text="Escriba la placa sin guiones",
+        label="Placa",
         widget=forms.TextInput(attrs={
             'class': 'form-control',
             'placeholder': 'P123456'
-        })
+        }),
+        validators=[
+            RegexValidator(
+                regex=r'^[A-Za-z0-9 ]+$',
+                message="Solo se permiten letras, números y espacios"
+            )
+        ]
     )

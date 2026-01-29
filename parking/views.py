@@ -125,6 +125,12 @@ def search_plate(request):
             else:
                 # No existe → entrada
                 return redirect('register', plate)
+            
+        else:
+            messages.error(
+                request,
+                "La placa solo puede contener letras, números y espacios"
+            )
 
     return render(request, "parking/search_plate.html", {
         'form': form

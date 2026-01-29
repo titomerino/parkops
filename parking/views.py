@@ -81,7 +81,9 @@ def departure(request, pk):
 
         entry.save()
         messages.success(request, f"La salida para {entry.plate} se guardó correctamente.")
-        return redirect('search_plate')
+        return_url = request.session.pop('departure_return_url', None)
+        print("RETURN URL:", request.session.get('departure_return_url'))
+        return redirect(return_url or 'search_plate')
 
     # Mostrar datos en solo lectura
     form = EntryExitForm(initial={
@@ -103,6 +105,17 @@ def departure(request, pk):
 
 
 @login_required(login_url='login')
+def go_to_departure(request, pk):
+    # Página REAL de donde vino el usuario
+    return_url = request.META.get('HTTP_REFERER')
+
+    if return_url:
+        request.session['departure_return_url'] = return_url
+
+    return redirect('departure', pk)
+    
+
+@login_required(login_url='login')
 def search_plate(request):
     """Vista principal: buscar placa y decidir flujo"""
 
@@ -121,6 +134,7 @@ def search_plate(request):
 
             if entry:
                 # Existe → salida
+                save_return_url(request)
                 return redirect('departure', entry.id)
             else:
                 # No existe → entrada
@@ -164,6 +178,14 @@ def record(request):
         'entries': entries,
         'today': today
     })
+
+## functions ##
+def save_return_url(request):
+    path = request.get_full_path()
+    print("GUARDANDO:", path)
+    # Evita guardar la misma vista de departure como retorno
+    if not path.startswith("/departure"):
+        request.session['departure_return_url'] = path
 
 
 def get_daily_income():

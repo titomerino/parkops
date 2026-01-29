@@ -214,3 +214,12 @@ def get_daily_income():
         "total_daily_income": total_daily_income,
         "total_monthly_income": total_monthly_income
     }
+
+
+def get_today_entries_count():
+    """Retorna la cantidad de carros dentro hoy"""
+    today = now().date()
+
+    return Entry.objects.filter(
+        entry_date_hour__date=today
+    ).count()

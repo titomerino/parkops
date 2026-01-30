@@ -1,7 +1,7 @@
 {% extends "shell/base.html" %}
 
-{% block title %}ParkOps / Registro{% endblock %}
-{% block page_title %}Parking mensualidades{% endblock %}
+{% block title %}ParkOps / Suscripciones{% endblock %}
+{% block page_title %}Parking {% if is_edit %} Editar Suscripción {% else %} Registrar Suscripción {% endif %}{% endblock %}
 
 {% block content %}
 
@@ -18,13 +18,13 @@
                     <div>
                         <h5 class="mb-0">
                             {% if is_edit %}
-                                Editar mensualidad
+                                Editar suscripción
                             {% else %}
-                                Registrar mensualidad
+                                Registrar suscripción
                             {% endif %}
                         </h5>
                         <small class="text-muted">
-                            Agrega un vehículo con pago mensual al sistema
+                            Define cómo se cobrará una placa en el sistema
                         </small>
                     </div>
                 </div>
@@ -54,7 +54,7 @@
                     <!-- PROPIETARIO -->
                     <div class="mb-3">
                         <label class="form-label text-muted">
-                            Nombre del propietario
+                            Nombre del propietario (opcional)
                         </label>
 
                         {{ form.owner_name }}
@@ -66,10 +66,25 @@
                         {% endif %}
                     </div>
 
+                    <!-- TIPO DE COBRO -->
+                    <div class="mb-3">
+                        <label class="form-label text-muted">
+                            Tipo de cobro
+                        </label>
+
+                        {{ form.billing_type }}
+
+                        {% if form.billing_type.errors %}
+                            <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                {{ form.billing_type.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
                     <!-- MONTO -->
                     <div class="mb-3">
                         <label class="form-label text-muted">
-                            Monto mensual ($)
+                            Monto ($)
                         </label>
 
                         <div class="input-group">
@@ -77,12 +92,12 @@
                                 <i class="bi bi-cash-coin"></i>
                             </span>
 
-                            {{ form.monthly_amount }}
+                            {{ form.amount }}
                         </div>
 
-                        {% if form.monthly_amount.errors %}
+                        {% if form.amount.errors %}
                             <div class="alert alert-danger mt-2 py-1 px-2 small">
-                                {{ form.monthly_amount.errors.0 }}
+                                {{ form.amount.errors.0 }}
                             </div>
                         {% endif %}
                     </div>
@@ -91,7 +106,7 @@
                     <div class="form-check form-switch mb-4">
                         {{ form.active }}
                         <label class="form-check-label text-muted">
-                            Mensualidad activa
+                            Suscripción activa
                         </label>
                     </div>
 
@@ -102,7 +117,7 @@
                         {% if is_edit %}
                             Guardar cambios
                         {% else %}
-                            Guardar mensualidad
+                            Guardar suscripción
                         {% endif %}
                     </button>
                 </div>
@@ -117,4 +132,7 @@
 
 {% block menu_bottom %}
     {% include 'parking/partials/_parking_menu_month_bottom.html' %}
+{% endblock %}
+
+{% block extra_js %}
 {% endblock %}

@@ -1,7 +1,7 @@
 {% extends "shell/base.html" %}
 
 {% block title %}ParkOps / Entradas del día{% endblock %}
-{% block page_title %}Parking mensualidades{% endblock %}
+{% block page_title %}Parking Suscripciones{% endblock %}
 
 {% block content %}
 
@@ -14,13 +14,13 @@
         <!-- Buscador -->
         <div class="input-group mb-2">
 
-            <span class="input-group-text bg-dark border border-white text-light rounded-start-3">
+            <span class="input-group-text bg-dark border border-secondary text-light rounded-start-3">
                 <i class="bi bi-search text-light opacity-75"></i>
             </span>
 
             <input type="text"
                 id="plateSearch"
-                class="form-control bg-dark border border-white text-light rounded-end-3"
+                class="form-control bg-dark border border-secondary text-light rounded-end-3"
                 placeholder="Buscar placa del día..."
                 style="box-shadow:none;"
             >
@@ -42,7 +42,7 @@
     </div>
 </div>
 
-<!-- Lista de entradas -->
+<!-- Lista de suscripciones -->
 <div class="row g-3">
 
     {% for plate in plates %}
@@ -51,6 +51,7 @@
                 class="card bg-dark text-light border-0 shadow-lg rounded-4 monthly-card"
                 data-plate="{{ plate.plate|lower }}"
                 data-state="{% if plate.active %}active{% else %}inactive{% endif %}"
+                data-type="{{ plate.billing_type|lower }}"
             >
 
                 <!-- Zona táctil SOLO para desplegar -->
@@ -67,7 +68,13 @@
                         <!-- Izquierda -->
                         <div class="d-flex align-items-center">
                             <div class="bg-info bg-opacity-10 rounded-circle p-2 me-2">
-                                <i class="bi bi-credit-card-2-front text-info"></i>
+                                <i class="bi 
+                                    {% if plate.billing_type == 'MONTHLY' %}bi-calendar-check
+                                    {% elif plate.billing_type == 'DAILY' %}bi-sun
+                                    {% else %}bi-clock
+                                    {% endif %}
+                                    text-info">
+                                </i>
                             </div>
 
                             <div>
@@ -78,7 +85,6 @@
                                         style="width:8px; height:8px;
                                         background-color: {% if plate.active %}#22c55e{% else %}#6b7280{% endif %};">
                                     </span>
-                                    
                                 </div>
 
                                 <small class="text-muted">
@@ -87,11 +93,20 @@
                             </div>
                         </div>
 
-                        <!-- Derecha: MONTO MENSUAL -->
+                        <!-- Derecha: TIPO + MONTO -->
                         <div class="text-end">
-                            <small class="text-muted">Mensualidad</small>
+                            <small class="text-muted">
+                                {% if plate.billing_type == 'MONTHLY' %}
+                                    Mensualidad
+                                {% elif plate.billing_type == 'DAILY' %}
+                                    Tarifa diaria
+                                {% else %}
+                                    Tarifa por hora
+                                {% endif %}
+                            </small>
+
                             <div class="fw-bold fs-5 text-success">
-                                ${{ plate.monthly_amount|floatformat:2 }}
+                                ${{ plate.amount|floatformat:2 }}
                             </div>
                         </div>
 
@@ -118,6 +133,19 @@
                                 </strong>
                             </div>
 
+                            <div class="me-3">
+                                <span class="text-muted">Tipo de cobro</span><br>
+                                <strong>
+                                    {% if plate.billing_type == 'MONTHLY' %}
+                                        Mensual
+                                    {% elif plate.billing_type == 'DAILY' %}
+                                        Diario
+                                    {% else %}
+                                        Por hora
+                                    {% endif %}
+                                </strong>
+                            </div>
+
                             <div>
                                 <span class="text-muted">Registrado</span><br>
                                 <strong>
@@ -129,7 +157,7 @@
                         <!-- Botones de acción -->
                         <div class="d-flex gap-2">
                             <a
-                                href="{% url 'edit_month' plate.id %}"
+                                href="{% url 'subscription_edit' plate.id %}"
                                 class="btn btn-sm btn-primary rounded-pill px-3 w-50"
                             >
                                 <i class="bi bi-pencil-square me-1"></i>
@@ -138,7 +166,7 @@
 
                             <form
                                 method="POST"
-                                action="{% url 'toggle_month_active' plate.id %}"
+                                action="{% url 'toggle_subscription_active' plate.id %}"
                                 class="d-inline w-50"
                             >
                                 {% csrf_token %}
@@ -169,7 +197,7 @@
         <div class="col-12">
             <div class="card bg-dark text-light border-0 shadow-sm rounded-4">
                 <div class="card-body text-center text-muted">
-                    No hay placas con mensualidad registradas
+                    No hay suscripciones registradas
                 </div>
             </div>
         </div>
@@ -180,12 +208,11 @@
         <div class="card bg-dark text-light border-0 shadow-sm rounded-4">
             <div class="card-body text-center text-muted py-4">
                 <i class="bi bi-search fs-3 d-block mb-2"></i>
-                No se encontraron placas con ese criterio
+                No se encontraron suscripciones con ese criterio
             </div>
         </div>
     </div>
 </div>
-
 
 {% endblock %}
 

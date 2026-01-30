@@ -47,31 +47,35 @@ class Entry(models.Model):
     
     def calculate_amount(self):
         """
-        Calcula horas y monto a pagar según tiempo transcurrido
+        Calcula horas y monto a pagar según política de cobro
         """
-        # Verifica si la placa es mensual
-        is_monthly = MonthlyPlate.objects.filter(
-            plate=self.plate,
-            active=True
-        ).exists()
-
-        # Determinar el tiempo final
-        end_time = self.departure_date_hour if self.departure_date_hour else now()
+        # Tiempo final
+        end_time = self.departure_date_hour or now()
         delta = end_time - self.entry_date_hour
 
         # Horas redondeadas hacia arriba
         hours = ceil(delta.total_seconds() / 3600)
 
-        # Si es mensual, no paga
-        if is_monthly:
+        # Buscar política activa
+        policy = PlatePolicy.objects.filter(
+            plate=self.plate,
+            active=True
+        ).first()
+
+        # 🟢 Mensual → nunca paga por salida
+        if policy and policy.billing_type == "MONTHLY":
             return hours, 0
 
-        # Si no hay tarifa asignada, monto = 0
-        if not self.fee or not self.fee.amount:
-            return hours, 0
+        # 🟡 Diario → paga monto fijo al salir (sin importar horas)
+        if policy and policy.billing_type == "DAILY":
+            return hours, float(policy.amount or 0)
 
-        amount = hours * float(self.fee.amount)
-        return hours, amount
+        # 🔵 Por hora → cobra según tarifa
+        if self.fee and self.fee.amount:
+            return hours, hours * float(self.fee.amount)
+
+        # Fallback
+        return hours, 0
 
 
 class Configuration(models.Model):
@@ -88,23 +92,47 @@ class Configuration(models.Model):
         return self.name
     
 
-class MonthlyPlate(models.Model):
-    """ Vehículos con pago mensual """
-    plate = models.CharField("Placa", max_length=10, unique=True)
-    owner_name = models.CharField("Nombre del propietario", max_length=150)
-    monthly_amount = models.DecimalField(
-        "Monto mensual",
-        max_digits=8,
-        decimal_places=2
+class PlatePolicy(models.Model):
+    BILLING_TYPES = (
+        ("HOURLY", "Por hora"),
+        ("DAILY", "Diario fijo"),
+        ("MONTHLY", "Mensual"),
     )
+
+    plate = models.CharField(
+        "Placa",
+        max_length=10,
+        unique=True
+    )
+
+    billing_type = models.CharField(
+        "Tipo de cobro",
+        max_length=10,
+        choices=BILLING_TYPES
+    )
+
+    amount = models.DecimalField(
+        "Monto",
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Monto según tipo de cobro (diario o mensual)"
+    )
+
+    owner_name = models.CharField(
+        "Propietario",
+        max_length=150,
+        blank=True
+    )
+
     active = models.BooleanField("Activo", default=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = "Placa mensual"
-        verbose_name_plural = "Placas mensuales"
+        verbose_name = "Política de placa"
+        verbose_name_plural = "Políticas de placas"
 
     def __str__(self):
-        return f"{self.plate} - ${self.monthly_amount}"
-
-    
+        return f"{self.plate} - {self.billing_type}"

@@ -1,7 +1,7 @@
 {% extends "shell/base.html" %}
 
 {% block title %}ParkOps / Escanear placa de vehículo{% endblock %}
-{% block page_title %}Parking / escanear{% endblock %}
+{% block page_title %}Parking Buscar{% endblock %}
 
 {% block content %}
 
@@ -9,55 +9,66 @@
 
 <!-- Card principal -->
 <div class="card bg-dark text-light border-0 shadow-lg rounded-4">
-    <div class="card-body">
+  <div class="card-body">
 
-      <div class="alert alert-info py-1 px-3 mb-1 small d-flex align-items-center">
-        Te permite buscar o registrar una placa.
+    <!-- Tip superior -->
+    <div class="alert alert-info py-2 px-3 mb-3 small d-flex align-items-center">
+      <i class="bi bi-lightbulb-fill me-2"></i>
+      Busca una placa o regístrala rápidamente.
+    </div>
+
+    <!-- Input -->
+    <form method="POST" novalidate>
+      {% csrf_token %}
+
+      <div class="mb-4">
+        <label class="form-label small text-muted">
+          Placa del vehículo
+        </label>
+
+        <div class="input-group mb-2 shadow-sm rounded-3">
+
+          <!-- Icono -->
+          <span class="input-group-text bg-dark border border-secondary text-light rounded-start-3">
+            <i class="bi bi-search opacity-75"></i>
+          </span>
+
+          <!-- Campo -->
+          <input
+            type="text"
+            name="plate"
+            id="plateInput"
+            value="{{ form.plate.value|default_if_none:'' }}"
+            class="form-control bg-dark border border-secondary text-light rounded-end-3"
+            placeholder="Ej: P123ABC"
+            required
+            autofocus
+            oninput="this.value = this.value.toUpperCase()"
+            style="box-shadow:none;"
+          >
+        </div>
+
+        {% if form.plate.help_text %}
+        <div class="form-text text-muted mt-1">
+          {{ form.plate.help_text }}
+        </div>
+        {% endif %}
       </div>
 
-        <!-- Input -->
-        <form method="POST" novalidate>
-            {% csrf_token %}
+      <!-- Botón -->
+      <button
+        type="submit"
+        class="btn btn-success w-100 rounded-pill shadow-sm d-flex align-items-center justify-content-center gap-2"
+        style="transition: transform .1s ease, box-shadow .1s ease;"
+        onmousedown="this.style.transform='scale(0.98)'; this.style.boxShadow='0 0 0 0 rgba(0,0,0,0)';"
+        onmouseup="this.style.transform='scale(1)'; this.style.boxShadow='';"
+      >
+        <i class="bi bi-search"></i>
+        Ingresar / buscar
+      </button>
 
-            <div class="mb-3">
-                <label class="form-label small text-muted">
-                    Placa del vehículo
-                </label>
-
-                <div class="input-group mb-2">
-                    <!-- Icono / Cámara -->
-                    <span class="input-group-text bg-dark border border-white text-light rounded-start-3">
-                        <i class="bi bi-search text-light opacity-75"></i>
-                    </span>
-
-                    <!-- Campo -->
-                    <input type="text"
-                          name="plate"
-                          id="plateInput"
-                          value="{{ form.plate.value|default_if_none:'' }}"
-                          class="form-control bg-dark border border-white text-light rounded-end-3"
-                          placeholder="Escanear o escribir placa..."
-                          style="box-shadow:none;"
-                          required
-                          autofocus
-                          oninput="this.value = this.value.toUpperCase()">
-                </div>
-
-                {% if form.plate.help_text %}
-                    <div class="form-text text-muted mt-1">
-                        {{ form.plate.help_text }}
-                    </div>
-                {% endif %}
-            </div>
-
-            <!-- Botón -->
-            <button type="submit"
-                    class="btn btn-success w-100 rounded-pill shadow-sm">
-                <i class="bi bi-search me-1"></i>
-                Ingresar / buscar
-            </button>
-        </form>
-    </div>
+    </form>
+  </div>
 </div>
 
 {% endblock %}

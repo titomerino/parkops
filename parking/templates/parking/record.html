@@ -1,7 +1,7 @@
 {% extends "shell/base.html" %}
 
 {% block title %}ParkOps / Entradas del día{% endblock %}
-{% block page_title %}Parking historial{% endblock %}
+{% block page_title %}Parking Historial del día{% endblock %}
 
 {% block content %}
 
@@ -14,13 +14,13 @@
         <!-- Buscador -->
         <div class="input-group mb-2">
 
-            <span class="input-group-text bg-dark border border-white text-light rounded-start-3">
+            <span class="input-group-text bg-dark border border-secondary text-light rounded-start-3">
                 <i class="bi bi-search text-light opacity-75"></i>
             </span>
 
             <input type="text"
                 id="plateSearch"
-                class="form-control bg-dark border border-white text-light rounded-end-3"
+                class="form-control bg-dark border border-secondary text-light rounded-end-3"
                 placeholder="Buscar placa del día..."
                 style="box-shadow:none;"
             >
@@ -81,9 +81,18 @@
                                         background-color: {% if entry.state %}#22c55e{% else %}#6b7280{% endif %};">
                                     </span>
 
-                                    {% if entry.amount == 0 %}
+                                    <!-- Etiqueta de tipo de cobro -->
+                                    {% if entry.billing_type == "MONTHLY" %}
                                         <span class="badge bg-warning text-dark ms-2">
                                             Mensual
+                                        </span>
+                                    {% elif entry.billing_type == "DAILY" %}
+                                        <span class="badge bg-primary ms-2">
+                                            Diario
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary ms-2">
+                                            Por hora
                                         </span>
                                     {% endif %}
                                 </div>
@@ -133,7 +142,6 @@
                                 </strong>
                             </div>
 
-                            <!-- TIEMPO abajo -->
                             <div>
                                 <span class="text-muted">Tiempo</span><br>
                                 <strong>
@@ -158,8 +166,6 @@
                 </div>
 
             </div>
-
-
         </div>
     {% empty %}
         <div class="col-12">
@@ -170,6 +176,7 @@
             </div>
         </div>
     {% endfor %}
+
     <!-- Estado vacío dinámico (JS) -->
     <div class="col-12 d-none" id="noResults">
         <div class="card bg-dark text-light border-0 shadow-sm rounded-4">

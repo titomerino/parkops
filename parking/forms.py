@@ -1,5 +1,5 @@
 from django import forms
-from .models import Fee, Entry, Configuration, MonthlyPlate
+from .models import Fee, Entry, Configuration, PlatePolicy
 from django.core.validators import RegexValidator
 import re
 
@@ -128,10 +128,10 @@ class PlateSearchForm(forms.Form):
     )
 
 
-class MonthlyPlateForm(forms.ModelForm):
+class PlatePolicyForm(forms.ModelForm):
     class Meta:
-        model = MonthlyPlate
-        fields = ['plate', 'owner_name', 'monthly_amount', 'active']
+        model = PlatePolicy
+        fields = ['plate', 'owner_name', 'billing_type', 'amount', 'active']
 
         widgets = {
             'plate': forms.TextInput(attrs={
@@ -145,14 +145,17 @@ class MonthlyPlateForm(forms.ModelForm):
                 'class': 'form-control bg-dark text-light border-secondary rounded-3',
                 'placeholder': 'Juan Pérez',
                 'maxlength': '150',
+                'required': False,
+            }),
+            'billing_type': forms.Select(attrs={
+                'class': 'form-select bg-dark text-light border-secondary rounded-3',
                 'required': True,
             }),
-            'monthly_amount': forms.NumberInput(attrs={
+            'amount': forms.NumberInput(attrs={
                 'class': 'form-control bg-dark text-light border-secondary rounded-end-3',
                 'placeholder': '0.00',
                 'step': '0.01',
                 'min': '0',
-                'required': True,
             }),
             'active': forms.CheckboxInput(attrs={
                 'class': 'form-check-input',
@@ -160,22 +163,42 @@ class MonthlyPlateForm(forms.ModelForm):
             }),
         }
 
+    # 🔐 Validación de placa
     def clean_plate(self):
         plate = self.cleaned_data['plate'].strip().upper()
 
-        # Regex: solo letras, números y espacios
+        # Solo letras, números y espacios
         if not re.match(r'^[A-Z0-9 ]+$', plate):
             raise forms.ValidationError(
                 "La placa solo puede contener letras, números y espacios"
             )
 
-        qs = MonthlyPlate.objects.filter(plate=plate)
+        qs = PlatePolicy.objects.filter(plate=plate)
         if self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
 
         if qs.exists():
             raise forms.ValidationError(
-                "Esta placa ya tiene una mensualidad registrada"
+                "Esta placa ya tiene una política registrada"
             )
 
         return plate
+
+    # 🧠 Validación semántica de cobro
+    def clean(self):
+        cleaned_data = super().clean()
+        billing_type = cleaned_data.get('billing_type')
+        amount = cleaned_data.get('amount')
+
+        # Mensual → amount opcional (informativo)
+        if billing_type == "MONTHLY":
+            return cleaned_data
+
+        # Diario / Hora → amount obligatorio
+        if billing_type in ["DAILY", "HOURLY"] and not amount:
+            raise forms.ValidationError(
+                "Debes indicar un monto para este tipo de cobro"
+            )
+
+        return cleaned_data
+

@@ -319,7 +319,7 @@ def get_daily_income():
 
 def get_today_entries_count():
     """Retorna la cantidad de carros dentro hoy"""
-    today = now().date()
+    today = localtime(now()).date()
 
     return Entry.objects.filter(
         entry_date_hour__date=today

@@ -1,0 +1,74 @@
+<!-- Bottom Navigation -->
+<nav class="position-fixed bottom-0 start-0 w-100 z-3">
+    <div class="bg-dark border-top border-secondary shadow-lg">
+
+        <div class="d-flex justify-content-around align-items-center text-center py-2">
+
+            <!-- Inicio -->
+            <a href="{% url 'dashboard' %}" class="text-decoration-none">
+                <div class="d-flex flex-column align-items-center px-3">
+                    <i class="bi bi-house-door fs-4
+                        {% if request.resolver_match.url_name == 'dashboard' %}
+                            text-success
+                        {% else %}
+                            text-light
+                        {% endif %}">
+                    </i>
+                    <small class="text-light">Inicio</small>
+                </div>
+            </a>
+
+            <!-- Separador -->
+            <div class="vr text-secondary opacity-50" style="height:32px;"></div>
+
+            <!-- Escáner -->
+            <a href="{% url 'register_month' %}" class="text-decoration-none">
+                <div class="d-flex flex-column align-items-center px-3">
+                    <i class="bi bi-journal-check fs-4
+                        {% if request.resolver_match.url_name == 'register_month' %}
+                            text-success
+                        {% else %}
+                            text-light
+                        {% endif %}">
+                    </i>
+                    <small class="text-light">Registrar</small>
+                </div>
+            </a>
+
+            <!-- Separador -->
+            <div class="vr text-secondary opacity-50" style="height:32px;"></div>
+
+            <!-- Historial -->
+            <a href="{% url 'month_plate_list' %}" class="text-decoration-none">
+                <div class="d-flex flex-column align-items-center px-3">
+                    <i class="bi bi-card-list fs-4
+                        {% if request.resolver_match.url_name == 'month_plate_list' %}
+                            text-success
+                        {% else %}
+                            text-light
+                        {% endif %}">
+                    </i>
+                    <small class="text-light">Listado</small>
+                </div>
+            </a>
+
+            <!-- Separador -->
+            <!-- <div class="vr text-secondary opacity-50" style="height:32px;"></div> -->
+
+            <!-- Configuración -->
+            <!-- <a href="{% url 'search_plate' %}" class="text-decoration-none">
+                <div class="d-flex flex-column align-items-center px-3">
+                    <i class="bi bi-gear fs-4
+                        {% if request.resolver_match.url_name == 'settings' %}
+                            text-success
+                        {% else %}
+                            text-light
+                        {% endif %}">
+                    </i>
+                    <small class="text-light">Config</small>
+                </div>
+            </a> -->
+
+        </div>
+    </div>
+</nav>

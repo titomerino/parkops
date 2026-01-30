@@ -1,6 +1,7 @@
 from django import forms
-from .models import Fee, Entry, Configuration
+from .models import Fee, Entry, Configuration, MonthlyPlate
 from django.core.validators import RegexValidator
+import re
 
 
 class FeeForm(forms.ModelForm):
@@ -125,3 +126,56 @@ class PlateSearchForm(forms.Form):
             )
         ]
     )
+
+
+class MonthlyPlateForm(forms.ModelForm):
+    class Meta:
+        model = MonthlyPlate
+        fields = ['plate', 'owner_name', 'monthly_amount', 'active']
+
+        widgets = {
+            'plate': forms.TextInput(attrs={
+                'class': 'form-control bg-dark text-light border-secondary rounded-3',
+                'placeholder': 'ABC 1234',
+                'maxlength': '10',
+                'oninput': 'this.value = this.value.toUpperCase()',
+                'required': True,
+            }),
+            'owner_name': forms.TextInput(attrs={
+                'class': 'form-control bg-dark text-light border-secondary rounded-3',
+                'placeholder': 'Juan Pérez',
+                'maxlength': '150',
+                'required': True,
+            }),
+            'monthly_amount': forms.NumberInput(attrs={
+                'class': 'form-control bg-dark text-light border-secondary rounded-end-3',
+                'placeholder': '0.00',
+                'step': '0.01',
+                'min': '0',
+                'required': True,
+            }),
+            'active': forms.CheckboxInput(attrs={
+                'class': 'form-check-input',
+                'role': 'switch'
+            }),
+        }
+
+    def clean_plate(self):
+        plate = self.cleaned_data['plate'].strip().upper()
+
+        # Regex: solo letras, números y espacios
+        if not re.match(r'^[A-Z0-9 ]+$', plate):
+            raise forms.ValidationError(
+                "La placa solo puede contener letras, números y espacios"
+            )
+
+        qs = MonthlyPlate.objects.filter(plate=plate)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if qs.exists():
+            raise forms.ValidationError(
+                "Esta placa ya tiene una mensualidad registrada"
+            )
+
+        return plate

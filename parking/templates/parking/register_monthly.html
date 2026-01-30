@@ -1,0 +1,120 @@
+{% extends "shell/base.html" %}
+
+{% block title %}ParkOps / Registro{% endblock %}
+{% block page_title %}Parking mensualidades{% endblock %}
+
+{% block content %}
+
+{% include 'shell/partials/_messages_alert.html' with messages=messages %}
+
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+
+        <div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+
+            <!-- Header -->
+            <div class="card-body border-bottom border-secondary pb-3 mb-3">
+                <div class="d-flex align-items-center">
+                    <div>
+                        <h5 class="mb-0">
+                            {% if is_edit %}
+                                Editar mensualidad
+                            {% else %}
+                                Registrar mensualidad
+                            {% endif %}
+                        </h5>
+                        <small class="text-muted">
+                            Agrega un vehículo con pago mensual al sistema
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form -->
+            <form method="POST" novalidate>
+                {% csrf_token %}
+
+                <div class="card-body pt-0">
+
+                    <!-- PLACA -->
+                    <div class="mb-3">
+                        <label class="form-label text-muted">
+                            Placa del vehículo
+                        </label>
+
+                        {{ form.plate }}
+
+                        {% if form.plate.errors %}
+                            <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                {{ form.plate.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- PROPIETARIO -->
+                    <div class="mb-3">
+                        <label class="form-label text-muted">
+                            Nombre del propietario
+                        </label>
+
+                        {{ form.owner_name }}
+
+                        {% if form.owner_name.errors %}
+                            <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                {{ form.owner_name.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- MONTO -->
+                    <div class="mb-3">
+                        <label class="form-label text-muted">
+                            Monto mensual ($)
+                        </label>
+
+                        <div class="input-group">
+                            <span class="input-group-text bg-dark border-secondary text-success">
+                                <i class="bi bi-cash-coin"></i>
+                            </span>
+
+                            {{ form.monthly_amount }}
+                        </div>
+
+                        {% if form.monthly_amount.errors %}
+                            <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                {{ form.monthly_amount.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- ESTADO -->
+                    <div class="form-check form-switch mb-4">
+                        {{ form.active }}
+                        <label class="form-check-label text-muted">
+                            Mensualidad activa
+                        </label>
+                    </div>
+
+                    <!-- BOTÓN -->
+                    <button type="submit"
+                        class="btn btn-success rounded-pill px-4 w-100">
+                        <i class="bi bi-check-circle me-1"></i>
+                        {% if is_edit %}
+                            Guardar cambios
+                        {% else %}
+                            Guardar mensualidad
+                        {% endif %}
+                    </button>
+                </div>
+            </form>
+
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}
+
+{% block menu_bottom %}
+    {% include 'parking/partials/_parking_menu_month_bottom.html' %}
+{% endblock %}

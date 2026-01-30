@@ -1,7 +1,7 @@
 {% extends "shell/base.html" %}
 
 {% block title %}ParkOps / Entradas del día{% endblock %}
-{% block page_title %}Parking historial{% endblock %}
+{% block page_title %}Parking mensualidades{% endblock %}
 
 {% block content %}
 
@@ -42,24 +42,22 @@
     </div>
 </div>
 
-
-
 <!-- Lista de entradas -->
 <div class="row g-3">
 
-    {% for entry in entries %}
+    {% for plate in plates %}
         <div class="col-12 col-lg-4 col-md-6">
             <div
-                class="card bg-dark text-light border-0 shadow-lg rounded-4 entry-card"
-                data-plate="{{ entry.plate|lower }}"
-                data-state="{% if entry.state %}active{% else %}finished{% endif %}"
+                class="card bg-dark text-light border-0 shadow-lg rounded-4 monthly-card"
+                data-plate="{{ plate.plate|lower }}"
+                data-state="{% if plate.active %}active{% else %}inactive{% endif %}"
             >
 
                 <!-- Zona táctil SOLO para desplegar -->
                 <div class="card-body py-2 px-3"
                     role="button"
                     data-bs-toggle="collapse"
-                    data-bs-target="#details-{{ entry.id }}"
+                    data-bs-target="#details-{{ plate.id }}"
                     aria-expanded="false"
                 >
 
@@ -69,40 +67,31 @@
                         <!-- Izquierda -->
                         <div class="d-flex align-items-center">
                             <div class="bg-info bg-opacity-10 rounded-circle p-2 me-2">
-                                <i class="bi bi-car-front-fill text-info"></i>
+                                <i class="bi bi-credit-card-2-front text-info"></i>
                             </div>
 
                             <div>
                                 <div class="d-flex align-items-center">
-                                    <strong class="me-2">{{ entry.plate }}</strong>
+                                    <strong class="me-2">{{ plate.plate }}</strong>
 
                                     <span class="rounded-circle d-inline-block"
                                         style="width:8px; height:8px;
-                                        background-color: {% if entry.state %}#22c55e{% else %}#6b7280{% endif %};">
+                                        background-color: {% if plate.active %}#22c55e{% else %}#6b7280{% endif %};">
                                     </span>
-
-                                    {% if entry.amount == 0 %}
-                                        <span class="badge bg-warning text-dark ms-2">
-                                            Mensual
-                                        </span>
-                                    {% endif %}
+                                    
                                 </div>
 
                                 <small class="text-muted">
-                                    {% if entry.state %}En parqueo{% else %}Finalizado{% endif %}
+                                    {{ plate.owner_name }}
                                 </small>
                             </div>
                         </div>
 
-                        <!-- Derecha: MONTO -->
+                        <!-- Derecha: MONTO MENSUAL -->
                         <div class="text-end">
-                            <small class="text-muted">Monto</small>
+                            <small class="text-muted">Mensualidad</small>
                             <div class="fw-bold fs-5 text-success">
-                                {% if entry.amount %}
-                                    ${{ entry.amount|floatformat:2 }}
-                                {% else %}
-                                    $0.00
-                                {% endif %}
+                                ${{ plate.monthly_amount|floatformat:2 }}
                             </div>
                         </div>
 
@@ -110,143 +99,173 @@
                 </div>
 
                 <!-- Contenido desplegable -->
-                <div class="collapse" id="details-{{ entry.id }}">
+                <div class="collapse" id="details-{{ plate.id }}">
                     <div class="px-3 pb-3 pt-2 border-top">
 
                         <div class="d-flex justify-content-between small flex-wrap mb-2">
 
                             <div class="me-3">
-                                <span class="text-muted">Entrada</span><br>
+                                <span class="text-muted">Propietario</span><br>
                                 <strong>
-                                    {{ entry.entry_date_hour|date:"H:i d/m/Y" }}
+                                    {{ plate.owner_name }}
                                 </strong>
                             </div>
 
                             <div class="me-3">
-                                <span class="text-muted">Salida</span><br>
+                                <span class="text-muted">Estado</span><br>
                                 <strong>
-                                    {% if entry.departure_date_hour %}
-                                        {{ entry.departure_date_hour|date:"H:i d/m/Y" }}
-                                    {% else %}
-                                        —
-                                    {% endif %}
+                                    {% if plate.active %}Activo{% else %}Inactivo{% endif %}
                                 </strong>
                             </div>
 
-                            <!-- TIEMPO abajo -->
                             <div>
-                                <span class="text-muted">Tiempo</span><br>
+                                <span class="text-muted">Registrado</span><br>
                                 <strong>
-                                    {% if entry.hours %}
-                                        {{ entry.hours }}h
-                                    {% else %}
-                                        —
-                                    {% endif %}
+                                    {{ plate.created_at|date:"d/m/Y" }}
                                 </strong>
                             </div>
                         </div>
 
-                        <!-- Botón separado, no colapsa -->
-                        {% if entry.state %}
-                        <a href="{% url 'go_to_departure' entry.id %}"
-                        class="btn btn-sm btn-success rounded-pill w-100">
-                            <i class="bi bi-box-arrow-right me-1"></i>
-                            Dar salida
-                        </a>
-                        {% endif %}
+                        <!-- Botones de acción -->
+                        <div class="d-flex gap-2">
+                            <a
+                                href="{% url 'edit_month' plate.id %}"
+                                class="btn btn-sm btn-primary rounded-pill px-3 w-50"
+                            >
+                                <i class="bi bi-pencil-square me-1"></i>
+                                Editar
+                            </a>
+
+                            <form
+                                method="POST"
+                                action="{% url 'toggle_month_active' plate.id %}"
+                                class="d-inline w-50"
+                            >
+                                {% csrf_token %}
+
+                                <button
+                                    type="submit"
+                                    class="btn btn-sm rounded-pill px-3 w-100
+                                    {% if plate.active %}btn-danger{% else %}btn-success{% endif %}"
+                                >
+                                    <i class="bi {% if plate.active %}bi-pause-circle{% else %}bi-play-circle{% endif %} me-1"></i>
+
+                                    {% if plate.active %}
+                                        Desactivar
+                                    {% else %}
+                                        Activar
+                                    {% endif %}
+                                </button>
+                            </form>
+                        </div>
+
                     </div>
                 </div>
 
             </div>
-
-
         </div>
+
     {% empty %}
         <div class="col-12">
             <div class="card bg-dark text-light border-0 shadow-sm rounded-4">
                 <div class="card-body text-center text-muted">
-                    No hay vehículos en parqueo hoy
+                    No hay placas con mensualidad registradas
                 </div>
             </div>
         </div>
     {% endfor %}
+
     <!-- Estado vacío dinámico (JS) -->
     <div class="col-12 d-none" id="noResults">
         <div class="card bg-dark text-light border-0 shadow-sm rounded-4">
             <div class="card-body text-center text-muted py-4">
                 <i class="bi bi-search fs-3 d-block mb-2"></i>
-                No se encontraron vehículos con esa placa
+                No se encontraron placas con ese criterio
             </div>
         </div>
     </div>
 </div>
 
+
 {% endblock %}
 
 {% block menu_bottom %}
-    {% include 'parking/partials/_parking_menu_bottom.html' %}
+    {% include 'parking/partials/_parking_menu_month_bottom.html' %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", () => {
 
     const searchInput = document.getElementById("plateSearch");
-    const cards = document.querySelectorAll(".entry-card");
     const filterButtons = document.querySelectorAll("[data-filter]");
+    const cards = document.querySelectorAll(".monthly-card");
+    const noResults = document.getElementById("noResults");
 
     let currentFilter = "all";
 
-    function applyFilters() {
-        const searchValue = searchInput.value.toLowerCase();
+    function normalize(text) {
+        return text
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+    }
+
+    function filterCards() {
+        const query = normalize(searchInput.value.trim());
         let visibleCount = 0;
 
         cards.forEach(card => {
-            const plate = card.dataset.plate;
-            const state = card.dataset.state;
+            const plate = normalize(card.dataset.plate || "");
+            const state = card.dataset.state || "active";
 
-            const matchesPlate = plate.includes(searchValue);
+            // Busca propietario dentro del card
+            const ownerEl = card.querySelector("small.text-muted");
+            const owner = normalize(ownerEl ? ownerEl.textContent : "");
+
+            const matchesText =
+                plate.includes(query) ||
+                owner.includes(query);
+
             const matchesState =
-                currentFilter === "all" || state === currentFilter;
+                currentFilter === "all" ||
+                state === currentFilter;
 
-            const show = matchesPlate && matchesState;
-
-            card.parentElement.style.display = show ? "block" : "none";
-
-            if (show) visibleCount++;
+            if (matchesText && matchesState) {
+                card.closest(".col-12").classList.remove("d-none");
+                visibleCount++;
+            } else {
+                card.closest(".col-12").classList.add("d-none");
+            }
         });
 
-        // Mostrar estado vacío si no hay resultados visibles
-        const noResults = document.getElementById("noResults");
-        if (visibleCount === 0) {
-            noResults.classList.remove("d-none");
-        } else {
-            noResults.classList.add("d-none");
+        if (noResults) {
+            if (visibleCount === 0) {
+                noResults.classList.remove("d-none");
+            } else {
+                noResults.classList.add("d-none");
+            }
         }
     }
 
-    // Buscar por placa en tiempo real
-    searchInput.addEventListener("input", applyFilters);
+    // Buscar en vivo
+    searchInput.addEventListener("input", filterCards);
 
     // Chips de estado
     filterButtons.forEach(btn => {
         btn.addEventListener("click", () => {
-            currentFilter = btn.dataset.filter;
-
-            // Reset: todos dark
             filterButtons.forEach(b => {
                 b.classList.remove("btn-success");
                 b.classList.add("btn-dark");
             });
 
-            // Activo: success
             btn.classList.remove("btn-dark");
             btn.classList.add("btn-success");
 
-            applyFilters();
+            currentFilter = btn.dataset.filter;
+            filterCards();
         });
     });
-
 
 });
 </script>

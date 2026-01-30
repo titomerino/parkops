@@ -5,9 +5,10 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 
 from math import ceil
+import re
 
 from .models import Fee, Entry, Configuration, MonthlyPlate
-from .forms import EntryForm, PlateSearchForm, EntryExitForm
+from .forms import EntryForm, PlateSearchForm, EntryExitForm, MonthlyPlateForm
 
 
 @login_required(login_url='login')
@@ -178,6 +179,106 @@ def record(request):
         'entries': entries,
         'today': today
     })
+
+
+@login_required(login_url='login')
+def month_plate_list(request):
+    """ Página de placas con pago mensual """
+
+    plates = MonthlyPlate.objects.all().order_by(
+        '-active',
+        'plate'
+    )
+
+    return render(request, "parking/month_plate_list.html", {
+        'plates': plates
+    })
+
+
+@login_required(login_url='login')
+def register_month(request):
+    """ Registrar placa con mensualidad """
+
+    if request.method == 'POST':
+        form = MonthlyPlateForm(request.POST)
+
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                "Mensualidad registrada correctamente"
+            )
+            return redirect('month_plate_list')
+        else:
+            messages.error(
+                request,
+                "Corrige los errores del formulario"
+            )
+    else:
+        form = MonthlyPlateForm()
+
+    return render(request, "parking/register_monthly.html", {
+        'form': form
+    })
+
+
+@login_required(login_url='login')
+def edit_month(request, pk):
+    """ Editar placa con mensualidad """
+
+    monthly_plate = get_object_or_404(MonthlyPlate, pk=pk)
+
+    if request.method == 'POST':
+        form = MonthlyPlateForm(
+            request.POST,
+            instance=monthly_plate
+        )
+
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                "Mensualidad actualizada correctamente"
+            )
+            return redirect('month_plate_list')
+        else:
+            messages.error(
+                request,
+                "Corrige los errores del formulario"
+            )
+    else:
+        form = MonthlyPlateForm(instance=monthly_plate)
+
+    return render(request, "parking/register_monthly.html", {
+        'form': form,
+        'is_edit': True,
+        'monthly_plate': monthly_plate
+    })
+
+
+@login_required(login_url='login')
+def toggle_month_active(request, pk):
+    """ Activa / desactiva una mensualidad y recarga la lista """
+
+    print("METHOD:", request.method)
+    plate = get_object_or_404(MonthlyPlate, pk=pk)
+    
+    if request.method == "POST":
+        plate.active = not plate.active
+        plate.save()
+
+        if plate.active:
+            messages.success(
+                request,
+                f"La mensualidad de {plate.plate} fue ACTIVADA"
+            )
+        else:
+            messages.warning(
+                request,
+                f"La mensualidad de {plate.plate} fue DESACTIVADA"
+            )
+
+    return redirect('month_plate_list')
 
 ## functions ##
 def save_return_url(request):

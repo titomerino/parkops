@@ -5,6 +5,11 @@ from math import ceil
 # Create your models here.
 class Fee(models.Model):
     """Tarifas por bloques de horas"""
+    
+    BILLING_TYPE_CHOICES = [
+        ("HOURLY_BLOCK", "Bloque por horas"),
+        ("DAILY_FIXED", "Monto fijo por día"),
+    ]
     duration_hours = models.PositiveSmallIntegerField(
         "Duración (horas)",
         help_text="Tiempo mínimo en horas"
@@ -14,6 +19,12 @@ class Fee(models.Model):
         max_digits=8,
         decimal_places=2
     )
+    billing_type = models.CharField(
+        "Tipo de cobro",
+        max_length=20,
+        choices=BILLING_TYPE_CHOICES,
+        default="HOURLY_BLOCK"
+    )
     default = models.BooleanField("Activa por defecto", default=False)
 
     class Meta:
@@ -21,6 +32,8 @@ class Fee(models.Model):
         verbose_name_plural = "Tarifas"
 
     def __str__(self):
+        if self.billing_type == "DAILY_FIXED":
+            return f'${self.amount} por día'
         return f'${self.amount} por {self.duration_hours}h'
     
 
@@ -44,10 +57,11 @@ class Entry(models.Model):
 
     def __str__(self):
         return self.plate
-    
+
     def calculate_amount(self):
         """
-        Calcula horas y monto a pagar según política de cobro
+        Calcula horas y monto a pagar según tiempo transcurrido,
+        tarifa por bloques o monto fijo diario, o suscripción
         """
         # Tiempo final
         end_time = self.departure_date_hour or now()
@@ -56,23 +70,30 @@ class Entry(models.Model):
         # Horas redondeadas hacia arriba
         hours = ceil(delta.total_seconds() / 3600)
 
-        # Buscar política activa
+        # Buscar política activa de suscripción
         policy = PlatePolicy.objects.filter(
             plate=self.plate,
             active=True
         ).first()
 
-        # 🟢 Mensual → nunca paga por salida
+        # 🟢 Mensual → no paga nunca por salida
         if policy and policy.billing_type == "MONTHLY":
             return hours, 0
 
-        # 🟡 Diario → paga monto fijo al salir (sin importar horas)
+        # 🟡 Diario por suscripción → paga monto fijo por salida
         if policy and policy.billing_type == "DAILY":
             return hours, float(policy.amount or 0)
 
-        # 🔵 Por hora → cobra según tarifa
-        if self.fee and self.fee.amount:
-            return hours, hours * float(self.fee.amount)
+        # 🔵 Tarifa normal (Fee)
+        if self.fee:
+            # Monto fijo por día (ej: motos)
+            if self.fee.billing_type == "DAILY_FIXED":
+                return hours, float(self.fee.amount)
+
+            # Bloques por horas
+            if self.fee.billing_type == "HOURLY_BLOCK":
+                blocks = ceil(hours / max(self.fee.duration_hours or 1, 1))
+                return hours, blocks * float(self.fee.amount)
 
         # Fallback
         return hours, 0

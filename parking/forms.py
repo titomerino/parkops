@@ -30,6 +30,21 @@ class FeeForm(forms.ModelForm):
             })
         }
 
+    def clean_default(self):
+        default = self.cleaned_data.get('default')
+
+        if default:
+            qs = Fee.objects.filter(default=True)
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+
+            if qs.exists():
+                raise forms.ValidationError(
+                    "Ya existe una tarifa por defecto"
+                )
+
+        return default
+
 
 class EntryForm(forms.ModelForm):
     """ Formulario para entradas """

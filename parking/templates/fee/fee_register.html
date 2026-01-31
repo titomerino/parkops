@@ -1,0 +1,102 @@
+{% extends "shell/base.html" %}
+
+{% block title %}ParkOps / Tarifas{% endblock %}
+{% block page_title %}
+    {% if is_edit %}Editar tarifa{% else %}Registrar tarifa{% endif %}
+{% endblock %}
+
+{% block content %}
+
+{% include 'shell/partials/_messages_alert.html' with messages=messages %}
+
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+
+        <div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+
+            <!-- Header -->
+            <div class="card-body border-bottom border-secondary pb-3 mb-3">
+                <h5 class="mb-0">
+                    {% if is_edit %}
+                        Editar tarifa
+                    {% else %}
+                        Registrar tarifa
+                    {% endif %}
+                </h5>
+                <small class="text-muted">
+                    Define el costo según la duración
+                </small>
+            </div>
+
+            <!-- Form -->
+            <form method="POST" novalidate>
+                {% csrf_token %}
+
+                <div class="card-body pt-0">
+
+                    <!-- DURACIÓN -->
+                    <div class="mb-3">
+                        <label class="form-label text-muted">
+                            Duración mínima (horas)
+                        </label>
+
+                        {{ form.duration_hours }}
+
+                        {% if form.duration_hours.errors %}
+                            <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                {{ form.duration_hours.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- MONTO -->
+                    <div class="mb-3">
+                        <label class="form-label text-muted">
+                            Monto ($)
+                        </label>
+
+                        <div class="input-group">
+                            <span class="input-group-text bg-dark border-secondary text-success">
+                                <i class="bi bi-cash-coin"></i>
+                            </span>
+                            {{ form.amount }}
+                        </div>
+
+                        {% if form.amount.errors %}
+                            <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                {{ form.amount.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- DEFAULT -->
+                    <div class="form-check form-switch mb-4">
+                        {{ form.default }}
+                        <label class="form-check-label text-muted">
+                            Tarifa por defecto
+                        </label>
+                    </div>
+
+                    <!-- BOTÓN -->
+                    <button type="submit"
+                        class="btn btn-success rounded-pill px-4 w-100">
+                        <i class="bi bi-check-circle me-1"></i>
+                        {% if is_edit %}
+                            Guardar cambios
+                        {% else %}
+                            Guardar tarifa
+                        {% endif %}
+                    </button>
+
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block menu_bottom %}
+    {% include 'fee/partials/_fee_menu_bottom.html' %}
+{% endblock menu_bottom %}

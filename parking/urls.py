@@ -7,7 +7,10 @@ from .views import (
     subscription_plate_list,
     subscription_register,
     subscription_edit,
-    toggle_subscription_active
+    toggle_subscription_active,
+    fee_list,
+    fee_register,
+    fee_edit
 )
 from django.urls import path
 
@@ -22,4 +25,12 @@ urlpatterns = [
     path('suscripciones/<int:pk>', subscription_edit, name='subscription_edit'),
     path('suscripciones/desactivar/<int:pk>', toggle_subscription_active, name='toggle_subscription_active'),
     path('suscripciones/activar/<int:pk>', toggle_subscription_active, name='toggle_subscription_active'),
+
+    # Fee URLs
+    path('tarifas/registrar/', fee_register, name='fee_register'),
+    path('tarifas/<int:pk>/editar/', fee_edit, name='fee_edit'),
+    path('tarifas/', fee_list, name='fee_list'),
+    path('tarifas/registrar/', fee_register, name='fee_register'),
+    path('tarifas/<int:pk>/editar/', fee_edit, name='fee_edit'),
+
 ]

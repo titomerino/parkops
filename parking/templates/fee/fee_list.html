@@ -1,0 +1,184 @@
+{% extends "shell/base.html" %}
+
+{% block title %}ParkOps / Tarifas{% endblock %}
+{% block page_title %}Tarifas de cobro{% endblock %}
+
+{% block content %}
+
+{% include 'shell/partials/_messages_alert.html' with messages=messages %}
+
+<!-- Buscador + Chips -->
+<div class="card bg-dark text-light border-0 shadow-lg rounded-4 mb-3">
+    <div class="card-body">
+
+        <!-- Buscador -->
+        <div class="input-group mb-2">
+            <span class="input-group-text bg-dark border border-secondary text-light">
+                <i class="bi bi-search opacity-75"></i>
+            </span>
+
+            <input
+                type="text"
+                id="feeSearch"
+                class="form-control bg-dark border border-secondary text-light"
+                placeholder="Buscar por horas o monto..."
+                style="box-shadow:none;"
+            >
+        </div>
+
+        <!-- Chips -->
+        <div class="d-flex gap-2">
+            <button class="btn btn-sm rounded-pill btn-success" data-filter="all">
+                Todas
+            </button>
+            <button class="btn btn-sm rounded-pill btn-dark" data-filter="default">
+                Por defecto
+            </button>
+            <button class="btn btn-sm rounded-pill btn-dark" data-filter="custom">
+                Personalizadas
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<!-- Lista de tarifas -->
+<div class="row g-3">
+
+    {% for fee in fees %}
+    <div class="col-12 col-md-6 col-lg-4">
+        <div
+            class="card bg-dark text-light border-0 shadow-lg rounded-4 fee-card"
+            data-default="{% if fee.default %}default{% else %}custom{% endif %}"
+            data-text="{{ fee.duration_hours }} {{ fee.amount }}"
+        >
+
+            <div class="card-body">
+
+                <div class="d-flex justify-content-between align-items-center mb-2">
+
+                    <!-- Info -->
+                    <div>
+                        <strong>{{ fee.duration_hours }} hora{{ fee.duration_hours|pluralize }}</strong><br>
+                        <small class="text-muted">
+                            {% if fee.default %}
+                                Tarifa por defecto
+                            {% else %}
+                                Tarifa personalizada
+                            {% endif %}
+                        </small>
+                    </div>
+
+                    <!-- Precio -->
+                    <div class="text-end">
+                        <div class="fw-bold fs-4 text-success">
+                            ${{ fee.amount|floatformat:2 }}
+                        </div>
+
+                        {% if fee.default %}
+                            <span class="badge bg-success bg-opacity-25 text-success">
+                                Default
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Acciones -->
+                <div class="d-flex gap-2 mt-3">
+                    <a
+                        href="{% url 'fee_edit' fee.id %}"
+                        class="btn btn-sm btn-primary rounded-pill w-100"
+                    >
+                        <i class="bi bi-pencil-square me-1"></i>
+                        Editar
+                    </a>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="card bg-dark text-light border-0 rounded-4 text-center">
+            <div class="card-body text-muted">
+                No hay tarifas registradas
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Sin resultados -->
+    <div class="col-12 d-none" id="noResults">
+        <div class="card bg-dark text-light border-0 rounded-4">
+            <div class="card-body text-center text-muted">
+                No se encontraron tarifas
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+    const search = document.getElementById("feeSearch");
+    const buttons = document.querySelectorAll("[data-filter]");
+    const cards = document.querySelectorAll(".fee-card");
+    const noResults = document.getElementById("noResults");
+
+    let currentFilter = "all";
+
+    function filterCards() {
+        const query = search.value.toLowerCase().trim();
+        let visible = 0;
+
+        cards.forEach(card => {
+            const text = card.dataset.text;
+            const type = card.dataset.default;
+
+            const matchesText = text.includes(query);
+            const matchesType =
+                currentFilter === "all" ||
+                type === currentFilter;
+
+            const col = card.closest(".col-12");
+
+            if (matchesText && matchesType) {
+                col.classList.remove("d-none");
+                visible++;
+            } else {
+                col.classList.add("d-none");
+            }
+        });
+
+        noResults.classList.toggle("d-none", visible !== 0);
+    }
+
+    search.addEventListener("input", filterCards);
+
+    buttons.forEach(btn => {
+        btn.addEventListener("click", () => {
+            buttons.forEach(b => {
+                b.classList.remove("btn-success");
+                b.classList.add("btn-dark");
+            });
+
+            btn.classList.remove("btn-dark");
+            btn.classList.add("btn-success");
+
+            currentFilter = btn.dataset.filter;
+            filterCards();
+        });
+    });
+
+});
+</script>
+{% endblock %}
+
+
+{% block menu_bottom %}
+    {% include 'fee/partials/_fee_menu_bottom.html' %}
+{% endblock menu_bottom %}

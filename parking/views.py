@@ -8,7 +8,7 @@ from math import ceil
 import re
 
 from .models import Fee, Entry, Configuration, PlatePolicy
-from .forms import EntryForm, PlateSearchForm, EntryExitForm, PlatePolicyForm
+from .forms import EntryForm, PlateSearchForm, EntryExitForm, PlatePolicyForm, FeeForm
 
 
 @login_required(login_url='login')
@@ -352,3 +352,86 @@ def get_today_entries_count():
     return Entry.objects.filter(
         entry_date_hour__date=today
     ).count()
+
+
+# ------------- Fees ------------- #
+
+@login_required(login_url='login')
+def fee_list(request):
+    """ Lista de tarifas definidas """
+
+    fees = Fee.objects.all()
+
+    return render(request, "fee/fee_list.html", {
+        'fees': fees
+    })
+
+@login_required(login_url='login')
+def fee_register(request):
+    """ Registrar tarifa """
+
+    if request.method == 'POST':
+        form = FeeForm(request.POST)
+
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                "Tarifa registrada correctamente"
+            )
+            return redirect('fee_list')
+        else:
+            messages.error(
+                request,
+                "Corrige los errores del formulario"
+            )
+    else:
+        form = FeeForm()
+
+    return render(request, "fee/fee_register.html", {
+        'form': form
+    })
+
+
+@login_required(login_url='login')
+def fee_edit(request, pk):
+    """ Editar tarifa """
+
+    fee = get_object_or_404(Fee, pk=pk)
+
+    if request.method == 'POST':
+        form = FeeForm(request.POST, instance=fee)
+
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                "Tarifa actualizada correctamente"
+            )
+            return redirect('fee_list')
+        else:
+            messages.error(
+                request,
+                "Corrige los errores del formulario"
+            )
+    else:
+        form = FeeForm(instance=fee)
+
+    return render(request, "fee/fee_register.html", {
+        'form': form,
+        'is_edit': True,
+        'fee': fee
+    })
+
+@login_required(login_url='login')
+def fee_list(request):
+    """ Listado de tarifas """
+
+    fees = Fee.objects.all().order_by(
+        '-default',
+        'duration_hours'
+    )
+
+    return render(request, 'fee/fee_list.html', {
+        'fees': fees
+    })

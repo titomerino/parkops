@@ -12,11 +12,30 @@
 
     <div class="card-body p-4">
 
-        <!-- Mensual -->
-        {% if is_monthly %}
-        <div class="alert alert-warning d-flex align-items-center">
-            <i class="bi bi-check-circle-fill me-2"></i>
-            <div>Suscripción mensual activa</div>
+        <!-- Badge tipo de cobro -->
+        {% if billing_type %}
+        <div class="alert
+            {% if is_monthly %}alert-warning
+            {% elif is_daily %}alert-info
+            {% else %}alert-success{% endif %}
+            d-flex align-items-center small py-2"
+        >
+            <i class="bi
+                {% if is_monthly %}bi-calendar-check-fill
+                {% elif is_daily %}bi-sun-fill
+                {% else %}bi-clock-fill{% endif %}
+                me-2"
+            ></i>
+
+            <div>
+                {% if is_monthly %}
+                    Suscripción mensual activa
+                {% elif is_daily %}
+                    Suscripción diaria (monto fijo)
+                {% else %}
+                    Cobro por horas
+                {% endif %}
+            </div>
         </div>
         {% endif %}
 
@@ -31,8 +50,15 @@
         <!-- Monto destacado -->
         <div class="bg-black-custom rounded-4 p-3 text-center mb-3">
             <div class="text-muted small">
-                {% if is_monthly %}Monto del día{% else %}Total a pagar{% endif %}
+                {% if is_monthly %}
+                    Monto del día
+                {% elif is_daily %}
+                    Monto diario
+                {% else %}
+                    Total a pagar
+                {% endif %}
             </div>
+
             <div class="display-5 fw-bold text-success">
                 ${{ amount|floatformat:2 }}
             </div>
@@ -63,8 +89,11 @@
 
             <button class="btn btn-success w-100 rounded-pill shadow-sm">
                 <i class="bi bi-cash-coin me-1"></i>
+
                 {% if is_monthly %}
                     Confirmar salida
+                {% elif is_daily %}
+                    Cobrar diario y salir
                 {% else %}
                     Cobrar y salir
                 {% endif %}

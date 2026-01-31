@@ -5,21 +5,24 @@
 
 {% block content %}
 
-<!-- Header -->
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <small class="text-muted">Resumen de hoy</small>
-        <h2 class="h6 mb-0">{{ today|default:"Actividad del sistema" }}</h2>
-    </div>
-</div>
-
 {% include 'shell/partials/_messages_alert.html' with messages=messages %}
 
 <!-- Cards métricas -->
 <div class="row g-3 mb-4">
 
     <!-- Parqueo diario -->
-    {% include 'parking/partials/_parking_total_today_card.html' with parking_total=total_daily_income %}
+    <!-- <div class="col-6 col-lg-4">
+        {% include 'parking/partials/_parking_total_today_card.html' with parking_total=total_daily_income %}
+    </div> -->
+
+    <!-- <div class="col-6 col-lg-4">
+        {% include 'parking/partials/_parking_total_today_entries.html' with today_entries=total_today_count_entries %}
+    </div> -->
+
+    <div class="col-12 col-lg-4">
+        {% include 'parking/partials/_parking_total_entries_money_today.html' with parking_total=total_daily_income today_entries=total_today_count_entries parking_month_total=total_monthly_income %}
+    </div>
+
 
     <!-- Baños diarios -->
     <div class="col-6 col-lg-4">
@@ -37,7 +40,7 @@
     </div>
 
     <!-- Ingreso mensual parqueo -->
-    {% include 'parking/partials/_parking_total_month_card.html' with parking_month_total=total_monthly_income %}
+    <!-- {% include 'parking/partials/_parking_total_month_card.html' with parking_month_total=total_monthly_income %} -->
 
     <!-- Ingreso mensual baños -->
     <div class="col-6 col-lg-4">
@@ -64,8 +67,13 @@
 <div class="row g-3">
 
     <!-- Parking -->
-    {% include 'parking/partials/_parking_principal_access_button.html' %}
+    <div class="col-12 col-md-6 col-lg-4">
+        {% include 'parking/partials/_parking_principal_access_button.html' %}
+    </div>
 
+    <div class="col-12 col-md-6 col-lg-4">
+        {% include 'parking/partials/_parking_principal_access_month_button.html' %}
+    </div>
     <!-- Baños -->
     <div class="col-12 col-md-6 col-lg-4">
         <a href="#"

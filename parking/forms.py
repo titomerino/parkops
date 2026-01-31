@@ -1,5 +1,7 @@
 from django import forms
-from .models import Fee, Entry, Configuration
+from .models import Fee, Entry, Configuration, PlatePolicy
+from django.core.validators import RegexValidator
+import re
 
 
 class FeeForm(forms.ModelForm):
@@ -110,12 +112,93 @@ class ConfigurationForm(forms.ModelForm):
 
 
 class PlateSearchForm(forms.Form):
-    """ Formulario de busquedas de placa """
     plate = forms.CharField(
         max_length=10,
-        help_text="Escriba la placa sin guiones",
+        label="Placa",
         widget=forms.TextInput(attrs={
             'class': 'form-control',
             'placeholder': 'P123456'
-        })
+        }),
+        validators=[
+            RegexValidator(
+                regex=r'^[A-Za-z0-9 ]+$',
+                message="Solo se permiten letras, números y espacios"
+            )
+        ]
     )
+
+
+class PlatePolicyForm(forms.ModelForm):
+    class Meta:
+        model = PlatePolicy
+        fields = ['plate', 'owner_name', 'billing_type', 'amount', 'active']
+
+        widgets = {
+            'plate': forms.TextInput(attrs={
+                'class': 'form-control bg-dark text-light border-secondary rounded-3',
+                'placeholder': 'ABC 1234',
+                'maxlength': '10',
+                'oninput': 'this.value = this.value.toUpperCase()',
+                'required': True,
+            }),
+            'owner_name': forms.TextInput(attrs={
+                'class': 'form-control bg-dark text-light border-secondary rounded-3',
+                'placeholder': 'Juan Pérez',
+                'maxlength': '150',
+                'required': False,
+            }),
+            'billing_type': forms.Select(attrs={
+                'class': 'form-select bg-dark text-light border-secondary rounded-3',
+                'required': True,
+            }),
+            'amount': forms.NumberInput(attrs={
+                'class': 'form-control bg-dark text-light border-secondary rounded-end-3',
+                'placeholder': '0.00',
+                'step': '0.01',
+                'min': '0',
+            }),
+            'active': forms.CheckboxInput(attrs={
+                'class': 'form-check-input',
+                'role': 'switch'
+            }),
+        }
+
+    # 🔐 Validación de placa
+    def clean_plate(self):
+        plate = self.cleaned_data['plate'].strip().upper()
+
+        # Solo letras, números y espacios
+        if not re.match(r'^[A-Z0-9 ]+$', plate):
+            raise forms.ValidationError(
+                "La placa solo puede contener letras, números y espacios"
+            )
+
+        qs = PlatePolicy.objects.filter(plate=plate)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if qs.exists():
+            raise forms.ValidationError(
+                "Esta placa ya tiene una política registrada"
+            )
+
+        return plate
+
+    # 🧠 Validación semántica de cobro
+    def clean(self):
+        cleaned_data = super().clean()
+        billing_type = cleaned_data.get('billing_type')
+        amount = cleaned_data.get('amount')
+
+        # Mensual → amount opcional (informativo)
+        if billing_type == "MONTHLY":
+            return cleaned_data
+
+        # Diario / Hora → amount obligatorio
+        if billing_type in ["DAILY", "HOURLY"] and not amount:
+            raise forms.ValidationError(
+                "Debes indicar un monto para este tipo de cobro"
+            )
+
+        return cleaned_data
+

@@ -1,11 +1,11 @@
 <div class="card bg-dark text-light border-0 shadow-sm rounded-4 h-100">
     <div class="card-body d-flex align-items-center justify-content-between py-3 px-3">
         <div>
-            <small class="text-muted">Parqueo</small>
+            <small class="text-muted">Entradas del día</small>
             <div class="fw-semibold fs-5">
-                ${{ parking_total|floatformat:2|default:"0.00" }}
+                {{ today_entries|default:"0" }}
             </div>
         </div>
-        <i class="bi bi-cash-stack fs-4 text-success"></i>
+        <i class="bi bi-car-front fs-4 text-info"></i>
     </div>
 </div>

@@ -4,7 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 
 from .forms import LoginForm
-from parking.views import get_daily_income
+from parking.views import get_daily_income, get_today_entries_count
 import logging
 
 logger = logging.getLogger(__name__)
@@ -16,6 +16,7 @@ def dashboard(request):
         income = get_daily_income()  # Llamada a la función
         total_daily_income = income.get("total_daily_income", 0)
         total_monthly_income = income.get("total_monthly_income", 0)
+        today_count = get_today_entries_count()
     except Exception as e:
         # Registrar el error en el log
         logger.error(f"Error al calcular ingresos: {e}")
@@ -26,6 +27,7 @@ def dashboard(request):
     context = {
         "total_daily_income": total_daily_income,
         "total_monthly_income": total_monthly_income,
+        "total_today_count_entries": today_count,
     }
 
     return render(request, "shell/dashboard.html", context)

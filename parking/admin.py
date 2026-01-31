@@ -1,5 +1,5 @@
 from django.contrib import admin
-from parking.models import Configuration, Entry, Fee, MonthlyPlate
+from parking.models import Configuration, Entry, Fee, PlatePolicy
 
 
 admin.site.register(Configuration)
@@ -13,7 +13,6 @@ class EntryAdmin(admin.ModelAdmin):
 class FeeAdmin(admin.ModelAdmin):
     list_display = ('__str__', 'amount', 'duration_hours', 'default')
 
-
-@admin.register(MonthlyPlate)
-class MonthlyPlateAdmin(admin.ModelAdmin):
-    list_display = ("plate", "owner_name", "monthly_amount", "active")
+@admin.register(PlatePolicy)
+class PlatePolicyAdmin(admin.ModelAdmin):
+    list_display = ("plate", "owner_name", "amount", "billing_type", "active")

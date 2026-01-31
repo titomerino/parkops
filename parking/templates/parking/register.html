@@ -1,7 +1,7 @@
 {% extends "shell/base.html" %}
 
 {% block title %}ParkOps / Registro{% endblock %}
-{% block page_title %}Parking entradas{% endblock %}
+{% block page_title %}Parking Entradas{% endblock %}
 
 {% block content %}
 
@@ -17,13 +17,30 @@
 
     <div class="card-body p-4">
 
-        <!-- Mensual -->
-        {% if is_monthly %}
-        <div class="alert alert-warning d-flex align-items-center">
-            <i class="bi bi-check-circle-fill me-2"></i>
-            <div>Suscripción mensual activa</div>
-        </div>
+    {% if policy %}
+    <div class="alert 
+        {% if policy.billing_type == 'MONTHLY' %}alert-warning
+        {% elif policy.billing_type == 'DAILY' %}alert-info
         {% endif %}
+        d-flex justify-content-between align-items-center small py-2">
+
+        <div class="d-flex align-items-center">
+            <i class="bi bi-check-circle-fill me-2"></i>
+
+            <span>
+                {% if policy.billing_type == 'MONTHLY' %}
+                    Suscripción mensual activa
+                {% elif policy.billing_type == 'DAILY' %}
+                    Suscripción diaria activa
+                {% endif %}
+            </span>
+        </div>
+
+        <strong class="ms-2">
+            ${{ policy.amount|floatformat:2 }}
+        </strong>
+    </div>
+    {% endif %}
 
         <!-- Placa -->
         <div class="text-center mb-3">
@@ -78,7 +95,7 @@
 
 <!-- Tip -->
 <div class="text-center small text-muted mt-3">
-    Seleccione la tarifa si aplica y toque para registrar la entrada
+   Toque para registrar la entrada
 </div>
 
 {% endblock %}

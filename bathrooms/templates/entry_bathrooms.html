@@ -1,0 +1,120 @@
+{% extends "shell/base.html" %}
+
+{% block title %}ParkOps / Uso del baño del día{% endblock %}
+{% block page_title %}Parking Baños{% endblock %}
+
+{% block content %}
+
+<!-- Acciones de cobro -->
+<div class="card bg-dark text-light border-0 shadow-lg rounded-4 mb-3">
+    <div class="card-body">
+
+        <!-- Encabezado de opciones -->
+        <div class="text-group mb-2">
+
+            <span class="text-group-text bg-dark text-light rounded-start-3">
+                Opciones de cobros
+            </span>
+
+        </div>
+
+        <div class="row">
+
+            {% for fee in fees %}
+
+                <div class="col-6 col-lg-3">
+
+                    <a
+                        href="{% url 'bathroom_entry_register' fee.id %}"
+                        class="btn btn-{{ fee.color }} me-2 mb-2 w-100"
+                    >
+                        {{ fee.name }} - <strong>${{ fee.amount|floatformat:2 }}</strong>
+                    </a>
+
+                </div>
+
+            {% empty %}
+                <div class="col-12">
+                    <div class="card bg-dark text-light border-0 shadow-sm rounded-4">
+                        <div class="card-body text-center text-muted">
+                            No hay tarifas de baños activas
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+
+        </div>
+
+    </div>
+</div>
+
+<!-- Mensajes -->
+{% include 'shell/partials/_messages_alert.html' with messages=messages %}
+
+<!-- Lista de suscripciones -->
+<div class="row g-3">
+
+    {% for entry in entries %}
+        <div class="col-12 col-lg-4 col-md-6">
+            <div
+                class="card bg-dark text-light border-0 shadow-lg rounded-4 monthly-card"
+                data-plate="{{ entry.fee|lower }}"
+            >
+
+                <!-- Zona táctil SOLO para desplegar -->
+                <div class="card-body py-2 px-3"
+                    role="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#details-{{ entry.id }}"
+                    aria-expanded="false"
+                >
+
+                    <!-- Fila principal -->
+                    <div class="d-flex align-items-center justify-content-between">
+
+                        <!-- Izquierda -->
+                        <div class="d-flex align-items-center">
+                            <div class="bg-info bg-opacity-10 text-{{ entry.fee.color }} rounded-circle p-2 me-2">
+                                <i class="bi bi-droplet-half"></i>
+                            </div>
+
+                            <div>
+                                <div class="d-flex align-items-center">
+                                    <strong class="me-2">{{ entry.fee.name }}</strong>
+                                </div>
+
+                                <small class="text-muted">
+                                    {{ entry.entry_date_hour }}
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- Derecha -->
+                        <div class="text-end">
+                            <div class="fw-bold fs-5 text-success">
+                                ${{ entry.fee.amount|floatformat:2 }}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    {% empty %}
+        <div class="col-12">
+            <div class="card bg-dark text-light border-0 shadow-sm rounded-4">
+                <div class="card-body text-center text-muted">
+                    No hay uso de baños registrados
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+
+</div>
+
+{% endblock %}
+
+{% block menu_bottom %}
+    {% include 'partials/_bathrooms_menu_buttons.html' %}
+{% endblock %}

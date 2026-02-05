@@ -21,4 +21,5 @@ urlpatterns = [
     path('', include('shell.urls')),   # 👈 raíz del sistema
     path('admin/', admin.site.urls),
     path('parking/', include('parking.urls')),
+    path('baños/', include('bathrooms.urls')),
 ]

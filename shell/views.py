@@ -6,12 +6,15 @@ from django.contrib.auth.decorators import login_required
 from .forms import LoginForm
 from parking.views import get_daily_income, get_today_entries_count
 import logging
+from bathrooms.models import BathroomEntry
 
 logger = logging.getLogger(__name__)
 
 @login_required(login_url='login')
 def dashboard(request):
     """Panel principal del sistema"""
+
+    #Parking income and entries
     try:
         income = get_daily_income()  # Llamada a la función
         total_daily_income = income.get("total_daily_income", 0)
@@ -24,10 +27,24 @@ def dashboard(request):
         total_daily_income = 0
         total_monthly_income = 0
 
+    # Bathroom income
+    try:
+        daily_bathroom_income = BathroomEntry.objects.today_income()
+        monthly_bathroom_income = BathroomEntry.objects.month_income()
+        today_total_count = BathroomEntry.objects.total_today()
+    except Exception as e:
+        logger.error(f"Error al calcular ingresos de baños: {e}")
+        daily_bathroom_income = 0
+        monthly_bathroom_income = 0
+        today_total_count = 0
+
     context = {
         "total_daily_income": total_daily_income,
         "total_monthly_income": total_monthly_income,
         "total_today_count_entries": today_count,
+        "daily_bathroom_income": daily_bathroom_income,
+        "monthly_bathroom_income": monthly_bathroom_income,
+        "today_total_count": today_total_count
     }
 
     return render(request, "shell/dashboard.html", context)

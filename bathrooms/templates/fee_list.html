@@ -1,0 +1,128 @@
+{% extends "shell/base.html" %}
+
+{% block title %}ParkOps / Tarifas de baños{% endblock %}
+{% block page_title %}Tarifas de baños{% endblock %}
+
+{% block content %}
+
+<!-- Acción registrar -->
+<div class="card bg-dark text-light border-0 shadow-lg rounded-4 mb-3">
+    <div class="card-body">
+
+        <!-- Encabezado -->
+        <div class="text-group mb-2">
+
+            <strong class="me-2">Lista de tarifas para uso de baños</strong>
+
+        </div>
+
+    </div>
+</div>
+
+{% include 'shell/partials/_messages_alert.html' with messages=messages %}
+
+<!-- Lista de tarifas -->
+<div class="row g-3">
+
+    {% for fee in fees %}
+        <div class="col-12 col-lg-4 col-md-6">
+            <div
+                class="card bg-dark text-light border-0 shadow-lg rounded-4 monthly-card"
+                data-plate="{{ fee.name|lower }}"
+            >
+
+                <!-- Zona táctil SOLO para desplegar -->
+                <div class="card-body py-2 px-3"
+                    role="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#details-{{ fee.id }}"
+                    aria-expanded="false"
+                >
+
+                    <!-- Fila principal -->
+                    <div class="d-flex align-items-center justify-content-between">
+
+                        <!-- Izquierda -->
+                        <div class="d-flex align-items-center">
+                            <div class="bg-{{ fee.color }} text-{{ fee.color }} bg-opacity-10 rounded-circle p-2 me-2">
+                                <i class="bi bi-cash-coin"></i>
+                            </div>
+
+                            <div>
+                                <div class="d-flex align-items-center">
+                                    <strong class="me-2">{{ fee.name }}</strong>
+                                    
+                                    <span class="rounded-circle d-inline-block"
+                                        style="width:8px; height:8px;
+                                        background-color: {% if fee.state %}#22c55e{% else %}#6b7280{% endif %};">
+                                    </span>
+
+                                </div>
+
+                                <small class="text-muted">
+                                    {{ fee.created_at }}
+                                </small>
+                            </div>
+                            
+                        </div>
+
+                        <!-- Derecha -->
+                        <div class="text-end">
+                            <div class="fw-bold fs-5 text-success">
+                                ${{ fee.amount|floatformat:2 }}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Contenido desplegable -->
+                <div class="collapse" id="details-{{ fee.id }}">
+                    <div class="px-3 pb-3 pt-2 border-top">
+
+                        <!-- Botones de acciones-->
+                        <div class="d-flex gap-2">
+                            <a 
+                                href="{% url 'bathroom_fee_edit' fee.id %}"
+                                class="btn btn-sm btn-primary rounded-pill px-3 w-50"
+                            >
+                                <i class="bi bi-pencil-square me-1"></i>
+                                Editar
+                            </a>
+                            <a 
+                                href="{% url 'bathroom_fee_toggle_state' fee.id %}"
+                                class="btn btn-sm {% if fee.state %}btn-warning rounded-pill px-3 w-50{% else %}btn-success rounded-pill px-3 w-50{% endif %}"
+                            >
+                                {% if fee.state %}
+                                    <i class="bi bi-clipboard2-x"></i>
+                                    Desactivar
+                                {% else %}
+                                    <i class="bi bi-clipboard2-check"></i>
+                                    Activar
+                                {% endif %}
+                            </a>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    {% empty %}
+        <div class="col-12">
+            <div class="card bg-dark text-light border-0 shadow-sm rounded-4">
+                <div class="card-body text-center text-muted">
+                    No hay tarifas de baños registradas
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+
+</div>
+
+{% endblock %}
+
+{% block menu_bottom %}
+    {% include 'partials/_bathrooms_menu_buttons.html' %}
+{% endblock %}

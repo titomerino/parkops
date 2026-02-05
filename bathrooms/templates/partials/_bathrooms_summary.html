@@ -1,0 +1,46 @@
+<div class="card bg-dark text-light border-0 shadow-sm rounded-4 h-100">
+    <div class="card-body py-3 px-4">
+
+        <!-- Título -->
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0 fw-semibold">Baños</h6>
+            <i class="bi bi-droplet-half fs-4 text-info"></i>
+        </div>
+
+        <!-- Subtítulo -->
+        <small class="text-muted d-block mb-3">Resumen del día y mes</small>
+
+        <div class="d-flex justify-content-between align-items-center text-center">
+            <!-- Ingreso Día -->
+            <div class="flex-fill">
+                <small class="text-muted">Ingreso hoy</small>
+                <div class="fw-semibold fs-5 text-success">
+                    ${{ daily_bathroom_income|floatformat:2|default:"0.00" }}
+                </div>
+            </div>
+
+            <!-- Separador -->
+            <div class="vr bg-secondary mx-2"></div>
+
+            <!-- Ingreso Mes -->
+            <div class="flex-fill">
+                <small class="text-muted">Ingreso mes</small>
+                <div class="fw-semibold fs-5 text-warning">
+                    ${{ monthly_bathroom_income|floatformat:2|default:"0.00" }}
+                </div>
+            </div>
+
+            <!-- Separador -->
+            <div class="vr bg-secondary mx-2"></div>
+
+            <!-- Entradas -->
+            <div class="flex-fill">
+                <small class="text-muted">Frecuencia hoy</small>
+                <div class="fw-semibold fs-5 text-info">
+                    {{ today_total_count|default:"0" }}
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>

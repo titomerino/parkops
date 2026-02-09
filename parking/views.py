@@ -373,5 +373,5 @@ def get_today_entries_count():
     today = localtime(now()).date()
 
     return Entry.objects.filter(
-        entry_date_hour__date=today
-    ).count()
+            entry_date_hour__date=today
+        ).count()

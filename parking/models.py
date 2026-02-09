@@ -4,37 +4,52 @@ from math import ceil
 
 # Create your models here.
 class Fee(models.Model):
-    """Tarifas por bloques de horas"""
-    
-    BILLING_TYPE_CHOICES = [
-        ("HOURLY_BLOCK", "Bloque por horas"),
-        ("DAILY_FIXED", "Monto fijo por día"),
-    ]
-    duration_hours = models.PositiveSmallIntegerField(
-        "Duración (horas)",
-        help_text="Tiempo mínimo en horas"
+    """Tarifas"""
+    name = models.CharField(
+        "Nombre",
+        max_length=50,
+        help_text="Nombre de la tarifa"
     )
-    amount = models.DecimalField(
-        "Monto",
-        max_digits=8,
-        decimal_places=2
-    )
-    billing_type = models.CharField(
-        "Tipo de cobro",
-        max_length=20,
-        choices=BILLING_TYPE_CHOICES,
-        default="HOURLY_BLOCK"
+    description = models.TextField(
+        "Descripción",
+        blank=True,
+        help_text="Descripción de la tarifa"
     )
     default = models.BooleanField("Activa por defecto", default=False)
+    is_active = models.BooleanField("Activa", default=True)
 
     class Meta:
         verbose_name = "Tarifa"
         verbose_name_plural = "Tarifas"
 
     def __str__(self):
-        if self.billing_type == "DAILY_FIXED":
-            return f'${self.amount} por día'
-        return f'${self.amount} por {self.duration_hours}h'
+        return self.name
+    
+    def calculate_fee(self, minute):
+        ranges = Range.objects.filter(fee=self).order_by('start_minute')
+        for r in ranges:
+            if minute >= r.start_minute:
+                amount = r.amount
+        return amount if ranges.exists() else 0
+
+
+
+class Range(models.Model):
+    """Rangos de tarifas"""
+    fee = models.ForeignKey(
+        Fee,
+        on_delete=models.CASCADE,
+        related_name='ranges',
+    )
+    start_minute = models.PositiveIntegerField("Minuto inicial")
+    amount = models.DecimalField("Monto", max_digits=8, decimal_places=2)
+
+    class Meta:
+        verbose_name = "Rango de tarifa"
+        verbose_name_plural = "Rangos de tarifas"
+
+    def __str__(self):
+        return f"{self.fee.name} - {self.start_minute} min: ${self.amount}"
     
 
 class Entry(models.Model): 
@@ -68,7 +83,7 @@ class Entry(models.Model):
         delta = end_time - self.entry_date_hour
 
         # Horas redondeadas hacia arriba
-        hours = ceil(delta.total_seconds() / 3600)
+        minute = ceil(delta.total_seconds() / 60)
 
         # Buscar política activa de suscripción
         policy = PlatePolicy.objects.filter(
@@ -78,25 +93,18 @@ class Entry(models.Model):
 
         # 🟢 Mensual → no paga nunca por salida
         if policy and policy.billing_type == "MONTHLY":
-            return hours, 0
+            return minute, 0
 
         # 🟡 Diario por suscripción → paga monto fijo por salida
         if policy and policy.billing_type == "DAILY":
-            return hours, float(policy.amount or 0)
+            return minute, float(policy.amount or 0)
 
         # 🔵 Tarifa normal (Fee)
         if self.fee:
-            # Monto fijo por día (ej: motos)
-            if self.fee.billing_type == "DAILY_FIXED":
-                return hours, float(self.fee.amount)
-
-            # Bloques por horas
-            if self.fee.billing_type == "HOURLY_BLOCK":
-                blocks = ceil(hours / max(self.fee.duration_hours or 1, 1))
-                return hours, blocks * float(self.fee.amount)
+                return minute, float(self.fee.calculate_fee(minute))
 
         # Fallback
-        return hours, 0
+        return minute, 0
 
 
 class Configuration(models.Model):

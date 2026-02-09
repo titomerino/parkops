@@ -196,9 +196,12 @@ def record(request):
         e.billing_type = policy.billing_type if policy else "HOURLY"
 
         # Usar la lógica centralizada del modelo
-        hours, amount = e.calculate_amount()
+        minutes, amount = e.calculate_amount()
+        hours = minutes // 60
+        minutes = minutes % 60
 
         e.hours = hours
+        e.minutes = minutes
         e.amount = amount
 
     return render(request, "parking/record.html", {

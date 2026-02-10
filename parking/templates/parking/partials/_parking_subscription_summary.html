@@ -3,7 +3,7 @@
 
         <!-- Título -->
         <div class="d-flex justify-content-between align-items-center mb-2">
-            <h6 class="mb-0 fw-semibold">Parqueo</h6>
+            <h6 class="mb-0 fw-semibold">Parqueo - Suscripciones</h6>
             <i class="bi bi-p-circle fs-4 text-info"></i>
         </div>
 
@@ -11,33 +11,23 @@
         <small class="text-muted d-block mb-3">Resumen del día y mes</small>
 
         <div class="d-flex justify-content-between align-items-center text-center">
-            <!-- Ingreso Día -->
-            <div class="flex-fill">
-                <small class="text-muted">Ingreso hoy</small>
-                <div class="fw-semibold fs-5 text-success">
-                    ${{ total_daily_income|floatformat:2|default:"0.00" }}
-                </div>
-            </div>
 
-            <!-- Separador -->
-            <div class="vr bg-secondary mx-2"></div>
-
-            <!-- Ingreso Mes -->
+            <!-- Ingreso Mes Suscripciones -->
             <div class="flex-fill">
                 <small class="text-muted">Ingreso mes</small>
                 <div class="fw-semibold fs-5 text-warning">
-                    ${{ parking_month_total|floatformat:2|default:"0.00" }}
+                    ${{ total_subscriptions_month_income|floatformat:2|default:"0.00" }}
                 </div>
             </div>
 
             <!-- Separador -->
             <div class="vr bg-secondary mx-2"></div>
 
-            <!-- Entradas -->
+            <!-- Suscripciones activas -->
             <div class="flex-fill">
-                <small class="text-muted">Carros hoy</small>
+                <small class="text-muted">Suscripciones activas</small>
                 <div class="fw-semibold fs-5 text-info">
-                    {{ today_entries|default:"0" }}
+                    {{ total_active_subscriptions|default:"0" }}
                 </div>
             </div>
         </div>

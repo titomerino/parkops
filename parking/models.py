@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils.timezone import now
 from math import ceil
+from django.db.models import Sum
 
 # Create your models here.
 class Fee(models.Model):
@@ -121,6 +122,30 @@ class Configuration(models.Model):
         return self.name
     
 
+class PlatePolicyQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(active=True)
+    
+    def monthly(self):
+        return self.active().filter(billing_type="MONTHLY")
+    
+
+class PlatePolicyManager(models.Manager):
+    def get_queryset(self):
+        return PlatePolicyQuerySet(self.model, using=self._db)
+
+    def total_active_monthly_subscriptions(self):
+        return self.get_queryset().monthly().count()
+    
+    def month_income(self):
+        return (
+            self.get_queryset()
+            .monthly()
+            .aggregate(total=Sum("amount"))
+            ["total"] or 0
+        )
+
+
 class PlatePolicy(models.Model):
     BILLING_TYPES = (
         ("HOURLY", "Por hora"),
@@ -158,6 +183,8 @@ class PlatePolicy(models.Model):
     active = models.BooleanField("Activo", default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = PlatePolicyManager()
 
     class Meta:
         verbose_name = "Política de placa"

@@ -334,7 +334,7 @@ def get_daily_income():
     # INGRESOS DEL DÍA (IGUAL)
     # =========================
     entries = Entry.objects.filter(
-        entry_date_hour__date=today
+        departure_date_hour__date=today
     )
 
     total_daily_income = sum(
@@ -349,7 +349,7 @@ def get_daily_income():
     # 🔹 Entradas cobradas este mes (por salida real)
     month_entries = Entry.objects.filter(
         departure_date_hour__year=current_year,
-        departure_date_hour__month=current_month
+        departure_date_hour__month=current_month,
     )
 
     total_entries_month = sum(
@@ -357,18 +357,11 @@ def get_daily_income():
         for e in month_entries
     )
 
-    # 🔹 Suscripciones mensuales activas (solo se suman una vez al mes)
-    total_subscriptions_month = PlatePolicy.objects.filter(
-        billing_type="MONTHLY",
-        active=True
-    ).aggregate(
-        total=Sum('amount')
-    )['total'] or 0
-
     return {
-        "total_daily_income": total_daily_income,
-        "total_monthly_income": float(total_entries_month) + float(total_subscriptions_month)
+        "total_daily_income": float(total_daily_income),
+        "total_monthly_income": float(total_entries_month),
     }
+
 
 
 def get_today_entries_count():

@@ -7,6 +7,7 @@ from .forms import LoginForm
 from parking.views import get_daily_income, get_today_entries_count
 import logging
 from bathrooms.models import BathroomEntry
+from parking.models import PlatePolicy
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,13 @@ def dashboard(request):
         total_daily_income = 0
         total_monthly_income = 0
 
+    # Parking suscripciones mensuales
+    try:
+        total_subscriptions_month_income = PlatePolicy.objects.month_income()
+        total_active_subscriptions = PlatePolicy.objects.total_active_monthly_subscriptions()
+    except Exception as e:
+        logger.error(f"Error al calcular ingresos de suscripciones: {e}")
+
     # Bathroom income
     try:
         daily_bathroom_income = BathroomEntry.objects.today_income()
@@ -44,7 +52,9 @@ def dashboard(request):
         "total_today_count_entries": today_count,
         "daily_bathroom_income": daily_bathroom_income,
         "monthly_bathroom_income": monthly_bathroom_income,
-        "today_total_count": today_total_count
+        "today_total_count": today_total_count,
+        "total_subscriptions_month_income": total_subscriptions_month_income,
+        "total_active_subscriptions": total_active_subscriptions,
     }
 
     return render(request, "shell/dashboard.html", context)

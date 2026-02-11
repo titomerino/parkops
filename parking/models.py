@@ -2,6 +2,7 @@ from django.db import models
 from django.utils.timezone import now
 from math import ceil
 from django.db.models import Sum
+from django.db.models import Q
 
 # Create your models here.
 class Fee(models.Model):
@@ -34,7 +35,6 @@ class Fee(models.Model):
         return amount if ranges.exists() else 0
 
 
-
 class Range(models.Model):
     """Rangos de tarifas"""
     fee = models.ForeignKey(
@@ -53,10 +53,64 @@ class Range(models.Model):
         return f"{self.fee.name} - {self.start_minute} min: ${self.amount}"
     
 
+class EntryQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(state=True)
+    
+    def entries_today(self, date):
+        return self.filter(entry_date_hour__date=date)
+    
+    def entries_today_and_active(self, date):
+        return self.filter(
+            Q(entry_date_hour__date=date) | Q(state=True)
+        ).order_by('-entry_date_hour')
+
+    def departure_today(self, date):
+        return self.filter(departure_date_hour__date=date)
+
+    def departure_month(self, year, month):
+        return self.filter(
+            departure_date_hour__year=year,
+            departure_date_hour__month=month
+        )
+
+
+class EntryManager(models.Manager):
+    def get_queryset(self):
+        return EntryQuerySet(self.model, using=self._db)
+    
+    def entries_today_count(self, date):
+        return self.get_queryset().entries_today(date).count()
+
+    def entries_today_and_active(self, date):
+        return self.get_queryset().entries_today_and_active(date)
+
+    def departure_today(self, date):
+        return self.get_queryset().departure_today(date)
+
+    def departure_month(self, year, month):
+        return self.get_queryset().departure_month(year, month)
+
+    def today_income(self, date):
+        return sum(
+            e.calculate_amount()[1]
+            for e in self.departure_today(date)
+        )
+
+    def month_income(self, year, month):
+        return sum(
+            e.calculate_amount()[1]
+            for e in self.departure_month(year, month)
+        )
+
+    def total_active_vehicles(self):
+        return self.get_queryset().active().count()
+
+
 class Entry(models.Model): 
     """ Modelo de entradas al parqueo """
     plate = models.CharField("Placa", max_length=10)
-    entry_date_hour = models.DateTimeField("Fecha y hora de entrada", auto_now_add=True)
+    entry_date_hour = models.DateTimeField("Fecha y hora de entrada", default=now)
     departure_date_hour = models.DateTimeField("Fecha y hora de salida", null=True, blank=True)
     fee = models.ForeignKey(
         Fee,
@@ -66,6 +120,8 @@ class Entry(models.Model):
         related_name='entry_fee'
     )
     state = models.BooleanField("Estado", default=True)
+
+    objects = EntryManager()
 
     class Meta:
         verbose_name = "Entrada"
@@ -83,7 +139,7 @@ class Entry(models.Model):
         end_time = self.departure_date_hour or now()
         delta = end_time - self.entry_date_hour
 
-        # Horas redondeadas hacia arriba
+        # minutos redondeados hacia arriba
         minute = ceil(delta.total_seconds() / 60)
 
         # Buscar política activa de suscripción

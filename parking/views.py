@@ -1,14 +1,11 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.timezone import now, localtime
-from django.db.models import Sum
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 
-from math import ceil
-import re
-
-from .models import Fee, Entry, Configuration, PlatePolicy
+from .models import  Entry, PlatePolicy
 from .forms import EntryForm, PlateSearchForm, EntryExitForm, PlatePolicyForm
+from parking.utils import minutes_to_hours_and_minutes
 
 
 @login_required(login_url='login')
@@ -63,7 +60,6 @@ def register(request, plate=None):
         'has_subscription': has_subscription
     })
 
-
 @login_required(login_url='login')
 def departure(request, pk):
     """ Salida del parqueo """
@@ -81,7 +77,8 @@ def departure(request, pk):
     billing_type = policy.billing_type if policy else "HOURLY"
 
     # ⏱️ Calcula horas y monto usando el modelo
-    hours, amount = entry.calculate_amount()
+    total_minutes, amount = entry.calculate_amount()
+    hours, minutes = minutes_to_hours_and_minutes(total_minutes)
 
     if request.method == 'POST':
         # Guardar salida
@@ -109,7 +106,7 @@ def departure(request, pk):
 
     # Mostrar datos en solo lectura
     form = EntryExitForm(initial={
-        'time_spent': f"{hours} horas",
+        'time_spent': f"{hours}:{minutes} h",
         'total_amount': f"${amount:.2f}"
     })
 
@@ -120,7 +117,7 @@ def departure(request, pk):
     return render(request, "parking/departure.html", {
         'entry': entry,
         'form': form,
-        'hours': hours,
+        'hours': f"{hours}:{minutes}",
         'amount': amount,
         'policy': policy,
         'billing_type': billing_type,
@@ -137,7 +134,6 @@ def go_to_departure(request, pk):
         request.session['departure_return_url'] = return_url
 
     return redirect('departure', pk)
-    
 
 @login_required(login_url='login')
 def search_plate(request):
@@ -174,16 +170,13 @@ def search_plate(request):
         'form': form
     })
 
-
 @login_required(login_url='login')
 def record(request):
     """ Página de historial """
 
     today = localtime(now()).date()
 
-    entries = Entry.objects.filter(
-        entry_date_hour__date=today
-    ).order_by('-entry_date_hour')
+    entries = Entry.objects.entries_today_and_active(today)
 
     for e in entries:
         # Detectar política activa
@@ -197,18 +190,14 @@ def record(request):
 
         # Usar la lógica centralizada del modelo
         minutes, amount = e.calculate_amount()
-        hours = minutes // 60
-        minutes = minutes % 60
+        e.hours, e.minutes = minutes_to_hours_and_minutes(minutes)
 
-        e.hours = hours
-        e.minutes = minutes
         e.amount = amount
 
     return render(request, "parking/record.html", {
         'entries': entries,
         'today': today
     })
-
 
 @login_required(login_url='login')
 def subscription_plate_list(request):
@@ -223,7 +212,6 @@ def subscription_plate_list(request):
     return render(request, "parking/subscription_plate_list.html", {
         'plates': plates
     })
-
 
 @login_required(login_url='login')
 def subscription_register(request):
@@ -250,7 +238,6 @@ def subscription_register(request):
     return render(request, "parking/subscription_register.html", {
         'form': form
     })
-
 
 @login_required(login_url='login')
 def subscription_edit(request, pk):
@@ -285,7 +272,6 @@ def subscription_edit(request, pk):
         'policy': policy
     })
 
-
 @login_required(login_url='login')
 def toggle_subscription_active(request, pk):
     """ Activa / desactiva una suscripción y recarga la lista """
@@ -316,58 +302,3 @@ def save_return_url(request):
     # Evita guardar la misma vista de departure como retorno
     if not path.startswith("/departure"):
         request.session['departure_return_url'] = path
-
-
-def get_daily_income():
-    """
-    Retorna un diccionario con:
-    - total_daily_income: ingresos del día (NO se toca)
-    - total_monthly_income: ingresos acumulados del mes en curso
-      (suscripciones + cobros por salidas)
-    """
-
-    today = localtime(now()).date()
-    current_month = today.month
-    current_year = today.year
-
-    # =========================
-    # INGRESOS DEL DÍA (IGUAL)
-    # =========================
-    entries = Entry.objects.filter(
-        departure_date_hour__date=today
-    )
-
-    total_daily_income = sum(
-        e.calculate_amount()[1]
-        for e in entries
-    )
-
-    # =========================
-    # INGRESOS DEL MES (NUEVO)
-    # =========================
-
-    # 🔹 Entradas cobradas este mes (por salida real)
-    month_entries = Entry.objects.filter(
-        departure_date_hour__year=current_year,
-        departure_date_hour__month=current_month,
-    )
-
-    total_entries_month = sum(
-        e.calculate_amount()[1]
-        for e in month_entries
-    )
-
-    return {
-        "total_daily_income": float(total_daily_income),
-        "total_monthly_income": float(total_entries_month),
-    }
-
-
-
-def get_today_entries_count():
-    """Retorna la cantidad de carros dentro hoy"""
-    today = localtime(now()).date()
-
-    return Entry.objects.filter(
-            entry_date_hour__date=today
-        ).count()

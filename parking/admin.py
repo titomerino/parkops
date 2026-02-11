@@ -7,7 +7,6 @@ admin.site.register(Configuration)
 @admin.register(Entry)
 class EntryAdmin(admin.ModelAdmin):
     list_display = ('plate', 'entry_date_hour', 'departure_date_hour', 'state')
-    readonly_fields = ('entry_date_hour', 'state')
 
 @admin.register(Range)
 class RangeAdmin(admin.ModelAdmin):

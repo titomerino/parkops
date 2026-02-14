@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+    }
+
+    .header {
+        border-bottom: 2px solid #0d6efd;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+
+    .header-table {
+        width: 100%;
+    }
+
+    .header-table td {
+        vertical-align: middle;
+    }
+
+    .title {
+        text-align: center;
+        margin-bottom: 20px;
+        font-size: 14px;
+        font-weight: bold;
+    }
+
+    .summary-table {
+        width: 100%;
+        margin-bottom: 20px;
+        border-collapse: collapse;
+    }
+
+    .summary-table td {
+        border: 1px solid #ccc;
+        padding: 10px;
+        text-align: center;
+        width: 33.33%;
+    }
+
+    .summary-title {
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+
+    .main-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+
+    .main-table th,
+    .main-table td {
+        border: 1px solid black;
+        padding: 6px;
+        text-align: center;
+    }
+
+    .main-table th {
+        background-color: #212529;
+        color: white;
+    }
+
+    .total {
+        margin-top: 15px;
+        text-align: right;
+        font-weight: bold;
+        font-size: 14px;
+    }
+    .income-text {
+        font-size: 12px;
+        font-weight: bold;
+    }
+</style>
+
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+    <table class="header-table">
+        <tr>
+            <td>
+                {% if logo_url %}
+                    <img src="{{ logo_url }}" style="height:60px;">
+                {% endif %}
+            </td>
+            <td style="text-align: right;">
+                <strong>Parking OPS</strong><br>
+                {{ today|date:"j \\d\\e F \\d\\e Y" }}
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="title">
+    REPORTE DE INGRESOS DEL DÍA
+</div>
+
+<div class="total" style="margin-bottom: 15px;">
+    Ingresos Totales del Día: ${{ total_income_today }}
+</div>
+
+<!-- SUMMARY -->
+<table class="summary-table">
+    <tr>
+        <td>
+            <div class="summary-title">Tarifas</div>
+            Total: {{ normal_count|default:"0" }}<br>
+            <span class="income-text">Ingresos: ${{ total_income_normal }}</span>
+        </td>
+        <td>
+            <div class="summary-title">Suscripciones Diarias</div>
+            Total: {{ daily_count|default:"0" }}<br>
+            <span class="income-text">Ingresos: ${{ total_income_daily }}</span>
+        </td>
+        <td>
+            <div class="summary-title">Baños</div>
+            Usos: {{ total_use_bathroom|default:"0" }}<br>
+            <span class="income-text">Ingresos: ${{ total_income_bathroom }}</span>
+        </td>
+    </tr>
+</table>
+
+<!-- DETALLE -->
+<table class="main-table">
+    <thead>
+        <tr>
+            <th>Placa</th>
+            <th>Entrada</th>
+            <th>Salida</th>
+            <th>Tiempo</th>
+            <th>Tipo de cobro</th>
+            <th>Monto</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for e in entries %}
+        <tr>
+            <td>{{ e.plate }}</td>
+            <td>{{ e.entry_date_hour|date:"H:i"|default:"—" }}</td>
+            <td>{{ e.departure_date_hour|date:"H:i"|default:"—" }}</td>
+            <td>{{ e.hours }}:{{ e.minutes }} h</td>
+            <td>{{ e.type }}{% if e.fee %} - {{ e.fee.name }}{% endif %}</td>
+            <td>${{ e.amount }}{% if  not e.departure_date_hour %} *{% endif %}</td>
+        </tr>
+        {% empty %}
+            <tr>
+                <td colspan="6" class="text-center text-muted fst-italic bg-light">No hay entradas para este día</td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="total">
+    Total ingresos por parqueo: ${{ total_income }}
+</div>
+
+<span>
+    <em>Nota: <Strong>*</Strong> Indican entradas sin salida registrada, no suman a los ingresos del día.<br>
+        Todas suscripciones mensuales suman $0 a los ingresos del día</em>
+</span>
+
+</body>
+</html>

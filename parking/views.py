@@ -2,10 +2,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.timezone import now, localtime
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
+from django.template.loader import render_to_string
 
 from .models import  Entry, PlatePolicy
+from bathrooms.models import BathroomEntry
 from .forms import EntryForm, PlateSearchForm, EntryExitForm, PlatePolicyForm
 from parking.utils import minutes_to_hours_and_minutes
+import weasyprint
 
 
 @login_required(login_url='login')
@@ -302,3 +306,76 @@ def save_return_url(request):
     # Evita guardar la misma vista de departure como retorno
     if not path.startswith("/departure"):
         request.session['departure_return_url'] = path
+
+
+def income_day_report(date):
+    day = date
+    entries = list(Entry.objects.entries_today(day))
+
+    # Obtener placas únicas del día
+    plates = {e.plate for e in entries}
+
+    policies = PlatePolicy.objects.filter(
+        plate__in=plates,
+        active=True
+    )
+
+    # Crear diccionario {plate: policy}
+    policy_map = {p.plate: p for p in policies}
+
+    total_income = 0
+    daily_subscription_count = 0
+    normal_fee_count = 0
+    total_income_normal = 0
+    total_income_daily = 0
+
+    for e in entries:
+        minutes, amount = e.calculate_amount()
+        if e.departure_date_hour:
+            total_income += amount
+        e.hours, e.minutes = minutes_to_hours_and_minutes(minutes)
+        e.amount = amount
+
+        policy = policy_map.get(e.plate)
+
+        if policy and policy.billing_type == "DAILY":
+            daily_subscription_count += 1
+            if e.departure_date_hour:
+                total_income_daily += amount
+            e.type = "Suscripción - DIARIO"
+        elif policy and policy.billing_type == "MONTHLY":
+            e.type = "Suscripción - MENSUAL"
+        else:
+            normal_fee_count += 1
+            if e.departure_date_hour:
+                total_income_normal += amount
+            e.type = "Tarifa"
+
+    bathrooms_today_income = BathroomEntry.objects.today_income()
+    
+    html_string = render_to_string(
+        "parking/reports/parking_income_day_pdf.html",
+        {
+            'entries': entries,
+            'total_income': total_income,
+            'today': day,
+            'daily_count': daily_subscription_count,
+            'normal_count': normal_fee_count,
+            'total_income_normal': total_income_normal,
+            'total_income_daily': total_income_daily,
+            'total_use_bathroom': BathroomEntry.objects.total_today(),
+            'total_income_bathroom': float(bathrooms_today_income),
+            'total_income_today': total_income + float(bathrooms_today_income),
+        }
+    )
+
+    pdf = weasyprint.HTML(string=html_string).write_pdf()
+
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="Parqueo-Reporte_de_ingresos_{day}.pdf"'
+    return response
+
+def income_today_report(request):
+    """LLama a la función de generación de reporte de ingresos del día actual"""
+    today = localtime(now()).date()
+    return income_day_report(today)

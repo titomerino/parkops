@@ -79,6 +79,9 @@ class EntryManager(models.Manager):
     def get_queryset(self):
         return EntryQuerySet(self.model, using=self._db)
     
+    def entries_today(self, date):
+        return self.get_queryset().entries_today(date)
+    
     def entries_today_count(self, date):
         return self.get_queryset().entries_today(date).count()
 

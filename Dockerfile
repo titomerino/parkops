@@ -16,6 +16,11 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     postgresql-client \
     curl \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libcairo2 \
+    libgdk-pixbuf-2.0-0 \
+    fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar dependencias Python

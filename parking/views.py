@@ -375,7 +375,30 @@ def income_day_report(date):
     response['Content-Disposition'] = f'inline; filename="Parqueo-Reporte_de_ingresos_{day}.pdf"'
     return response
 
+def income_month_report_func(request, date):
+    date_parts = date.split("-")
+
+    html_string = render_to_string(
+        "parking/reports/parking_income_month_pdf.html",
+        {
+            'month': date_parts[1],
+            'year': date_parts[0],
+            'report_date': localtime(now()).date()
+        }
+    )
+
+    pdf = weasyprint.HTML(string=html_string).write_pdf()
+
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="Parqueo-Reporte_de_ingresos_{date_parts[1]}-{date_parts[0]}.pdf"'
+    return response
+
+
+
 def income_today_report(request):
     """LLama a la función de generación de reporte de ingresos del día actual"""
     today = localtime(now()).date()
     return income_day_report(today)
+
+def income_month_report(request, date):
+    return income_month_report_func(request, date)

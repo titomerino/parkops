@@ -1,0 +1,175 @@
+{% extends "shell/base.html" %}
+
+{% block title %}ParkOps / Baños{% endblock %}
+{% block page_title %}{% if is_edit %} Editar Tarifa de Baño {% else %} Registrar Tarifa de Baño {% endif %}{% endblock %}
+
+{% block content %}
+
+{% include 'shell/partials/_messages_alert.html' with messages=messages %}
+
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+
+        <div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+
+            <!-- Header -->
+            <div class="card-body border-bottom border-secondary pb-3 mb-3">
+                <div class="d-flex align-items-center">
+                    <div>
+                        <h5 class="mb-0">
+                            {% if is_edit %}
+                                Editar tarifa de baño
+                            {% else %}
+                                Registrar tarifa de baño
+                            {% endif %}
+                        </h5>
+                        <small class="text-muted">
+                            Define cómo se cobrará el uso del baño en el sistema
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form -->
+            <form method="POST" novalidate>
+                {% csrf_token %}
+
+                <div class="card-body pt-0">
+
+                    <!-- Nombre de tarifa -->
+                    <div class="mb-3">
+                        <label class="form-label text-muted">
+                            Nombre de la tarifa
+                        </label>
+
+                        {{ form.name }}
+
+                        {% if form.name.errors %}
+                            <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                {{ form.name.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Monto a cobrar -->
+                    <div class="mb-3">
+                        <label class="form-label text-muted">
+                            Monto a cobrar ($)
+                        </label>
+
+                        {{ form.amount }}
+
+                        {% if form.amount.errors %}
+                            <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                {{ form.amount.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Color -->
+                    <div class="mb-3">
+                        <label class="form-label text-muted">
+                            Color
+                        </label>
+
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-primary color-btn" data-color="primary"></button>
+                            <button type="button" class="btn btn-secondary color-btn" data-color="secondary"></button>
+                            <button type="button" class="btn btn-success color-btn" data-color="success"></button>
+                            <button type="button" class="btn btn-danger color-btn" data-color="danger"></button>
+                            <button type="button" class="btn btn-warning color-btn" data-color="warning"></button>
+                            <button type="button" class="btn btn-info color-btn" data-color="info"></button>
+                            <button type="button" class="btn btn-dark color-btn" data-color="dark"></button>
+                        </div>
+
+                        {{ form.color }}
+
+                        {% if form.color.errors %}
+                            <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                {{ form.color.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Estado -->
+                    <div class="form-check form-switch mb-4">
+                        {{ form.state }}
+                        <label class="form-check-label text-muted">
+                            Tarifa activa
+                        </label>
+                    </div>
+
+                    <!-- BOTÓN -->
+                    <button type="submit"
+                        class="btn btn-success rounded-pill px-4 w-100">
+                        <i class="bi bi-check-circle me-1"></i>
+                        {% if is_edit %}
+                            Guardar cambios
+                        {% else %}
+                            Guardar tarifa
+                        {% endif %}
+                    </button>
+                </div>
+            </form>
+
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}
+
+{% block menu_bottom %}
+    {% include 'partials/_bathrooms_menu_buttons.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    const colorInput = document.getElementById('id_color');
+    const colorButtons = document.querySelectorAll('.color-btn');
+
+    function selectColor(color) {
+        colorButtons.forEach(btn => {
+            btn.classList.remove(
+                'active',
+                'border',
+                'border-3',
+                'border-light',
+                'shadow',
+                'opacity-100'
+            );
+            btn.classList.add('opacity-50');
+
+            if (btn.dataset.color === color) {
+                btn.classList.add(
+                    'active',
+                    'border',
+                    'border-3',
+                    'border-light',
+                    'shadow',
+                    'opacity-100'
+                );
+                btn.classList.remove('opacity-50');
+            }
+        });
+
+        colorInput.value = color;
+    }
+
+    // Al cargar (editar)
+    if (colorInput.value) {
+        selectColor(colorInput.value);
+    }
+
+    // Al hacer click
+    colorButtons.forEach(btn => {
+        btn.addEventListener('click', function () {
+            selectColor(this.dataset.color);
+        });
+    });
+
+});
+</script>
+{% endblock %}

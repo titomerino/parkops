@@ -375,7 +375,7 @@ def income_day_report(date):
     response['Content-Disposition'] = f'inline; filename="Parqueo-Reporte_de_ingresos_{day}.pdf"'
     return response
 
-def income_month_report_func(request, date):
+def income_month_report_func(date):
     date_parts = date.split("-")
 
     html_string = render_to_string(
@@ -400,5 +400,9 @@ def income_today_report(request):
     today = localtime(now()).date()
     return income_day_report(today)
 
-def income_month_report(request, date):
-    return income_month_report_func(request, date)
+def income_month_report_specific(request, date):
+    return income_month_report_func(date)
+
+def income_month_report_today(request):
+    date = localtime(now()).strftime("%Y-%m")
+    return income_month_report_func(date)

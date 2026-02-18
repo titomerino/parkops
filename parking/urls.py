@@ -1,5 +1,4 @@
 from .views import (
-    income_month_report,
     register,
     search_plate,
     departure,
@@ -10,6 +9,8 @@ from .views import (
     subscription_edit,
     toggle_subscription_active,
     income_today_report,
+    income_month_report_specific,
+    income_month_report_today
 )
 from django.urls import path
 
@@ -25,5 +26,6 @@ urlpatterns = [
     path('suscripciones/desactivar/<int:pk>', toggle_subscription_active, name='toggle_subscription_active'),
     path('suscripciones/activar/<int:pk>', toggle_subscription_active, name='toggle_subscription_active'),
     path('reporte-de-ingresos-hoy/', income_today_report, name='income_today_report'),
-    path('reporte-de-ingresos-mes/<str:date>/', income_month_report, name='income_month_report')
+    path('reporte-de-ingresos-mes/', income_month_report_today, name='income_month_report_today'),
+    path('reporte-de-ingresos-mes/<str:date>/', income_month_report_specific, name='income_month_report'),
 ]

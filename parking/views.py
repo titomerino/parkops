@@ -169,10 +169,12 @@ def search_plate(request):
                 return redirect('register', plate)
             
         else:
-            messages.error(
-                request,
-                "La placa solo puede contener letras, números y espacios"
-            )
+            error_message = form.errors.get('plate')
+            
+            if error_message:
+                messages.error(request, error_message[0])
+            else:
+                messages.error(request, "Formulario inválido")
 
     return render(request, "parking/search_plate.html", {
         'form': form

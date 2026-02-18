@@ -18,11 +18,13 @@
                 <i class="bi bi-search text-light opacity-75"></i>
             </span>
 
-            <input type="text"
+            <input
+                type="text"
                 id="plateSearch"
                 class="form-control bg-dark border border-secondary text-light rounded-end-3"
                 placeholder="Buscar placa del día..."
                 style="box-shadow:none;"
+                maxlength="10"
             >
 
         </div>
@@ -196,11 +198,11 @@ document.addEventListener("DOMContentLoaded", function () {
     let currentFilter = "all";
 
     function applyFilters() {
-        const searchValue = searchInput.value.toLowerCase();
+        const searchValue = searchInput.value.toUpperCase();
         let visibleCount = 0;
 
         cards.forEach(card => {
-            const plate = card.dataset.plate;
+            const plate = (card.dataset.plate || "").toUpperCase();
             const state = card.dataset.state;
 
             const matchesPlate = plate.includes(searchValue);
@@ -214,37 +216,38 @@ document.addEventListener("DOMContentLoaded", function () {
             if (show) visibleCount++;
         });
 
-        // Mostrar estado vacío si no hay resultados visibles
         const noResults = document.getElementById("noResults");
-        if (visibleCount === 0) {
-            noResults.classList.remove("d-none");
-        } else {
-            noResults.classList.add("d-none");
-        }
+        noResults.classList.toggle("d-none", visibleCount !== 0);
     }
 
-    // Buscar por placa en tiempo real
-    searchInput.addEventListener("input", applyFilters);
+    // NORMALIZACIÓN DEL INPUT
+    searchInput.addEventListener("input", function () {
+
+        this.value = this.value
+            .replace(/\s+/g, '')          
+            .replace(/[^a-zA-Z0-9]/g, '')
+            .toUpperCase()
+            .slice(0, 10);
+
+        applyFilters();
+    });
 
     // Chips de estado
     filterButtons.forEach(btn => {
         btn.addEventListener("click", () => {
             currentFilter = btn.dataset.filter;
 
-            // Reset: todos dark
             filterButtons.forEach(b => {
                 b.classList.remove("btn-success");
                 b.classList.add("btn-dark");
             });
 
-            // Activo: success
             btn.classList.remove("btn-dark");
             btn.classList.add("btn-success");
 
             applyFilters();
         });
     });
-
 
 });
 </script>

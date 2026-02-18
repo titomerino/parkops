@@ -40,11 +40,13 @@
             id="plateInput"
             value="{{ form.plate.value|default_if_none:'' }}"
             class="form-control bg-dark border border-secondary text-light rounded-end-3"
-            placeholder="Ej: P123ABC"
+            placeholder="P123ABC"
             required
             autofocus
-            oninput="this.value = this.value.toUpperCase()"
             style="box-shadow:none;"
+            maxlength="10"
+            pattern="[A-Z0-9]+"
+            oninput="this.value = this.value.replace(/\s/g, '').toUpperCase()"
           >
         </div>
 

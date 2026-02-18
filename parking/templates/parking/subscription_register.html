@@ -135,4 +135,23 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const plateInput = document.getElementById("id_plate");
+
+    if (plateInput) {
+        plateInput.setAttribute("maxlength", "10");
+
+        plateInput.addEventListener("input", function () {
+            this.value = this.value
+                .replace(/\s+/g, '')
+                .replace(/[^a-zA-Z0-9]/g, '')
+                .toUpperCase()
+                .slice(0, 10);
+        });
+    }
+
+});
+</script>
 {% endblock %}

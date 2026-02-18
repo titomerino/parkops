@@ -132,6 +132,12 @@ class Entry(models.Model):
 
     def __str__(self):
         return self.plate
+    
+    def save(self, *args, **kwargs):
+        # Si existe una entrada activa para la misma placa, no se permite guardar una nueva
+        if self.state and Entry.objects.filter(plate=self.plate, state=True).exclude(id=self.id).exists():
+            raise ValueError(f"Ya existe una entrada activa para esta placa: {self.plate}")
+        super().save(*args, **kwargs)
 
     def calculate_amount(self):
         """

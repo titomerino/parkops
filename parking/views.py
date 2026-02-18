@@ -45,11 +45,15 @@ def register(request, plate=None):
             if has_subscription:
                 entry.fee = None
 
-            entry.save()
-            messages.success(
-                request,
-                f"La entrada para {entry.plate} se guardó correctamente."
-            )
+            try:
+                entry.save()
+                messages.success(
+                    request,
+                    f"La entrada para {entry.plate} se guardó correctamente."
+                )
+            except ValueError as e:
+                messages.error(request, str(e))
+            
             return redirect('search_plate')
     else:
         form = EntryForm(initial={'plate': plate})
@@ -375,6 +379,7 @@ def income_day_report(date):
     response['Content-Disposition'] = f'inline; filename="Parqueo-Reporte_de_ingresos_{day}.pdf"'
     return response
 
+@login_required(login_url='login')
 def income_today_report(request):
     """LLama a la función de generación de reporte de ingresos del día actual"""
     today = localtime(now()).date()

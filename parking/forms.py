@@ -3,9 +3,9 @@ from .models import Fee, Entry, Configuration, PlatePolicy
 from django.core.validators import RegexValidator
 import re
 
-
+"""
 class FeeForm(forms.ModelForm):
-    """ Formulario para cuotas """
+    Formulario para cuotas
     
     class Meta:
         model = Fee
@@ -28,7 +28,7 @@ class FeeForm(forms.ModelForm):
             'default': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'
             })
-        }
+        }"""
 
 
 class EntryForm(forms.ModelForm):

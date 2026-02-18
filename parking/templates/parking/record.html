@@ -81,24 +81,19 @@
                                         background-color: {% if entry.state %}#22c55e{% else %}#6b7280{% endif %};">
                                     </span>
 
-                                    <!-- Etiqueta de tipo de cobro -->
-                                    {% if entry.billing_type == "MONTHLY" %}
-                                        <span class="badge bg-warning text-dark ms-2">
-                                            Mensual
-                                        </span>
-                                    {% elif entry.billing_type == "DAILY" %}
-                                        <span class="badge bg-primary ms-2">
-                                            Diario
-                                        </span>
-                                    {% else %}
-                                        <span class="badge bg-secondary ms-2">
-                                            Por hora
-                                        </span>
-                                    {% endif %}
                                 </div>
 
                                 <small class="text-muted">
-                                    {% if entry.state %}En parqueo{% else %}Finalizado{% endif %}
+                                    {% if entry.fee%}
+                                        {{ entry.fee.name }}
+                                    {% else %}
+                                        <!-- Etiqueta de tipo de cobro -->
+                                        {% if entry.billing_type == "MONTHLY" %}
+                                            Mensual
+                                        {% elif entry.billing_type == "DAILY" %}
+                                            Diario
+                                        {% endif %}
+                                    {% endif %}
                                 </small>
                             </div>
                         </div>
@@ -145,11 +140,7 @@
                             <div>
                                 <span class="text-muted">Tiempo</span><br>
                                 <strong>
-                                    {% if entry.hours %}
-                                        {{ entry.hours }}h
-                                    {% else %}
-                                        —
-                                    {% endif %}
+                                    {{ entry.hours }}:{{ entry.minutes }} h
                                 </strong>
                             </div>
                         </div>

@@ -10,51 +10,19 @@
 <!-- Cards métricas -->
 <div class="row g-3 mb-4">
 
-    <!-- Parqueo diario -->
-    <!-- <div class="col-6 col-lg-4">
-        {% include 'parking/partials/_parking_total_today_card.html' with parking_total=total_daily_income %}
-    </div> -->
-
-    <!-- <div class="col-6 col-lg-4">
-        {% include 'parking/partials/_parking_total_today_entries.html' with today_entries=total_today_count_entries %}
-    </div> -->
-
+    <!-- Resumen parqueo -->
     <div class="col-12 col-lg-4">
         {% include 'parking/partials/_parking_total_entries_money_today.html' with parking_total=total_daily_income today_entries=total_today_count_entries parking_month_total=total_monthly_income %}
     </div>
 
-
-    <!-- Baños diarios -->
-    <div class="col-6 col-lg-4">
-        <div class="card bg-dark text-light border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body d-flex align-items-center justify-content-between py-3 px-3">
-                <div>
-                    <small class="text-muted">Baños</small>
-                    <div class="fw-semibold fs-5">
-                        ${{ bathrooms_total|default:"0.00" }}
-                    </div>
-                </div>
-                <i class="bi bi-droplet fs-4 text-primary"></i>
-            </div>
-        </div>
+    <!-- Resumen suscripciones mensuales -->
+    <div class="col-12 col-lg-4">
+        {% include 'parking/partials/_parking_subscription_summary.html' with parking_total=total_subscriptions_month_income %}
     </div>
 
-    <!-- Ingreso mensual parqueo -->
-    <!-- {% include 'parking/partials/_parking_total_month_card.html' with parking_month_total=total_monthly_income %} -->
-
-    <!-- Ingreso mensual baños -->
-    <div class="col-6 col-lg-4">
-        <div class="card bg-dark text-light border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body d-flex align-items-center justify-content-between py-3 px-3">
-                <div>
-                    <small class="text-muted">Baños (Mensual)</small>
-                    <div class="fw-semibold fs-5">
-                        ${{ bathrooms_month_total|default:"0.00" }}
-                    </div>
-                </div>
-                <i class="bi bi-calendar-month fs-4 text-warning"></i>
-            </div>
-        </div>
+    <!-- Resumen baños -->
+    <div class="col-12 col-lg-4">
+        {% include 'partials/_bathrooms_summary.html' with parking_total=total_daily_income today_entries=total_today_count_entries parking_month_total=total_monthly_income %}
     </div>
 
 </div>
@@ -76,16 +44,7 @@
     </div>
     <!-- Baños -->
     <div class="col-12 col-md-6 col-lg-4">
-        <a href="#"
-           class="card bg-primary bg-opacity-75 text-light border-0 shadow-sm rounded-4 text-decoration-none h-100">
-            <div class="card-body d-flex align-items-center py-2 px-3">
-                <i class="bi bi-droplet fs-4 me-3"></i>
-                <div>
-                    <div class="fw-semibold">Baños</div>
-                    <small class="opacity-75">Control de accesos</small>
-                </div>
-            </div>
-        </a>
+        {% include 'partials/_bathrooms_principal_access_button.html' %}
     </div>
 
 </div>

@@ -185,26 +185,28 @@ def search_plate(request):
 
 @login_required(login_url='login')
 def record(request):
-    """ Página de historial """
 
     today = localtime(now()).date()
 
     entries = Entry.objects.entries_today_and_active(today)
 
-    for e in entries:
-        # Detectar política activa
-        policy = PlatePolicy.objects.filter(
-            plate=e.plate,
-            active=True
-        ).first()
+    plates = [e.plate for e in entries]
 
-        # Tipo de cobro para la UI
+    policies = PlatePolicy.objects.filter(
+        plate__in=plates,
+        active=True
+    )
+
+    # Convertir en diccionario para acceso rápido
+    policy_dict = {p.plate: p for p in policies}
+
+    for e in entries:
+        policy = policy_dict.get(e.plate)
+
         e.billing_type = policy.billing_type if policy else "HOURLY"
 
-        # Usar la lógica centralizada del modelo
         minutes, amount = e.calculate_amount()
         e.hours, e.minutes = minutes_to_hours_and_minutes(minutes)
-
         e.amount = amount
 
     return render(request, "parking/record.html", {

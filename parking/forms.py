@@ -136,7 +136,7 @@ class PlatePolicyForm(forms.ModelForm):
         widgets = {
             'plate': forms.TextInput(attrs={
                 'class': 'form-control bg-dark text-light border-secondary rounded-3',
-                'placeholder': 'ABC 1234',
+                'placeholder': 'P 123 456',
                 'maxlength': '10',
                 'oninput': 'this.value = this.value.toUpperCase()',
                 'required': True,
@@ -163,7 +163,6 @@ class PlatePolicyForm(forms.ModelForm):
             }),
         }
 
-    # 🔐 Validación de placa
     def clean_plate(self):
         plate = self.cleaned_data['plate'].strip().upper()
 

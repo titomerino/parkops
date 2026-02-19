@@ -213,6 +213,7 @@ class PlatePolicyManager(models.Manager):
 
 class PlatePolicy(models.Model):
     BILLING_TYPES = (
+        ("", "-Seleccione un tipo de cobro-"),
         ("HOURLY", "Por hora"),
         ("DAILY", "Diario fijo"),
         ("MONTHLY", "Mensual"),

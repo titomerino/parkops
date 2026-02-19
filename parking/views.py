@@ -11,6 +11,9 @@ from .forms import EntryForm, PlateSearchForm, EntryExitForm, PlatePolicyForm
 from parking.utils import minutes_to_hours_and_minutes
 import weasyprint
 
+from django.db.models import F, Value
+from django.db.models.functions import Replace
+
 
 @login_required(login_url='login')
 def register(request, plate=None):
@@ -169,10 +172,12 @@ def search_plate(request):
                 return redirect('register', plate)
             
         else:
-            messages.error(
-                request,
-                "La placa solo puede contener letras, números y espacios"
-            )
+            error_message = form.errors.get('plate')
+            
+            if error_message:
+                messages.error(request, error_message[0])
+            else:
+                messages.error(request, "Formulario inválido")
 
     return render(request, "parking/search_plate.html", {
         'form': form
@@ -181,6 +186,15 @@ def search_plate(request):
 @login_required(login_url='login')
 def record(request):
     """ Página de historial """
+
+    # 🔥 ACTUALIZACIÓN TEMPORAL (BORRAR DESPUÉS)
+    Entry.objects.update(
+        plate=Replace(F("plate"), Value(" "), Value(""))
+    )
+
+    PlatePolicy.objects.update(
+        plate=Replace(F("plate"), Value(" "), Value(""))
+    )
 
     today = localtime(now()).date()
 
@@ -193,10 +207,8 @@ def record(request):
             active=True
         ).first()
 
-        # Tipo de cobro para la UI
         e.billing_type = policy.billing_type if policy else "HOURLY"
 
-        # Usar la lógica centralizada del modelo
         minutes, amount = e.calculate_amount()
         e.hours, e.minutes = minutes_to_hours_and_minutes(minutes)
 

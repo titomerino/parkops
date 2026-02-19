@@ -3,6 +3,7 @@ from django.utils.timezone import now
 from math import ceil
 from django.db.models import Sum
 from django.db.models import Q
+from parking.utils import format_plate
 
 # Create your models here.
 class Fee(models.Model):
@@ -172,6 +173,12 @@ class Entry(models.Model):
         # Fallback
         return minute, 0
 
+    def formatted_plate(self):
+        """
+        retorna el formato de placa con espacios
+        """
+        return format_plate(self.plate)
+
 
 class Configuration(models.Model):
     """ Modelo de configuración """
@@ -257,3 +264,9 @@ class PlatePolicy(models.Model):
 
     def __str__(self):
         return f"{self.plate} - {self.billing_type}"
+    
+    def formatted_plate(self):
+        """
+        retorna el formato de placa con espacios
+        """
+        return format_plate(self.plate)

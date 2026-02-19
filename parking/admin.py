@@ -7,6 +7,8 @@ admin.site.register(Configuration)
 @admin.register(Entry)
 class EntryAdmin(admin.ModelAdmin):
     list_display = ('plate', 'entry_date_hour', 'departure_date_hour', 'state')
+    search_fields = ('plate',)
+    list_per_page = 20
 
 @admin.register(Range)
 class RangeAdmin(admin.ModelAdmin):
@@ -19,3 +21,5 @@ class FeeAdmin(admin.ModelAdmin):
 @admin.register(PlatePolicy)
 class PlatePolicyAdmin(admin.ModelAdmin):
     list_display = ("plate", "owner_name", "amount", "billing_type", "active")
+    search_fields = ('plate',)
+    list_per_page = 20

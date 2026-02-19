@@ -187,15 +187,6 @@ def search_plate(request):
 def record(request):
     """ Página de historial """
 
-    # 🔥 ACTUALIZACIÓN TEMPORAL (BORRAR DESPUÉS)
-    Entry.objects.update(
-        plate=Replace(F("plate"), Value(" "), Value(""))
-    )
-
-    PlatePolicy.objects.update(
-        plate=Replace(F("plate"), Value(" "), Value(""))
-    )
-
     today = localtime(now()).date()
 
     entries = Entry.objects.entries_today_and_active(today)
@@ -207,8 +198,10 @@ def record(request):
             active=True
         ).first()
 
+        # Tipo de cobro para la UI
         e.billing_type = policy.billing_type if policy else "HOURLY"
 
+        # Usar la lógica centralizada del modelo
         minutes, amount = e.calculate_amount()
         e.hours, e.minutes = minutes_to_hours_and_minutes(minutes)
 

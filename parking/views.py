@@ -375,15 +375,34 @@ def income_day_report(date):
     response['Content-Disposition'] = f'inline; filename="Parqueo-Reporte_de_ingresos_{day}.pdf"'
     return response
 
-def income_month_report_func(date):
+
+def income_today_report(request):
+    """LLama a la función de generación de reporte de ingresos del día actual"""
+    today = localtime(now()).date()
+    return income_day_report(today)
+
+def income_month_report(request, date=None):
+
+    if not date:
+        date = localtime(now()).strftime("%Y-%m")
+    else:
+        date = date.strip()
+        date_parts = date.split("-")
+        date = f"{date_parts[1]}-{date_parts[0]}"
+
     date_parts = date.split("-")
+
+    departures_month = Entry.objects.departure_month(date_parts[0], date_parts[1]) #Cambiar el orden de entrada de la funcion
+    month_income = Entry.objects.month_income(date_parts[0], date_parts[1]) #Cambiar el orden de entrada de la funcion
 
     html_string = render_to_string(
         "parking/reports/parking_income_month_pdf.html",
         {
             'month': date_parts[1],
             'year': date_parts[0],
-            'report_date': localtime(now()).date()
+            'report_date': localtime(now()).date(),
+            'departures': departures_month,
+            'income_month': month_income,
         }
     )
 
@@ -391,18 +410,5 @@ def income_month_report_func(date):
 
     response = HttpResponse(pdf, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="Parqueo-Reporte_de_ingresos_{date_parts[1]}-{date_parts[0]}.pdf"'
+
     return response
-
-
-
-def income_today_report(request):
-    """LLama a la función de generación de reporte de ingresos del día actual"""
-    today = localtime(now()).date()
-    return income_day_report(today)
-
-def income_month_report_specific(request, date):
-    return income_month_report_func(date)
-
-def income_month_report_today(request):
-    date = localtime(now()).strftime("%Y-%m")
-    return income_month_report_func(date)

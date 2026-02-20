@@ -96,15 +96,27 @@ class EntryManager(models.Manager):
         return self.get_queryset().departure_month(year, month)
 
     def today_income(self, date):
+        entries = (
+            self.departure_today(date)
+            .select_related("fee")
+            .only("entry_date_hour", "departure_date_hour", "fee")
+        )
+
         return sum(
             e.calculate_amount()[1]
-            for e in self.departure_today(date)
+            for e in entries
         )
 
     def month_income(self, year, month):
+        entries = (
+            self.departure_month(year, month)
+            .select_related("fee")
+            .only("entry_date_hour", "departure_date_hour", "fee")
+        )
+
         return sum(
             e.calculate_amount()[1]
-            for e in self.departure_month(year, month)
+            for e in entries
         )
 
     def total_active_vehicles(self):
@@ -140,7 +152,7 @@ class Entry(models.Model):
             raise ValueError(f"Ya existe una entrada activa para esta placa: {self.plate}")
         super().save(*args, **kwargs)
 
-    def calculate_amount(self):
+    def calculate_amount(self, policy=None):
         """
         Calcula horas y monto a pagar según tiempo transcurrido,
         tarifa por bloques o monto fijo diario, o suscripción
@@ -148,15 +160,8 @@ class Entry(models.Model):
         # Tiempo final
         end_time = self.departure_date_hour or now()
         delta = end_time - self.entry_date_hour
-
-        # minutos redondeados hacia arriba
         minute = ceil(delta.total_seconds() / 60)
 
-        # Buscar política activa de suscripción
-        policy = PlatePolicy.objects.filter(
-            plate=self.plate,
-            active=True
-        ).first()
 
         # 🟢 Mensual → no paga nunca por salida
         if policy and policy.billing_type == "MONTHLY":
@@ -168,7 +173,7 @@ class Entry(models.Model):
 
         # 🔵 Tarifa normal (Fee)
         if self.fee:
-                return minute, float(self.fee.calculate_fee(minute))
+            return minute, float(self.fee.calculate_fee(minute))
 
         # Fallback
         return minute, 0

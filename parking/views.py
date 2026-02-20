@@ -4,15 +4,13 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.template.loader import render_to_string
+from django.db.models import Sum, Count
 
 from .models import  Entry, PlatePolicy
 from bathrooms.models import BathroomEntry
 from .forms import EntryForm, PlateSearchForm, EntryExitForm, PlatePolicyForm
 from parking.utils import minutes_to_hours_and_minutes
 import weasyprint
-
-from django.db.models import F, Value
-from django.db.models.functions import Replace
 
 
 @login_required(login_url='login')
@@ -75,34 +73,39 @@ def register(request, plate=None):
 def departure(request, pk):
     """ Salida del parqueo """
 
-    entry = get_object_or_404(Entry, pk=pk)
+    entry = get_object_or_404(
+        Entry.objects.select_related("fee"),
+        pk=pk
+    )
 
     plate = entry.plate.strip().upper()
 
-    # Buscar política activa para la placa
-    policy = PlatePolicy.objects.filter(
-        plate=plate,
-        active=True
-    ).first()
+    policy = (
+        PlatePolicy.objects
+        .filter(plate=plate, active=True)
+        .only("billing_type", "amount")
+        .first()
+    )
 
     billing_type = policy.billing_type if policy else "HOURLY"
 
-    # ⏱️ Calcula horas y monto usando el modelo
-    total_minutes, amount = entry.calculate_amount()
+    total_minutes, amount = entry.calculate_amount(policy=policy)
     hours, minutes = minutes_to_hours_and_minutes(total_minutes)
 
-    if request.method == 'POST':
-        # Guardar salida
+    if request.method == "POST":
+
         entry.departure_date_hour = now()
         entry.state = False
 
-        # Si NO es por hora → no debe quedar tarifa
         if billing_type in ["MONTHLY", "DAILY"]:
-            entry.fee = None
+            entry.fee_id = None 
 
-        entry.save()
+        entry.save(update_fields=[
+            "departure_date_hour",
+            "state",
+            "fee"
+        ])
 
-        # Mensaje según tipo de cobro
         if billing_type == "MONTHLY":
             msg = f"Salida registrada para {entry.plate} (Mensual — $0.00)"
         elif billing_type == "DAILY":
@@ -112,28 +115,26 @@ def departure(request, pk):
 
         messages.success(request, msg)
 
-        return_url = request.session.pop('departure_return_url', None)
-        return redirect(return_url or 'search_plate')
+        return_url = request.session.pop("departure_return_url", None)
+        return redirect(return_url or "search_plate")
 
-    # Mostrar datos en solo lectura
     form = EntryExitForm(initial={
-        'time_spent': f"{hours}:{minutes} h",
-        'total_amount': f"${amount:.2f}"
+        "time_spent": f"{hours}:{minutes} h",
+        "total_amount": f"${amount:.2f}"
     })
 
-    # Quita campo de monto si es mensual
     if billing_type == "MONTHLY":
-        form.fields.pop('total_amount', None)
+        form.fields.pop("total_amount", None)
 
     return render(request, "parking/departure.html", {
-        'entry': entry,
-        'form': form,
-        'hours': f"{hours}:{minutes}",
-        'amount': amount,
-        'policy': policy,
-        'billing_type': billing_type,
-        'is_monthly': billing_type == "MONTHLY",
-        'is_daily': billing_type == "DAILY",
+        "entry": entry,
+        "form": form,
+        "hours": f"{hours}:{minutes}",
+        "amount": amount,
+        "policy": policy,
+        "billing_type": billing_type,
+        "is_monthly": billing_type == "MONTHLY",
+        "is_daily": billing_type == "DAILY",
     })
 
 @login_required(login_url='login')
@@ -188,16 +189,27 @@ def record(request):
 
     today = localtime(now()).date()
 
-    entries = Entry.objects.entries_today_and_active(today)
-
-    plates = [e.plate for e in entries]
-
-    policies = PlatePolicy.objects.filter(
-        plate__in=plates,
-        active=True
+    entries = (
+        Entry.objects
+        .entries_today_and_active(today)
+        .select_related("fee")
+        .only(
+            "plate",
+            "entry_date_hour",
+            "departure_date_hour",
+            "fee",
+            "state"
+        )
     )
 
-    # Convertir en diccionario para acceso rápido
+    plates = entries.values_list("plate", flat=True)
+
+    policies = (
+        PlatePolicy.objects
+        .filter(plate__in=plates, active=True)
+        .only("plate", "billing_type", "amount")
+    )
+
     policy_dict = {p.plate: p for p in policies}
 
     for e in entries:
@@ -205,13 +217,13 @@ def record(request):
 
         e.billing_type = policy.billing_type if policy else "HOURLY"
 
-        minutes, amount = e.calculate_amount()
+        minutes, amount = e.calculate_amount(policy=policy)
         e.hours, e.minutes = minutes_to_hours_and_minutes(minutes)
         e.amount = amount
 
     return render(request, "parking/record.html", {
-        'entries': entries,
-        'today': today
+        "entries": entries,
+        "today": today
     })
 
 @login_required(login_url='login')
@@ -320,18 +332,30 @@ def save_return_url(request):
 
 
 def income_day_report(date):
+
     day = date
-    entries = list(Entry.objects.entries_today(day))
 
-    # Obtener placas únicas del día
-    plates = {e.plate for e in entries}
-
-    policies = PlatePolicy.objects.filter(
-        plate__in=plates,
-        active=True
+    entries = (
+        Entry.objects
+        .entries_today(day)
+        .select_related("fee")
+        .only(
+            "plate",
+            "entry_date_hour",
+            "departure_date_hour",
+            "fee",
+            "state"
+        )
     )
 
-    # Crear diccionario {plate: policy}
+    plates = entries.values_list("plate", flat=True).distinct()
+
+    policies = (
+        PlatePolicy.objects
+        .filter(plate__in=plates, active=True)
+        .only("plate", "billing_type", "amount")
+    )
+
     policy_map = {p.plate: p for p in policies}
 
     total_income = 0
@@ -341,49 +365,66 @@ def income_day_report(date):
     total_income_daily = 0
 
     for e in entries:
-        minutes, amount = e.calculate_amount()
-        if e.departure_date_hour:
-            total_income += amount
-        e.hours, e.minutes = minutes_to_hours_and_minutes(minutes)
-        e.amount = amount
 
         policy = policy_map.get(e.plate)
 
+        if e.departure_date_hour:
+            minutes, amount = e.calculate_amount(policy=policy)
+            total_income += amount
+        else:
+            minutes, amount = 0, 0
+
+        e.hours, e.minutes = minutes_to_hours_and_minutes(minutes)
+        e.amount = amount
+
         if policy and policy.billing_type == "DAILY":
             daily_subscription_count += 1
-            if e.departure_date_hour:
-                total_income_daily += amount
+            total_income_daily += amount
             e.type = "Suscripción - DIARIO"
+
         elif policy and policy.billing_type == "MONTHLY":
             e.type = "Suscripción - MENSUAL"
+
         else:
             normal_fee_count += 1
-            if e.departure_date_hour:
-                total_income_normal += amount
+            total_income_normal += amount
             e.type = "Tarifa"
 
-    bathrooms_today_income = BathroomEntry.objects.today_income()
-    
+    bathroom_data = (
+        BathroomEntry.objects
+        .filter(entry_date_hour__date=day)
+        .aggregate(
+            total_income=Sum("fee__amount"),
+            total_uses=Count("id")
+        )
+    )
+
+    total_use_bathroom = BathroomEntry.objects.total_today()
+    bathroom_income = float(bathroom_data["total_income"] or 0)
+
     html_string = render_to_string(
         "parking/reports/parking_income_day_pdf.html",
         {
-            'entries': entries,
-            'total_income': total_income,
-            'today': day,
-            'daily_count': daily_subscription_count,
-            'normal_count': normal_fee_count,
-            'total_income_normal': total_income_normal,
-            'total_income_daily': total_income_daily,
-            'total_use_bathroom': BathroomEntry.objects.total_today(),
-            'total_income_bathroom': float(bathrooms_today_income),
-            'total_income_today': total_income + float(bathrooms_today_income),
+            "entries": entries,
+            "total_income": total_income,
+            "today": day,
+            "daily_count": daily_subscription_count,
+            "normal_count": normal_fee_count,
+            "total_income_normal": total_income_normal,
+            "total_income_daily": total_income_daily,
+            "total_use_bathroom": total_use_bathroom,
+            "total_income_bathroom": bathroom_income,
+            "total_income_today": total_income + bathroom_income,
         }
     )
 
     pdf = weasyprint.HTML(string=html_string).write_pdf()
 
-    response = HttpResponse(pdf, content_type='application/pdf')
-    response['Content-Disposition'] = f'inline; filename="Parqueo-Reporte_de_ingresos_{day}.pdf"'
+    response = HttpResponse(pdf, content_type="application/pdf")
+    response["Content-Disposition"] = (
+        f'inline; filename="Parqueo-Reporte_de_ingresos_{day}.pdf"'
+    )
+
     return response
 
 @login_required(login_url='login')

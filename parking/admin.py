@@ -6,7 +6,7 @@ admin.site.register(Configuration)
 
 @admin.register(Entry)
 class EntryAdmin(admin.ModelAdmin):
-    list_display = ('plate', 'entry_date_hour', 'departure_date_hour', 'state')
+    list_display = ('plate', 'entry_date_hour', 'departure_date_hour', 'final_amount', 'state')
     search_fields = ('plate',)
     list_per_page = 20
 

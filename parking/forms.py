@@ -109,7 +109,7 @@ class PlatePolicyForm(forms.ModelForm):
         widgets = {
             'plate': forms.TextInput(attrs={
                 'class': 'form-control bg-dark text-light border-secondary rounded-3',
-                'placeholder': 'P123123',
+                'placeholder': 'P 123 456',
                 'maxlength': '10',
                 'oninput': "this.value = this.value.replace(/\\s+/g,'').replace(/[^a-zA-Z0-9]/g,'').toUpperCase().slice(0,10);",
                 'required': True,

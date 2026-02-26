@@ -22,8 +22,7 @@
                 type="text"
                 id="plateSearch"
                 class="form-control bg-dark border border-secondary text-light rounded-end-3"
-                placeholder="Buscar placa..."
-                maxlength="10"
+                placeholder="Buscar suscripción..."
                 style="box-shadow:none;"
                 oninput="this.value = this.value.replace(/\s+/g,'').replace(/[^a-zA-Z0-9]/g,'').toUpperCase().slice(0,10);"
             >
@@ -38,8 +37,8 @@
             <button class="btn btn-sm rounded-pill btn-dark" data-filter="active">
                 Activos
             </button>
-            <button class="btn btn-sm rounded-pill btn-dark" data-filter="finished">
-                Finalizados
+            <button class="btn btn-sm rounded-pill btn-dark" data-filter="inactive">
+                Inactivos
             </button>
         </div>
     </div>

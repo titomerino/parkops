@@ -12,6 +12,9 @@ from .forms import EntryForm, PlateSearchForm, EntryExitForm, PlatePolicyForm
 from parking.utils import minutes_to_hours_and_minutes
 import weasyprint
 
+from django.http import JsonResponse
+from django.db.models import Q
+
 
 @login_required(login_url='login')
 def register(request, plate=None):
@@ -439,3 +442,27 @@ def income_today_report(request):
     """LLama a la función de generación de reporte de ingresos del día actual"""
     today = localtime(now()).date()
     return income_day_report(today)
+
+
+
+@login_required(login_url='login')
+def fix_missing_amounts(request):
+
+    entries = Entry.objects.filter(
+        departure_date_hour__isnull=False
+    ).filter(
+        Q(final_amount__isnull=True) | Q(final_amount=0)
+    )[:200]
+
+    updated = 0
+
+    for entry in entries:
+        minutes, amount = entry.calculate_amount()
+        entry.final_amount = amount
+        entry.final_minutes = minutes
+        entry.save(update_fields=["final_amount", "final_minutes"])
+        updated += 1
+
+    return JsonResponse({
+        "updated_this_run": updated
+    })

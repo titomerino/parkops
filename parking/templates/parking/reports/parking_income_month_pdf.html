@@ -72,6 +72,7 @@
         font-weight: bold;
         font-size: 14px;
     }
+
     .income-text {
         font-size: 12px;
         font-weight: bold;
@@ -86,13 +87,11 @@
     <table class="header-table">
         <tr>
             <td>
-                {% if logo_url %}
-                    <img src="{{ logo_url }}" style="height:60px;">
-                {% endif %}
+                <img src="logo.png" style="height:60px;">
             </td>
             <td style="text-align: right;">
                 <strong>Parking OPS</strong><br>
-                {{ today|date:"j \\d\\e F \\d\\e Y" }}
+                {{ report_date|date:"j \\d\\e F \\d\\e Y" }}
             </td>
         </tr>
     </table>
@@ -102,13 +101,98 @@
     REPORTE DE INGRESOS DEL MES
 </div>
 
-<div>
-    {{ month }} - {{ year }} - {{ report_date }}
-    <br>
-    {{ departures.count }} Cantidad de ingresos completados
-    <br>
-    {{ income_month|floatformat:2 }} ingresos
+<div class="total" style="margin-bottom: 15px;">
+    Ingresos Totales del Mes: $4,850.00
 </div>
+
+<!-- RESUMEN POR TIPO -->
+<table class="summary-table">
+    <tr>
+        <td>
+            <div class="summary-title">Tarifas</div>
+            Total servicios: 320<br>
+            <span class="income-text">Ingresos: $3,200.00</span>
+        </td>
+        <td>
+            <div class="summary-title">Suscripciones Diarias</div>
+            Total servicios: 95<br>
+            <span class="income-text">Ingresos: $1,150.00</span>
+        </td>
+        <td>
+            <div class="summary-title">Baños</div>
+            Total usos: 250<br>
+            <span class="income-text">Ingresos: $500.00</span>
+        </td>
+    </tr>
+</table>
+
+<!-- DETALLE POR DÍA -->
+<div class="title" style="margin-top:30px;">
+    INGRESOS POR DÍA
+</div>
+
+<table class="main-table">
+    <thead>
+        <tr>
+            <th>Día</th>
+            <th>Cantidad de Servicios</th>
+            <th>Ingresos del Día</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>01 Febrero 2026</td>
+            <td>18</td>
+            <td>$150.00</td>
+        </tr>
+        <tr>
+            <td>02 Febrero 2026</td>
+            <td>22</td>
+            <td>$210.00</td>
+        </tr>
+        <tr>
+            <td>03 Febrero 2026</td>
+            <td>15</td>
+            <td>$130.00</td>
+        </tr>
+        <tr>
+            <td>04 Febrero 2026</td>
+            <td>20</td>
+            <td>$180.00</td>
+        </tr>
+        <tr>
+            <td>05 Febrero 2026</td>
+            <td>25</td>
+            <td>$240.00</td>
+        </tr>
+        <tr>
+            <td>06 Febrero 2026</td>
+            <td>30</td>
+            <td>$300.00</td>
+        </tr>
+        <tr>
+            <td>07 Febrero 2026</td>
+            <td>12</td>
+            <td>$100.00</td>
+        </tr>
+        <tr>
+            <td>08 Febrero 2026</td>
+            <td>28</td>
+            <td>$260.00</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="total">
+    Total General del Mes: $4,850.00
+</div>
+
+<span>
+    <em>
+        Nota: Este reporte incluye únicamente ingresos completados dentro del mes seleccionado.
+        Las suscripciones mensuales no generan ingreso diario.
+    </em>
+</span>
 
 </body>
 </html>

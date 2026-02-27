@@ -3,33 +3,6 @@ from .models import Fee, Entry, Configuration, PlatePolicy
 from django.core.validators import RegexValidator
 import re
 
-"""
-class FeeForm(forms.ModelForm):
-    Formulario para cuotas
-    
-    class Meta:
-        model = Fee
-        fields = [
-            'duration_hours',
-            'amount',
-            'default'
-        ]
-        widgets = {
-            'duration_hours': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': 1,
-                'placeholder': 'Horas mínimas'
-            }),
-            'amount': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'step': '0.01',
-                'placeholder': 'Monto en dólares'
-            }),
-            'default': forms.CheckboxInput(attrs={
-                'class': 'form-check-input'
-            })
-        }"""
-
 
 class EntryForm(forms.ModelForm):
     """ Formulario para entradas """
@@ -121,8 +94,8 @@ class PlateSearchForm(forms.Form):
         }),
         validators=[
             RegexValidator(
-                regex=r'^[A-Za-z0-9 ]+$',
-                message="Solo se permiten letras, números y espacios"
+                regex=r'^[A-Za-z0-9]+$',
+                message="Solo se permiten letras y números (sin espacios)"
             )
         ]
     )
@@ -136,9 +109,9 @@ class PlatePolicyForm(forms.ModelForm):
         widgets = {
             'plate': forms.TextInput(attrs={
                 'class': 'form-control bg-dark text-light border-secondary rounded-3',
-                'placeholder': 'ABC 1234',
+                'placeholder': 'P123456',
                 'maxlength': '10',
-                'oninput': 'this.value = this.value.toUpperCase()',
+                'oninput': "this.value = this.value.replace(/\\s+/g,'').replace(/[^a-zA-Z0-9]/g,'').toUpperCase().slice(0,10);",
                 'required': True,
             }),
             'owner_name': forms.TextInput(attrs={
@@ -163,17 +136,19 @@ class PlatePolicyForm(forms.ModelForm):
             }),
         }
 
-    # 🔐 Validación de placa
     def clean_plate(self):
-        plate = self.cleaned_data['plate'].strip().upper()
+        plate = self.cleaned_data['plate']
 
-        # Solo letras, números y espacios
-        if not re.match(r'^[A-Z0-9 ]+$', plate):
+        # Normalización fuerte
+        plate = re.sub(r'[^A-Za-z0-9]', '', plate).upper()[:10]
+
+        if not plate:
             raise forms.ValidationError(
-                "La placa solo puede contener letras, números y espacios"
+                "La placa solo puede contener letras y números"
             )
 
         qs = PlatePolicy.objects.filter(plate=plate)
+
         if self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
 

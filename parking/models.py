@@ -96,27 +96,17 @@ class EntryManager(models.Manager):
         return self.get_queryset().departure_month(year, month)
 
     def today_income(self, date):
-        entries = (
+        return (
             self.departure_today(date)
-            .select_related("fee")
-            .only("entry_date_hour", "departure_date_hour", "fee")
-        )
-
-        return sum(
-            e.calculate_amount()[1]
-            for e in entries
+            .aggregate(total=Sum("final_amount"))
+            ["total"] or 0
         )
 
     def month_income(self, year, month):
-        entries = (
+        return (
             self.departure_month(year, month)
-            .select_related("fee")
-            .only("entry_date_hour", "departure_date_hour", "fee")
-        )
-
-        return sum(
-            e.calculate_amount()[1]
-            for e in entries
+            .aggregate(total=Sum("final_amount"))
+            ["total"] or 0
         )
 
     def total_active_vehicles(self):
@@ -136,6 +126,21 @@ class Entry(models.Model):
         related_name='entry_fee'
     )
     state = models.BooleanField("Estado", default=True)
+    final_minutes = models.PositiveIntegerField(
+        "Minutos finales",
+        null=True,
+        blank=True,
+        help_text="Tiempo total en minutos al momento de registrar la salida"
+    )
+
+    final_amount = models.DecimalField(
+        "Monto final cobrado",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Monto calculado al momento de registrar la salida"
+    )
 
     objects = EntryManager()
 
@@ -225,6 +230,7 @@ class PlatePolicyManager(models.Manager):
 
 class PlatePolicy(models.Model):
     BILLING_TYPES = (
+        ("", "-Seleccione un tipo de cobro-"),
         ("HOURLY", "Por hora"),
         ("DAILY", "Diario fijo"),
         ("MONTHLY", "Mensual"),

@@ -98,12 +98,19 @@ def departure(request, pk):
         entry.departure_date_hour = now()
         entry.state = False
 
+        # 🔒 Congelar valores históricos
+        entry.final_minutes = total_minutes
+        entry.final_amount = amount
+
+        # Si es mensual o diario, ya no depende de fee
         if billing_type in ["MONTHLY", "DAILY"]:
-            entry.fee_id = None 
+            entry.fee_id = None
 
         entry.save(update_fields=[
             "departure_date_hour",
             "state",
+            "final_minutes",
+            "final_amount",
             "fee"
         ])
 

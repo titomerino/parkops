@@ -8,7 +8,7 @@ from .views import (
     subscription_register,
     subscription_edit,
     toggle_subscription_active,
-    income_today_report,
+    income_today_report
 )
 from django.urls import path
 

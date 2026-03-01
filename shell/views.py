@@ -32,6 +32,12 @@ def dashboard(request):
 
     return render(request, "shell/dashboard.html", context)
 
+def error_403(request, exception):
+    return render(request, 'shell/403.html', status=403)
+
+def error_404(request, exception):
+    return render(request, 'shell/404.html', status=404)
+
 
 def custom_login(request):
     """Login personalizado para usuarios"""

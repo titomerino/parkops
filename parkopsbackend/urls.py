@@ -17,8 +17,11 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 
+handler403 = 'shell.views.error_403'
+handler404 = 'shell.views.error_404'
+
 urlpatterns = [
-    path('', include('shell.urls')),   # 👈 raíz del sistema
+    path('', include('shell.urls')),
     path('admin/', admin.site.urls),
     path('parking/', include('parking.urls')),
     path('baños/', include('bathrooms.urls')),

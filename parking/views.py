@@ -8,7 +8,7 @@ from django.db.models import Sum, Count
 
 from .models import  Entry, PlatePolicy
 from bathrooms.models import BathroomEntry
-from .forms import EntryForm, PlateSearchForm, EntryExitForm, PlatePolicyForm
+from .forms import EntryForm, EntryEditForm, PlateSearchForm, EntryExitForm, PlatePolicyForm
 from parking.utils import minutes_to_hours_and_minutes
 import weasyprint
 
@@ -153,6 +153,41 @@ def go_to_departure(request, pk):
         request.session['departure_return_url'] = return_url
 
     return redirect('departure', pk)
+
+def entry_edit_view(request, pk):
+    """ Vista para editar una entrada (solo admin) """
+
+    entry = get_object_or_404(Entry, pk=pk)
+    policy = PlatePolicy.objects.filter(plate=entry.plate, active=True).first()
+
+    if request.method == "POST":
+        form = EntryEditForm(request.POST, instance=entry)
+
+        if form.is_valid():
+            instance = form.save(commit=False)
+
+            # Si se ingresó fecha de salida → marcar como salida y calcular monto
+            if form.cleaned_data.get('departure_date_hour'):
+                instance.state = False
+                instance.final_amount = instance.calculate_amount()[1]
+            else:
+                instance.state = True
+                instance.final_amount = None
+
+            instance.save()
+
+            messages.success(request, "Entrada actualizada correctamente.")
+            return redirect('record')
+        else:
+            messages.error(request, "Corrige los errores del formulario.")
+    else:
+        form = EntryEditForm(instance=entry)
+
+    return render(request, "parking/entry_edit_form.html", {
+        "form": form,
+        "entry": entry,
+        "policy": policy
+    })
 
 @login_required(login_url='login')
 def search_plate(request):

@@ -5,15 +5,16 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from django.db.models import Sum, Count
+from django.contrib.auth.decorators import permission_required
 
 from .models import  Entry, PlatePolicy
 from bathrooms.models import BathroomEntry
-from .forms import EntryForm, PlateSearchForm, EntryExitForm, PlatePolicyForm
+from .forms import EntryForm, EntryEditForm, PlateSearchForm, EntryExitForm, PlatePolicyForm
 from parking.utils import minutes_to_hours_and_minutes
 import weasyprint
 
 
-@login_required(login_url='login')
+@permission_required('parking.add_entry', raise_exception=True)
 def register(request, plate=None):
     """Vista que nos lleva a la pantalla de registro de entradas"""
 
@@ -69,7 +70,7 @@ def register(request, plate=None):
         'has_subscription': has_subscription
     })
 
-@login_required(login_url='login')
+@permission_required('parking.add_entry', raise_exception=True)
 def departure(request, pk):
     """ Salida del parqueo """
 
@@ -154,6 +155,42 @@ def go_to_departure(request, pk):
 
     return redirect('departure', pk)
 
+@permission_required('parking.change_entry', raise_exception=True)
+def entry_edit_view(request, pk):
+    """ Vista para editar una entrada (solo admin) """
+
+    entry = get_object_or_404(Entry, pk=pk)
+    policy = PlatePolicy.objects.filter(plate=entry.plate, active=True).first()
+
+    if request.method == "POST":
+        form = EntryEditForm(request.POST, instance=entry)
+
+        if form.is_valid():
+            instance = form.save(commit=False)
+
+            # Si se ingresó fecha de salida → marcar como salida y calcular monto
+            if form.cleaned_data.get('departure_date_hour'):
+                instance.state = False
+                instance.final_amount = instance.calculate_amount()[1]
+            else:
+                instance.state = True
+                instance.final_amount = None
+
+            instance.save()
+
+            messages.success(request, "Entrada actualizada correctamente.")
+            return redirect('record')
+        else:
+            messages.error(request, "Corrige los errores del formulario.")
+    else:
+        form = EntryEditForm(instance=entry)
+
+    return render(request, "parking/entry_edit_form.html", {
+        "form": form,
+        "entry": entry,
+        "policy": policy
+    })
+
 @login_required(login_url='login')
 def search_plate(request):
     """Vista principal: buscar placa y decidir flujo"""
@@ -191,7 +228,7 @@ def search_plate(request):
         'form': form
     })
 
-@login_required(login_url='login')
+@permission_required('parking.view_entry', raise_exception=True)
 def record(request):
 
     today = localtime(now()).date()
@@ -207,7 +244,13 @@ def record(request):
             "fee",
             "state"
         )
+        .order_by("-state", "-entry_date_hour")
     )
+
+    # Contadores para los chips
+    total_entries = entries.count()
+    active_entries = entries.filter(state=True).count()
+    finished_entries = entries.filter(state=False).count()
 
     plates = entries.values_list("plate", flat=True)
 
@@ -230,10 +273,13 @@ def record(request):
 
     return render(request, "parking/record.html", {
         "entries": entries,
-        "today": today
+        "today": today,
+        "total_entries": total_entries,
+        "active_entries": active_entries,
+        "finished_entries": finished_entries,
     })
 
-@login_required(login_url='login')
+@permission_required('parking.view_platepolicy', raise_exception=True)
 def subscription_plate_list(request):
     """ Página de placas con pago subcripcion """
 
@@ -247,7 +293,7 @@ def subscription_plate_list(request):
         'plates': plates
     })
 
-@login_required(login_url='login')
+@permission_required('parking.add_platepolicy', raise_exception=True)
 def subscription_register(request):
     """ Registrar política de cobro para una placa """
 
@@ -273,7 +319,7 @@ def subscription_register(request):
         'form': form
     })
 
-@login_required(login_url='login')
+@permission_required('parking.change_platepolicy', raise_exception=True)
 def subscription_edit(request, pk):
     """ Editar suscripción / política de cobro de una placa """
 
@@ -306,7 +352,7 @@ def subscription_edit(request, pk):
         'policy': policy
     })
 
-@login_required(login_url='login')
+@permission_required('parking.change_platepolicy', raise_exception=True)
 def toggle_subscription_active(request, pk):
     """ Activa / desactiva una suscripción y recarga la lista """
 

@@ -1,0 +1,157 @@
+{% extends "shell/base.html" %}
+
+{% block title %}ParkOps / Edición de entrada{% endblock %}
+{% block page_title %}Parking Entradas{% endblock %}
+
+{% block content %}
+
+{% include 'shell/partials/_messages_alert.html' with messages=messages %}
+
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+
+        <div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+
+            <!-- Header -->
+            <div class="card-body border-bottom border-secondary pb-3 mb-3">
+                <div class="d-flex align-items-center">
+                    <div>
+                        <h5 class="mb-0">
+                            Editar Entrada de Parking
+                        </h5>
+                        <small class="text-muted">
+                            Editar una entrada existente del parking
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form -->
+            <form method="POST" novalidate>
+                {% csrf_token %}
+
+                <div class="card-body pt-0">
+
+                    <!-- Placa -->
+                    <div class="mb-3">
+                        <label class="form-label text-muted">
+                            Placa
+                        </label>
+
+                        {{ form.plate }}
+
+                        {% if form.plate.errors %}
+                            <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                {{ form.plate.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    {% if policy %}
+                        <div class="mb-3">
+                            <label class="form-label text-muted">
+                                Tarifa aplicada: Suscripción {{ policy.get_billing_type_display }}
+                            </label>
+                            <div class="form-control bg-dark text-light border-1">
+                                {{ policy.get_billing_type_display }}
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- Tarifa aplicada -->
+                        <div class="mb-3">
+                            <label class="form-label text-muted">
+                                Tarifa aplicada
+                            </label>
+
+                            {{ form.fee }}
+
+                            {% if form.fee.errors %}
+                                <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                    {{ form.fee.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+
+                    <!-- Hora de entrada y salida -->
+                    <div class="row mb-3">
+                        
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">
+                                Hora de entrada
+                            </label>
+
+                            {{ form.entry_date_hour }}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">
+                                Hora de salida
+                            </label>
+
+                            {{ form.departure_date_hour }}
+                        </div>
+
+                        <!-- Errores en ancho completo -->
+                        <div class="col-12">
+                            {% if form.entry_date_hour.errors %}
+                                <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                    {{ form.entry_date_hour.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-12">
+                            {% if form.departure_date_hour.errors %}
+                                <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                    {{ form.departure_date_hour.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                    </div>
+
+                    <div class="row mb-3">
+                        <small class="text-muted">
+                            Si se modifica la hora de entrada o salida, el monto a pagar se recalculará automáticamente después de guardar los cambios.
+                        </small>
+                    </div>
+
+                    <!-- Monto a pagar -->
+                     <div class="mb-3">
+                        <label class="form-label text-muted">
+                            Monto a pagar
+                        </label>
+                        
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">$</span>
+                            {{ form.final_amount }}
+                        </div>
+
+                        {% if form.final_amount.errors %}
+                            <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                {{ form.final_amount.errors.0 }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+
+                    <!-- BOTÓN -->
+                    <button type="submit"
+                        class="btn btn-success rounded-pill px-4 w-100">
+                        <i class="bi bi-check-circle me-1"></i>
+                            Guardar cambios
+                    </button>
+                </div>
+            </form>
+
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}
+
+{% block menu_bottom %}
+    {% include 'parking/partials/_parking_menu_bottom.html' %}
+{% endblock %}

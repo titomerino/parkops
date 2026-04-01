@@ -1,0 +1,33 @@
+{% extends "shell/base.html" %}
+{% load static %}
+
+{% block title %}Acceso denegado{% endblock %}
+
+{% block page_title %}
+Acceso restringido
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column justify-content-center align-items-center text-center" style="min-height: 60vh;">
+
+    <div class="rounded-circle overflow-hidden mb-4"
+         style="width: 220px; height: 220px;">
+        <img src="{% static 'img/403.png' %}"
+             alt="403 Forbidden"
+             class="img-fluid w-100 h-100 object-fit-cover">
+    </div>
+
+    <h3 class="fw-semibold text-danger">
+        No tienes permisos para acceder a esta sección
+    </h3>
+
+    <p class="text-muted mt-2">
+        Si crees que esto es un error, contacta al administrador del sistema.
+    </p>
+
+    <a href="{% url 'dashboard' %}" class="btn btn-outline-info mt-3 rounded-pill px-4">
+        Volver al inicio
+    </a>
+
+</div>
+{% endblock %}

@@ -18,10 +18,11 @@
                 </div>
             </a>
 
+            <!-- Entradas -->
             <!-- Separador -->
             <div class="vr text-secondary opacity-50" style="height:32px;"></div>
 
-            <!-- Entradas -->
+            {% if perms.bathrooms.view_bathroomentry %}
             <a href="{% url 'bathroom_entries_list' %}" class="text-decoration-none">
                 <div class="d-flex flex-column align-items-center px-3">
                     <i class="bi bi-journal-check fs-4
@@ -35,10 +36,14 @@
                 </div>
             </a>
 
+            {% endif %}
+            
+            <!-- Registrar tarifa -->
+            {% if perms.bathrooms.add_bathroomfee %}
+
             <!-- Separador -->
             <div class="vr text-secondary opacity-50" style="height:32px;"></div>
 
-            <!-- Registrar tarifa -->
             <a href="{% url 'bathroom_fee_register' %}" class="text-decoration-none">
                 <div class="d-flex flex-column align-items-center px-3">
                     <i class="bi bi-journal-check fs-4
@@ -52,10 +57,13 @@
                 </div>
             </a>
 
+            {% endif %}
+            
+            <!-- Historial -->
+            {% if perms.bathrooms.view_bathroomfee %}
             <!-- Separador -->
             <div class="vr text-secondary opacity-50" style="height:32px;"></div>
-
-            <!-- Historial -->
+            
             <a href="{% url 'bathroom_fees_list' %}" class="text-decoration-none">
                 <div class="d-flex flex-column align-items-center px-3">
                     <i class="bi bi-card-list fs-4
@@ -68,6 +76,7 @@
                     <small class="text-light">Tarifas</small>
                 </div>
             </a>
+            {% endif %}
 
         </div>
     </div>

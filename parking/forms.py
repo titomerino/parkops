@@ -60,7 +60,97 @@ class EntryExitForm(forms.ModelForm):
         model = Entry
         fields = []  # no editamos nada directamente
 
+
+class EntryEditForm(forms.ModelForm):
+    """ Formulario para editar entradas (solo admin) """
+
+    class Meta:
+        model = Entry
+        fields = [
+            'plate',
+            'entry_date_hour',
+            'departure_date_hour',
+            'fee',
+            'state',
+            'final_amount'
+        ]
+        widgets = {
+            'plate': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Placa del vehículo',
+                'maxlength': '10',
+                'pattern': '[A-Z0-9]+',
+                'oninput': "this.value = this.value.replace(/\\s/g, '').toUpperCase()"
+            }),
+            'entry_date_hour': forms.DateTimeInput(attrs={
+                'class': 'form-control',
+                'type': 'datetime-local',
+                'required': True
+            }),
+            'departure_date_hour': forms.DateTimeInput(attrs={
+                'class': 'form-control',
+                'type': 'datetime-local'
+            }),
+            'fee': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'state': forms.CheckboxInput(attrs={
+                'class': 'form-check-input',
+                'role': 'switch'
+            }),
+            'final_amount': forms.NumberInput(attrs={
+                'class': 'form-control bg-dark text-light',
+                'placeholder': '... calculado automáticamente',
+                'readonly': 'readonly'
+            })
+        }
+
+    def clean_entry_date_hour(self):
+        entry = self.cleaned_data.get('entry_date_hour')
+        if not entry:
+            raise forms.ValidationError(
+                "La fecha y hora de entrada es obligatoria"
+            )
         
+        return entry
+    
+    def clean_departure_date_hour(self):
+        departure = self.cleaned_data.get('departure_date_hour')
+        entry = self.cleaned_data.get('entry_date_hour')
+
+        if departure and entry and departure < entry:
+            raise forms.ValidationError(
+                "La fecha y hora de salida no puede ser anterior a la de entrada"
+            )
+        
+        return departure
+    
+    def clean_plate(self):
+        plate = self.cleaned_data.get('plate', '').strip()
+        
+        # Validar si contiene algo que no sea letra o número
+        if not re.fullmatch(r'[A-Za-z0-9]+', plate):
+            raise forms.ValidationError(
+                "La placa solo puede contener letras y números."
+            )
+        
+        # Validar duplicados en entradas activas (excluyendo el registro actual)
+        qs = Entry.objects.filter(plate=plate, state=True).exclude(pk=self.instance.pk)
+        
+        if qs.exists():
+            raise forms.ValidationError(
+                "Ya existe una entrada activa con esta placa."
+            )
+        
+        return plate
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if self.fields['fee'].choices:
+            choices = [(value, label) for value, label in self.fields['fee'].choices if value != '']
+            self.fields['fee'].choices = [('', '--- Sin tarifa seleccionada ---')] + choices
+
 
 class ConfigurationForm(forms.ModelForm):
     """ Formulario para configuraciones """

@@ -30,15 +30,26 @@
         </div>
 
         <!-- Chips -->
-        <div class="d-flex gap-2">
-            <button class="btn btn-sm rounded-pill btn-success" data-filter="all">
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-sm rounded-pill btn-success d-flex align-items-center gap-2" data-filter="all">
                 Todos
+                <span class="badge rounded-pill bg-light text-dark small">
+                    {{ total_entries }}
+                </span>
             </button>
-            <button class="btn btn-sm rounded-pill btn-dark" data-filter="active">
+
+            <button class="btn btn-sm rounded-pill btn-dark d-flex align-items-center gap-2" data-filter="active">
                 Activos
+                <span class="badge rounded-pill bg-light text-dark small">
+                    {{ active_entries }}
+                </span>
             </button>
-            <button class="btn btn-sm rounded-pill btn-dark" data-filter="finished">
+
+            <button class="btn btn-sm rounded-pill btn-dark d-flex align-items-center gap-2" data-filter="finished">
                 Finalizados
+                <span class="badge rounded-pill bg-light text-dark small">
+                    {{ finished_entries }}
+                </span>
             </button>
         </div>
     </div>

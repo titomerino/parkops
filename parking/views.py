@@ -244,7 +244,13 @@ def record(request):
             "fee",
             "state"
         )
+        .order_by("-state", "-entry_date_hour")
     )
+
+    # Contadores para los chips
+    total_entries = entries.count()
+    active_entries = entries.filter(state=True).count()
+    finished_entries = entries.filter(state=False).count()
 
     plates = entries.values_list("plate", flat=True)
 
@@ -267,7 +273,10 @@ def record(request):
 
     return render(request, "parking/record.html", {
         "entries": entries,
-        "today": today
+        "today": today,
+        "total_entries": total_entries,
+        "active_entries": active_entries,
+        "finished_entries": finished_entries,
     })
 
 @permission_required('parking.view_platepolicy', raise_exception=True)

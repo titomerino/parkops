@@ -147,6 +147,9 @@ class Entry(models.Model):
     class Meta:
         verbose_name = "Entrada"
         verbose_name_plural = "Entradas"
+        permissions = [
+            ("view_statistics_entry", "Puede ver estadísticas de entradas"),
+        ]
 
     def __str__(self):
         return self.plate
@@ -272,6 +275,9 @@ class PlatePolicy(models.Model):
     class Meta:
         verbose_name = "Política de placa"
         verbose_name_plural = "Políticas de placas"
+        permissions = [
+            ("view_statistics_placepolicy", "Puede ver estadísticas de suscripciones"),
+        ]
 
     def __str__(self):
         return f"{self.plate} - {self.billing_type}"

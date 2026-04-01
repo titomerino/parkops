@@ -10,20 +10,26 @@
 <!-- Cards métricas -->
 <div class="row g-3 mb-4">
 
+    {% if perms.parking.view_statistics_entry %}
     <!-- Resumen parqueo -->
     <div class="col-12 col-lg-4">
         {% include 'parking/partials/_parking_total_entries_money_today.html' with parking_total=total_daily_income today_entries=total_today_count_entries parking_month_total=total_monthly_income %}
     </div>
+    {% endif %}
 
+    {% if perms.parking.view_statistics_placepolicy %}
     <!-- Resumen suscripciones mensuales -->
     <div class="col-12 col-lg-4">
         {% include 'parking/partials/_parking_subscription_summary.html' with parking_total=total_subscriptions_month_income %}
     </div>
+    {% endif %}
 
+    {% if perms.bathrooms.view_statistics_bathroomentry %}
     <!-- Resumen baños -->
     <div class="col-12 col-lg-4">
         {% include 'partials/_bathrooms_summary.html' with parking_total=total_daily_income today_entries=total_today_count_entries parking_month_total=total_monthly_income %}
     </div>
+    {% endif %}
 
 </div>
 
@@ -34,18 +40,25 @@
 
 <div class="row g-3">
 
+    {% if perms.parking.view_entry %}
     <!-- Parking -->
     <div class="col-12 col-md-6 col-lg-4">
         {% include 'parking/partials/_parking_principal_access_button.html' %}
     </div>
+    {% endif %}
 
+    {% if perms.parking.view_platepolicy %}
     <div class="col-12 col-md-6 col-lg-4">
         {% include 'parking/partials/_parking_principal_access_month_button.html' %}
     </div>
+    {% endif %}
+
+    {% if perms.bathrooms.view_bathroomentry %}
     <!-- Baños -->
     <div class="col-12 col-md-6 col-lg-4">
         {% include 'partials/_bathrooms_principal_access_button.html' %}
     </div>
+    {% endif %}
 
 </div>
 

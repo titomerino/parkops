@@ -75,6 +75,9 @@ class BathroomEntry(models.Model):
     class Meta:
         verbose_name = "Entrada de Baño"
         verbose_name_plural = "Entradas de Baños"
+        permissions = [
+            ("view_statistics_bathroomentry", "Puede ver estadísticas de uso de baños"),
+        ]
 
     def __str__(self):
         return f'Entrada al baño el {self.entry_date_hour}'

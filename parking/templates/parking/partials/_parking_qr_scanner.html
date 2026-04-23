@@ -69,9 +69,6 @@ const QrScanner = (function () {
 
         let entryId = null;
 
-        console.log("QR RAW:", decodedText);
-    alert(decodedText);
-
         if (decodedText.includes("entry_id=")) {
             entryId = decodedText.split("entry_id=")[1];
         }

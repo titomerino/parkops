@@ -167,3 +167,5 @@ LOGGING = {
         "level": "INFO",
     },
 }
+
+X_FRAME_OPTIONS = 'SAMEORIGIN'

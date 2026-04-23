@@ -70,8 +70,13 @@
       </button>
 
     </form>
+    <br>
+    {% include 'parking/partials/_parking_qr_scanner.html' %}
   </div>
 </div>
+
+<!-- modal de impresion -->
+{% include 'parking/partials/_parking_print_ticket_modal.html' %}
 
 {% endblock %}
 

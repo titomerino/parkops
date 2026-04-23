@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Ticket Parqueo</title>
+
+  <style>
+    body {
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    .ticket {
+      width: 80mm;
+    }
+
+    .text-center {
+      text-align: center;
+    }
+
+    .divider {
+      border-top: 1px dashed black;
+      margin: 10px 0;
+    }
+
+    img {
+      display: block;
+      margin: 0 auto;
+    }
+
+    .bold {
+      font-weight: bold;
+    }
+
+    @media print {
+      body {
+        margin: 0;
+      }
+
+      @page {
+        size: 80mm auto;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="ticket text-center">
+
+    <!-- HEADER -->
+    <div>
+      <h3>PARQUEO AMAYA</h3>
+      <p>¡BIENVENIDO!</p>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- DATOS -->
+    <p>Placa: <strong>{{ placa }}</strong></p>
+    <p>Hora entrada: <strong>{{ hora_llegada }}</strong></p>
+
+    <div class="divider"></div>
+
+    <!-- TIPO DE COBRO -->
+    {% if policy %}
+
+        <p class="bold">Tipo de cobro</p>
+
+        {% if policy.billing_type == "MONTHLY" %}
+            <p>Suscripción mensual</p>
+            <p>✔ Acceso ilimitado</p>
+
+        {% elif policy.billing_type == "DAILY" %}
+            <p>Suscripción diaria</p>
+            <p>Monto diario: <strong>${{ policy.amount }}</strong></p>
+
+        {% else %}
+            <p>Suscripción activa</p>
+        {% endif %}
+
+    {% else %}
+
+        <p class="bold">Tipo de cobro</p>
+        <p>Por hora</p>
+        <p>Costo base: <strong>{{ costo_hora }}</strong></p>
+
+    {% endif %}
+
+    <div class="divider"></div>
+
+    <!-- QR -->
+    <div>
+      <p>Escanee al salir</p>
+      <img src="data:image/png;base64,{{ qr_code }}" width="120">
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- FOOTER -->
+    <p>Gracias por su visita</p>
+    <p style="font-size:10px;">
+      No somos responsables por pérdidas ni daños a su vehículo
+    </p>
+
+  </div>
+
+</body>
+</html>

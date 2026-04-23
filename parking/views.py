@@ -6,7 +6,12 @@ from django.http import HttpResponse
 from django.template.loader import render_to_string
 from django.db.models import Sum, Count
 
-from .models import  Entry, PlatePolicy
+import qrcode
+import base64
+from io import BytesIO
+from datetime import datetime
+
+from .models import  Entry, PlatePolicy, Range
 from bathrooms.models import BathroomEntry
 from .forms import EntryForm, EntryEditForm, PlateSearchForm, EntryExitForm, PlatePolicyForm
 from parking.utils import minutes_to_hours_and_minutes
@@ -54,6 +59,13 @@ def register(request, plate=None):
                 )
             except ValueError as e:
                 messages.error(request, str(e))
+
+            # 🔥 AQUÍ LA MAGIA
+            action = request.POST.get('action')
+
+            if action == 'save_print':
+                # redirige a la vista de impresión
+                return redirect(f"/parking/busqueda/?entry_id={entry.id}")
             
             return redirect('search_plate')
     else:
@@ -474,3 +486,46 @@ def income_today_report(request):
     """LLama a la función de generación de reporte de ingresos del día actual"""
     today = localtime(now()).date()
     return income_day_report(today)
+
+
+@login_required(login_url='login')
+def imprimir_ticket(request):
+    entry_id = request.GET.get('entry_id')
+    entry = Entry.objects.get(id=entry_id)
+
+    qr_data = f"id={entry.id}"
+
+    qr = qrcode.make(qr_data)
+    buffer = BytesIO()
+    qr.save(buffer, format="PNG")
+
+    qr_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+    # 🔥 Buscar suscripción activa
+    policy = PlatePolicy.objects.filter(
+        plate=entry.plate,
+        active=True
+    ).first()
+
+    # 🔥 Determinar qué mostrar como costo
+    if policy:
+        if policy.billing_type == "MONTHLY":
+            costo = "Suscripción mensual activa"
+        elif policy.billing_type == "DAILY":
+            costo = f"Suscripción diaria (${policy.amount})"
+        else:
+            costo = "Suscripción activa"
+    else:
+        # 🔥 usar tarifa por rango
+        first_range = Range.objects.filter(fee=entry.fee).order_by('start_minute').first()
+        costo = f"${first_range.amount}" if first_range else "0.00"
+
+    context = {
+        'placa': entry.plate,
+        'hora_llegada': localtime(entry.entry_date_hour).strftime('%d/%m/%Y %I:%M %p'),
+        'costo_hora': costo,
+        'qr_code': qr_base64,
+        'policy': policy  # 🔥 opcional para usar en template
+    }
+
+    return render(request, 'parking/ticket-template.html', context)

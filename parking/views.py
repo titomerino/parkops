@@ -504,7 +504,7 @@ def imprimir_ticket(request):
     entry_id = request.GET.get('entry_id')
     entry = Entry.objects.get(id=entry_id)
 
-    qr_data = f"id={entry.id}"
+    qr_data = f"entry_id={entry.id}"
 
     qr = qrcode.make(qr_data)
     buffer = BytesIO()

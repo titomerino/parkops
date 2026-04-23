@@ -69,12 +69,9 @@ const QrScanner = (function () {
 
         let entryId = null;
 
-        // 🔥 CASO 1: solo número (recomendado)
-        if (!isNaN(decodedText)) {
-            entryId = decodedText;
-        }
+        console.log("QR RAW:", decodedText);
+    alert(decodedText);
 
-        // 🔥 CASO 2: entry_id=80
         if (decodedText.includes("entry_id=")) {
             entryId = decodedText.split("entry_id=")[1];
         }

@@ -16,7 +16,8 @@
       <i class="bi bi-lightbulb-fill me-2"></i>
       Busca una placa o regístrala rápidamente.
     </div>
-
+    {% include 'parking/partials/_parking_qr_scanner.html' %}
+    <br>
     <!-- Input -->
     <form method="POST" novalidate>
       {% csrf_token %}
@@ -70,8 +71,7 @@
       </button>
 
     </form>
-    <br>
-    {% include 'parking/partials/_parking_qr_scanner.html' %}
+
   </div>
 </div>
 

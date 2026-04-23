@@ -27,6 +27,7 @@ pyphen==0.17.2
 pytest==9.0.2
 pytest-django==4.11.1
 python-dotenv==1.2.1
+qrcode==8.2
 requests==2.32.5
 sqlparse==0.5.5
 tinycss2==1.5.1

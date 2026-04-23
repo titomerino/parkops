@@ -85,19 +85,38 @@
 
             <!-- Hidden placa -->
             <input type="hidden" name="plate" value="{{ plate|default:form.initial.plate }}">
-
-            <button class="btn btn-success w-100 rounded-pill shadow-sm">
-                <i class="bi bi-box-arrow-in-right me-1"></i>
-                Confirmar entrada
-            </button>
+            
+            <div class="row">
+                <div class="col-12 col-md-6 mb-3">
+                    <button
+                        name="action"
+                        value="save_print"
+                        class="btn btn-warning w-100 rounded-pill shadow-sm"
+                    >
+                        <i class="bi bi-box-arrow-in-right me-1"></i>
+                        🖨️ Confirmar + Ticket
+                    </button>
+                </div>
+                <div class="col-12 col-md-6">
+                    <button name="action" value="save" class="btn btn-success w-100 rounded-pill shadow-sm">
+                        <i class="bi bi-box-arrow-in-right me-1"></i>
+                        Confirmar
+                    </button>
+                </div>
+            </div>
         </form>
 
     </div>
 </div>
 
 <!-- Tip -->
-<div class="text-center small text-muted mt-3">
-   Toque para registrar la entrada
+<div class="small text-muted mt-3">
+    <h3 class="h5 text-center">Información</h3>
+    <hr>
+    <ul class="text-left">
+        <li>Toque para registrar la entrada</li>
+        <li>Para imprimir, asegúrate de tener una impresora conectada y lista para usar.</li>
+    </ul>
 </div>
 
 {% endblock %}

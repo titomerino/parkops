@@ -1,0 +1,69 @@
+<div class="modal fade" id="printModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg p-4">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Imprimir Ticket</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body p-0">
+        <iframe id="ticketFrame" style="width:100%; height:500px; border:none;"></iframe>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        <button class="btn btn-success" onclick="imprimirIframe()">🖨️ Imprimir</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+    // 🔥 evitar duplicación si el partial se incluye varias veces
+    if (window.printTicketInitialized) return;
+    window.printTicketInitialized = true;
+
+    function imprimirIframe() {
+        const iframe = document.getElementById("ticketFrame");
+        if (!iframe) return;
+
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+    }
+
+    function abrirTicketModal(entryId) {
+        const iframe = document.getElementById("ticketFrame");
+        if (!iframe) return;
+
+        iframe.src = `/parking/ticket/?entry_id=${entryId}`;
+
+        const modal = new bootstrap.Modal(document.getElementById('printModal'));
+        modal.show();
+
+        iframe.onload = function () {
+            iframe.contentWindow.print();
+        };
+    }
+
+    // 🔥 exponer funciones globales
+    window.abrirTicketModal = abrirTicketModal;
+    window.imprimirIframe = imprimirIframe;
+
+    // 🔥 auto detección por URL
+    document.addEventListener('DOMContentLoaded', function () {
+        const params = new URLSearchParams(window.location.search);
+        const entryId = params.get('entry_id');
+
+        if (entryId) {
+            abrirTicketModal(entryId);
+
+            // limpiar URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    });
+
+})();
+</script>

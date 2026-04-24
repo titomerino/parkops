@@ -533,7 +533,8 @@ def imprimir_ticket(request):
 
     context = {
         'placa': entry.plate,
-        'hora_llegada': localtime(entry.entry_date_hour).strftime('%d/%m/%Y %I:%M %p'),
+        'fecha_llegada': localtime(entry.entry_date_hour).strftime('%d/%m/%Y'),
+        'hora_llegada': localtime(entry.entry_date_hour).strftime('%I:%M %p'),
         'costo_hora': costo,
         'qr_code': qr_base64,
         'policy': policy  # 🔥 opcional para usar en template

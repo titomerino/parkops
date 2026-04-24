@@ -32,6 +32,10 @@
       font-weight: bold;
     }
 
+    .font-big {
+      font-size: 16px !important;
+    }
+
     @media print {
       body {
         margin: 0;
@@ -51,15 +55,15 @@
 
     <!-- HEADER -->
     <div>
-      <h3>PARQUEO AMAYA</h3>
-      <p>¡BIENVENIDO!</p>
+      <h3>PARQUEO</h3>
+      <p>¡BIENVENIDO! <br> {{ fecha_llegada }}</p>
     </div>
 
     <div class="divider"></div>
 
     <!-- DATOS -->
-    <p>Placa: <strong>{{ placa }}</strong></p>
-    <p>Hora entrada: <strong>{{ hora_llegada }}</strong></p>
+    <p>Placa: <strong class="font-big">{{ placa }}</strong></p>
+    <p>Hora entrada: <strong class="font-big">{{ hora_llegada }}</strong></p>
 
     <div class="divider"></div>
 
@@ -70,11 +74,11 @@
 
         {% if policy.billing_type == "MONTHLY" %}
             <p>Suscripción mensual</p>
-            <p>✔ Acceso ilimitado</p>
+            <p><strong class="font-big">✔ Acceso ilimitado</strong></p>
 
         {% elif policy.billing_type == "DAILY" %}
             <p>Suscripción diaria</p>
-            <p>Monto diario: <strong>${{ policy.amount }}</strong></p>
+            <p>Monto diario: <strong class="font-big">${{ policy.amount }}</strong></p>
 
         {% else %}
             <p>Suscripción activa</p>
@@ -84,7 +88,7 @@
 
         <p class="bold">Tipo de cobro</p>
         <p>Por hora</p>
-        <p>Costo base: <strong>{{ costo_hora }}</strong></p>
+        <p>Costo base: <strong class="font-big">{{ costo_hora }}</strong></p>
 
     {% endif %}
 
@@ -100,8 +104,10 @@
 
     <!-- FOOTER -->
     <p>Gracias por su visita</p>
-    <p style="font-size:10px;">
-      No somos responsables por pérdidas ni daños a su vehículo
+    <p style="font-size:12px;">
+        No somos responsables por pérdidas ni daños a su vehículo
+        <br><br>
+        Perdida del ticket $5.00
     </p>
 
   </div>

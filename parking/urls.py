@@ -9,8 +9,12 @@ from .views import (
     subscription_register,
     subscription_edit,
     toggle_subscription_active,
-    income_today_report,
-    imprimir_ticket
+    imprimir_ticket,
+    parking_generate_reports_form,
+    report_day_pdf,
+    report_month_pdf,
+    report_period_pdf,
+    report_plate_pdf,
 )
 from django.urls import path
 
@@ -26,6 +30,10 @@ urlpatterns = [
     path('suscripciones/<int:pk>', subscription_edit, name='subscription_edit'),
     path('suscripciones/desactivar/<int:pk>', toggle_subscription_active, name='toggle_subscription_active'),
     path('suscripciones/activar/<int:pk>', toggle_subscription_active, name='toggle_subscription_active'),
-    path('reporte-de-ingresos-hoy/', income_today_report, name='income_today_report'),
     path('ticket/', imprimir_ticket),
+    path('reportes/', parking_generate_reports_form, name='parking_reports'),
+    path("reporte/hoy/", report_day_pdf, name="report_day_pdf"),
+    path("reporte/mes/", report_month_pdf, name="report_month_pdf"),
+    path("reporte/periodo/", report_period_pdf, name="report_period_pdf"),
+    path("reporte/placa/", report_plate_pdf, name="report_plate_pdf"),
 ]

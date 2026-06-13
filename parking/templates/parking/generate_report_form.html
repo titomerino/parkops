@@ -1,0 +1,364 @@
+{% extends "shell/base.html" %}
+
+{% block title %}ParkOps / Reportes{% endblock %}
+{% block page_title %}Generar Reporte de Parqueo{% endblock %}
+
+{% block content %}
+
+{% include 'shell/partials/_messages_alert.html' with messages=messages %}
+
+<div class="row justify-content-center">
+    <div class="col-12 col-md-8 col-lg-6">
+
+        <div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+
+            <!-- Header -->
+            <div class="card-body border-bottom border-secondary pb-3 mb-3">
+                <div class="d-flex align-items-center">
+                    <div>
+                        <h5 class="mb-0">Reporte</h5>
+                        <small class="text-muted">
+                            Genera reportes personalizados de parqueo
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-body pt-0">
+
+                <!-- Tabs -->
+                <ul class="nav nav-pills mb-4" id="reportTabs">
+
+                    <li class="nav-item">
+                        <a class="nav-link active bg-secondary text-white"
+                           data-target="tab-todays"
+                           href="#">
+                            Del Día
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link text-white"
+                           data-target="tab-monthly"
+                           href="#">
+                            Mensual
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link text-white"
+                           data-target="tab-period"
+                           href="#">
+                            Periodo
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link text-white"
+                           data-target="tab-plate"
+                           href="#">
+                            Por placa
+                        </a>
+                    </li>
+
+                </ul>
+
+                <!-- ===================================== -->
+                <!-- TAB: DEL DÍA -->
+                <!-- ===================================== -->
+
+                <div id="tab-todays" class="tab-content-custom">
+
+                    <form method="GET"
+                          action="{% url 'report_day_pdf' %}"
+                          target="_blank"
+                          novalidate>
+
+                        <div class="mb-3">
+
+                            <label class="form-label text-muted">
+                                Fecha
+                            </label>
+
+                            {{ formDay.date }}
+
+                            {% if formDay.date.errors %}
+                                <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                    {{ formDay.date.errors.0 }}
+                                </div>
+                            {% endif %}
+
+                        </div>
+
+                        <button type="submit"
+                                class="btn btn-primary rounded-pill px-4 w-100 mt-3">
+
+                            <i class="bi bi-file-earmark-pdf me-1"></i>
+                            Generar Reporte
+
+                        </button>
+
+                    </form>
+
+                </div>
+
+                <!-- ===================================== -->
+                <!-- TAB: MENSUAL -->
+                <!-- ===================================== -->
+
+                <div id="tab-monthly"
+                     class="tab-content-custom d-none">
+
+                    <form method="GET"
+                          action="{% url 'report_month_pdf' %}"
+                          target="_blank"
+                          novalidate>
+
+                        <div class="mb-3">
+
+                            <label class="form-label text-muted">
+                                Mes
+                            </label>
+
+                            {{ formMonth.month_date }}
+
+                            {% if formMonth.month_date.errors %}
+                                <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                    {{ formMonth.month_date.errors.0 }}
+                                </div>
+                            {% endif %}
+
+                        </div>
+
+                        <button type="submit"
+                                class="btn btn-primary rounded-pill px-4 w-100 mt-3">
+
+                            <i class="bi bi-file-earmark-pdf me-1"></i>
+                            Generar Reporte
+
+                        </button>
+
+                    </form>
+
+                </div>
+
+                <!-- ===================================== -->
+                <!-- TAB: PERIODO -->
+                <!-- ===================================== -->
+
+                <div id="tab-period"
+                     class="tab-content-custom d-none">
+
+                    <form method="GET"
+                          action="{% url 'report_period_pdf' %}"
+                          target="_blank"
+                          novalidate>
+
+                        <div class="row">
+
+                            <div class="col-6 mb-3">
+
+                                <label class="form-label text-muted">
+                                    Desde
+                                </label>
+
+                                {{ formPeriod.period_start_date }}
+
+                                {% if formPeriod.period_start_date.errors %}
+                                    <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                        {{ formPeriod.period_start_date.errors.0 }}
+                                    </div>
+                                {% endif %}
+
+                            </div>
+
+                            <div class="col-6 mb-3">
+
+                                <label class="form-label text-muted">
+                                    Hasta
+                                </label>
+
+                                {{ formPeriod.period_end_date }}
+
+                                {% if formPeriod.period_end_date.errors %}
+                                    <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                        {{ formPeriod.period_end_date.errors.0 }}
+                                    </div>
+                                {% endif %}
+
+                            </div>
+
+                        </div>
+
+                        <button type="submit"
+                                class="btn btn-primary rounded-pill px-4 w-100 mt-3">
+
+                            <i class="bi bi-file-earmark-pdf me-1"></i>
+                            Generar Reporte
+
+                        </button>
+
+                    </form>
+
+                </div>
+
+                <!-- ===================================== -->
+                <!-- TAB: PLACA -->
+                <!-- ===================================== -->
+
+                <div id="tab-plate"
+                     class="tab-content-custom d-none">
+
+                    <form method="GET"
+                          action="{% url 'report_plate_pdf' %}"
+                          target="_blank"
+                          novalidate>
+
+                        <div class="mb-3">
+
+                            <label class="form-label text-muted">
+                                Placa
+                            </label>
+
+                            {{ formPlate.plate }}
+
+                            {% if formPlate.plate.errors %}
+                                <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                    {{ formPlate.plate.errors.0 }}
+                                </div>
+                            {% endif %}
+
+                        </div>
+
+                        <div class="row">
+
+                            <div class="col-6 mb-3">
+
+                                <label class="form-label text-muted">
+                                    Desde
+                                </label>
+
+                                {{ formPlate.start_date }}
+
+                                {% if formPlate.start_date.errors %}
+                                    <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                        {{ formPlate.start_date.errors.0 }}
+                                    </div>
+                                {% endif %}
+
+                            </div>
+
+                            <div class="col-6 mb-3">
+
+                                <label class="form-label text-muted">
+                                    Hasta
+                                </label>
+
+                                {{ formPlate.end_date }}
+
+                                {% if formPlate.end_date.errors %}
+                                    <div class="alert alert-danger mt-2 py-1 px-2 small">
+                                        {{ formPlate.end_date.errors.0 }}
+                                    </div>
+                                {% endif %}
+
+                            </div>
+
+                        </div>
+
+                        <button type="submit"
+                                class="btn btn-primary rounded-pill px-4 w-100 mt-3">
+
+                            <i class="bi bi-file-earmark-pdf me-1"></i>
+                            Generar Reporte
+
+                        </button>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+<!-- Bottom Navigation -->
+<nav class="position-fixed bottom-0 start-0 w-100 z-3">
+
+    <div class="bg-dark border-top border-secondary shadow-lg">
+
+        <div class="d-flex justify-content-around align-items-center text-center py-2">
+
+            <a href="{% url 'dashboard' %}"
+               class="text-decoration-none">
+
+                <div class="d-flex flex-column align-items-center px-3">
+
+                    <i class="bi bi-house-door fs-4
+                        {% if request.resolver_match.url_name == 'dashboard' %}
+                            text-success
+                        {% else %}
+                            text-light
+                        {% endif %}">
+                    </i>
+
+                    <small class="text-light">
+                        Inicio
+                    </small>
+
+                </div>
+
+            </a>
+
+        </div>
+
+    </div>
+
+</nav>
+
+{% endblock %}
+
+{% block extra_js %}
+
+<script>
+
+document.addEventListener("DOMContentLoaded", function () {
+
+    const tabs = document.querySelectorAll("#reportTabs .nav-link");
+
+    const contents = document.querySelectorAll(".tab-content-custom");
+
+    tabs.forEach(tab => {
+
+        tab.addEventListener("click", function (e) {
+
+            e.preventDefault();
+
+            tabs.forEach(t => {
+                t.classList.remove("active", "bg-secondary");
+            });
+
+            contents.forEach(c => {
+                c.classList.add("d-none");
+            });
+
+            this.classList.add("active", "bg-secondary");
+
+            const target = this.dataset.target;
+
+            document
+                .getElementById(target)
+                .classList.remove("d-none");
+
+        });
+
+    });
+
+});
+
+</script>
+
+{% endblock %}

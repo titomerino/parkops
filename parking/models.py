@@ -74,19 +74,45 @@ class EntryQuerySet(models.QuerySet):
             departure_date_hour__year=year,
             departure_date_hour__month=month
         )
+    
+    def custom_report(self, start_date=None, end_date=None, month_date=None, n_plate=None):
+        queryset = self.filter(departure_date_hour__isnull=False)
+
+        # Mes
+        if month_date:
+            queryset = queryset.filter(
+                departure_date_hour__year=month_date.year,
+                departure_date_hour__month=month_date.month
+            )
+        # Rango de fechas
+        elif start_date and end_date:
+            queryset = queryset.filter(
+                departure_date_hour__date__range=(start_date, end_date)
+            )
+        # Solo fecha de inicio
+        elif start_date:
+            queryset = queryset.filter(
+                departure_date_hour__date=start_date
+            )
+
+        # Placa
+        if n_plate:
+            queryset = queryset.filter(plate=n_plate)
+
+        return queryset
 
 
 class EntryManager(models.Manager):
     def get_queryset(self):
         return EntryQuerySet(self.model, using=self._db)
     
-    def entries_today(self, date):
+    def entries_today(self, date): #Se usa en dashboard
         return self.get_queryset().entries_today(date)
     
-    def entries_today_count(self, date):
+    def entries_today_count(self, date): #Se usa en dashboard
         return self.get_queryset().entries_today(date).count()
 
-    def entries_today_and_active(self, date):
+    def entries_today_and_active(self, date): #se usa
         return self.get_queryset().entries_today_and_active(date)
 
     def departure_today(self, date):
@@ -95,14 +121,14 @@ class EntryManager(models.Manager):
     def departure_month(self, year, month):
         return self.get_queryset().departure_month(year, month)
 
-    def today_income(self, date):
+    def today_income(self, date): #Se usa en dashboard
         return (
             self.departure_today(date)
             .aggregate(total=Sum("final_amount"))
             ["total"] or 0
         )
 
-    def month_income(self, year, month):
+    def month_income(self, year, month): #Se usa en dashboard
         return (
             self.departure_month(year, month)
             .aggregate(total=Sum("final_amount"))
@@ -111,6 +137,9 @@ class EntryManager(models.Manager):
 
     def total_active_vehicles(self):
         return self.get_queryset().active().count()
+    
+    def custom_report(self, start_date=None, end_date=None, month_date=None, n_plate=None):
+        return self.get_queryset().custom_report(start_date, end_date, month_date, n_plate)
 
 
 class Entry(models.Model): 

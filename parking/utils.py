@@ -1,3 +1,7 @@
+import weasyprint
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+
 def minutes_to_hours_and_minutes(total_minutes: int):
     hours = total_minutes // 60
     minutes = total_minutes % 60
@@ -40,3 +44,31 @@ def format_plate(plate: str) -> str:
         groups.append(rest[i:i+3])
 
     return f"{first} {' '.join(groups)}"
+
+
+def render_pdf_response(
+    request,
+    template_name,
+    context,
+    filename,
+):
+    html_string = render_to_string(
+        template_name,
+        context
+    )
+
+    pdf = weasyprint.HTML(
+        string=html_string,
+        base_url=request.build_absolute_uri("/")
+    ).write_pdf()
+
+    response = HttpResponse(
+        pdf,
+        content_type="application/pdf"
+    )
+
+    response["Content-Disposition"] = (
+        f'inline; filename="{filename}"'
+    )
+
+    return response

@@ -1,0 +1,33 @@
+{% extends "parking/reports/base_reports.html" %}
+
+{% block title %}ParkOps / Reporte de Placa{% endblock %}
+
+{% block content %}
+
+    {% include 'parking/reports/partials/_reports_header.html' %}
+
+    <div class="title">
+        Reporte de ingresos la placa {{ plate }}
+    </div>
+
+    <p class="subtitle">
+        Período: {{ start_date }} - {{ end_date }}
+    </p>
+
+    {% include 'parking/reports/partials/_reports_total.html' %}
+
+    {% include 'parking/reports/partials/_reports_summary.html' with summary=summary %}
+
+    {% include 'parking/reports/partials/_reports_table.html' %}
+
+    {% include 'parking/reports/partials/_reports_total.html' %}
+
+    <div class="report-note">
+        <em>
+            Notas:<br><Strong>*</Strong> Indican entradas sin salida registrada, no suman a los ingresos del día.<br>
+            <Strong>Tipo de contrato</Strong> es el contrato vigente al momento de generar el reporte (Si hay montos
+            que no corresponde al contrato, posiblemente se a modificado recientemente).
+        </em>
+    </div>
+
+{% endblock %}

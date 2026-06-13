@@ -60,6 +60,13 @@
     </div>
     {% endif %}
 
+    {% if perms.parking.view_entry %}
+    <!-- Parking reportes -->
+    <div class="col-12 col-md-6 col-lg-4">
+        {% include 'parking/partials/_parking_reports_access_button.html' %}
+    </div>
+    {% endif %}
+
 </div>
 
 {% endblock %}

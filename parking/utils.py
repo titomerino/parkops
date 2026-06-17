@@ -1,6 +1,18 @@
-import weasyprint
+
+from io import BytesIO
+from openpyxl import Workbook
 from django.http import HttpResponse
 from django.template.loader import render_to_string
+import weasyprint
+
+from openpyxl.styles import (
+    Font,
+    PatternFill,
+    Alignment,
+    Border,
+    Side,
+)
+
 
 def minutes_to_hours_and_minutes(total_minutes: int):
     hours = total_minutes // 60
@@ -69,6 +81,191 @@ def render_pdf_response(
 
     response["Content-Disposition"] = (
         f'inline; filename="{filename}"'
+    )
+
+    return response
+
+
+def export_report_excel(context, report_date, report_end_date=None, type=None, plate=None):
+
+    wb = Workbook()
+
+    ws = wb.active
+    ws.title = "Reporte diario"
+
+    # ESTILOS
+    header_fill = PatternFill(
+        fill_type="solid",
+        fgColor="212529"
+    )
+
+    header_font = Font(
+        color="FFFFFF",
+        bold=True
+    )
+
+    bold_font = Font(
+        bold=True
+    )
+
+    center = Alignment(
+        horizontal="center"
+    )
+
+    thin = Side(style="thin")
+
+    border = Border(
+        left=thin,
+        right=thin,
+        top=thin,
+        bottom=thin
+    )
+
+    # TOTAL
+    ws["E1"] = "Total ingresos"
+    ws["E1"].font = bold_font
+
+    total_cell = ws["F1"]
+
+    total_cell.value = float(context["total_income"])
+    total_cell.font = bold_font
+    total_cell.number_format = "$#,##0.00"
+
+
+    # DETALLE
+    row = 3
+
+    headers = [
+        "Placa",
+        "Entrada",
+        "Salida",
+        "Tiempo",
+        "Tipo",
+        "Monto",
+    ]
+
+    for col, header in enumerate(headers, start=1):
+
+        cell = ws.cell(
+            row=row,
+            column=col,
+            value=header
+        )
+
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = center
+        cell.border = border
+
+    row += 1
+
+    # DATOS
+    for entry in context["entries"]:
+
+        ws.cell(
+            row=row,
+            column=1,
+            value=entry.plate
+        )
+
+        ws.cell(
+            row=row,
+            column=2,
+            value=entry.entry_date_hour.strftime(
+                "%d/%m - %I:%M %p"
+            )
+            if entry.entry_date_hour else ""
+        )
+
+        ws.cell(
+            row=row,
+            column=3,
+            value=entry.departure_date_hour.strftime(
+                "%d/%m - %I:%M %p"
+            )
+            if entry.departure_date_hour else ""
+        )
+
+        ws.cell(
+            row=row,
+            column=4,
+            value=entry.duration
+        )
+
+        ws.cell(
+            row=row,
+            column=5,
+            value=entry.type + " - " + entry.fee.name if entry.fee else entry.type
+        )
+
+        amount_cell = ws.cell(
+            row=row,
+            column=6,
+            value=float(entry.final_amount or 0)
+        )
+
+        amount_cell.number_format = "$#,##0.00"
+
+        for col in range(1, 7):
+            ws.cell(row=row, column=col).border = border
+
+        row += 1
+
+    # AUTOAJUSTE COLUMNAS
+    for column in ws.columns:
+
+        max_length = 0
+
+        try:
+            column_letter = column[0].column_letter
+        except AttributeError:
+            continue
+
+        for cell in column:
+
+            if cell.value:
+
+                max_length = max(
+                    max_length,
+                    len(str(cell.value))
+                )
+
+        ws.column_dimensions[
+            column_letter
+        ].width = max_length + 3
+
+
+    # DESCARGA
+    output = BytesIO()
+
+    wb.save(output)
+
+    output.seek(0)
+
+    response = HttpResponse(
+        output.read(),
+        content_type=(
+            "application/vnd.openxmlformats-"
+            "officedocument.spreadsheetml.sheet"
+        )
+    )
+
+    report_title = "reporte-parqueo-"
+
+    match type:
+        case "day":
+            report_title = report_title + "diario-" + report_date.strftime("%d-%m-%Y") + ".xlsx"
+        case "monthly":
+            report_title = report_title + "mensual-" + report_date.strftime("%m-%Y") + ".xlsx"
+        case "period":
+            report_title = report_title + "periodo-" + report_date.strftime("%d-%m-%Y") + "-al-" + report_end_date.strftime("%d-%m-%Y") + ".xlsx"
+        case "plate":
+            report_title = report_title + "placa-" + plate + "-" + report_date.strftime("%d-%m-%Y") + "-al-" + report_end_date.strftime("%d-%m-%Y") + ".xlsx"
+        case _:
+                return HttpResponse("Tipo de reporte no válido", status=400)
+
+    response["Content-Disposition"] = (
+        f'attachment; filename={report_title}'
     )
 
     return response

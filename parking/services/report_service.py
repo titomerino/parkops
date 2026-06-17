@@ -1,6 +1,4 @@
 from collections import defaultdict
-from unittest import case
-
 from django.utils.timezone import localtime, now
 
 from parking.models import Entry, PlatePolicy
@@ -54,12 +52,15 @@ def _build_summary(stats):
 
 def _prepare_entry(entry):
 
+    if not entry.final_minutes:
+        entry.final_minutes, _ = entry.calculate_amount(policy=entry.policy)
+        entry.final_amount = 0
+
     hours, mins = minutes_to_hours_and_minutes(entry.final_minutes)
 
     entry.duration = f"{hours:02}:{mins:02}"
 
     return entry
-
 
 def generate_day_report(report_date):
 
@@ -73,6 +74,7 @@ def generate_day_report(report_date):
 
         policy = policy_map.get(entry.plate)
 
+        entry.policy = policy
         _prepare_entry(entry)
 
         stats["total_income"] += entry.final_amount
@@ -103,7 +105,7 @@ def generate_day_report(report_date):
         "is_day_report": True,
         "date": report_date.strftime('%d/%m/%Y'),
         "entries": entries,
-        "today": localtime(now()).date(),
+        "today": localtime(now()),
         "total_income": stats["total_income"],
         "summary": _build_summary(stats),
     }
@@ -120,6 +122,7 @@ def generate_month_report(date):
 
         policy = policy_map.get(entry.plate)
 
+        entry.policy = policy
         _prepare_entry(entry)
 
         stats["total_income"] += entry.final_amount
@@ -152,7 +155,7 @@ def generate_month_report(date):
     return {
         "date": date.strftime('%m/%Y'),
         "entries": entries,
-        "today": localtime(now()).date(),
+        "today": localtime(now()),
         "total_income": stats["total_income"],
         "summary": _build_summary(stats),
     }
@@ -200,7 +203,7 @@ def generate_period_report(start_date, end_date):
         "start_date": start_date.strftime('%d/%m/%Y'),
         "end_date": end_date.strftime('%d/%m/%Y'),
         "entries": entries,
-        "today": localtime(now()).date(),
+        "today": localtime(now()),
         "total_income": stats["total_income"],
         "summary": _build_summary(stats),
     }
@@ -213,24 +216,32 @@ def generate_plate_report(n_plate, start_date, end_date):
 
     policy = PlatePolicy.objects.filter(plate=n_plate, active=True).first()
 
-    match policy.billing_type:
-        case "DAILY":
-            billing_type = "Suscripción - DIARIO"
-        case "MONTHLY":
-            billing_type = "Suscripción - MENSUAL"
-        case _:
-            billing_type = "Tarifa"
+    if policy:
+        match policy.billing_type:
+            case "DAILY":
+                billing_type = "Suscripción - DIARIO" + (f" - ${policy.amount}")
+            case "MONTHLY":
+                billing_type = "Suscripción - MENSUAL" + (f" - ${policy.amount}")
+            case _:
+                return
+    else:
+        billing_type = "Sin suscripción"
 
     for entry in entries:
 
         _prepare_entry(entry)
+
+        if policy:
+            entry.type = billing_type
+        else:
+            entry.type = "Tarifa"
 
         total_income += entry.final_amount
 
     summary = [
         {
             "title": "Tipo de contrato",
-            "text": billing_type + (f" - ${policy.amount}"),
+            "text": billing_type,
         },
         {
             "title": "Total de entradas",
@@ -243,7 +254,8 @@ def generate_plate_report(n_plate, start_date, end_date):
         "start_date": start_date.strftime('%d/%m/%Y'),
         "end_date": end_date.strftime('%d/%m/%Y'),
         "entries": entries,
-        "today": localtime(now()).date(),
+        "today": localtime(now()),
         "total_income": total_income,
         "summary": summary,
+        "policy": policy,
     }

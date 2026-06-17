@@ -2,16 +2,10 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.timezone import now, localtime
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseBadRequest
 from django.contrib.auth.decorators import permission_required
+from io import BytesIO
 
 import qrcode, base64
-from io import BytesIO
-from parking.services.report_service import (
-    generate_day_report, generate_month_report,
-    generate_period_report,
-    generate_plate_report
-)
 
 from .models import  Entry, PlatePolicy, Range
 from .forms import (
@@ -25,7 +19,15 @@ from .forms import (
     ReportFilterByPeriodForm,
     ReportFilterByPlateForm
 )
-from parking.utils import minutes_to_hours_and_minutes, render_pdf_response
+from parking.utils import (
+    minutes_to_hours_and_minutes,
+    render_pdf_response, export_report_excel
+)
+from parking.services.report_service import (
+    generate_day_report, generate_month_report,
+    generate_period_report,
+    generate_plate_report
+)
 
 
 @permission_required('parking.add_entry', raise_exception=True)
@@ -70,7 +72,6 @@ def register(request, plate=None):
             except ValueError as e:
                 messages.error(request, str(e))
 
-            # 🔥 AQUÍ LA MAGIA
             action = request.POST.get('action')
 
             if action == 'save_print':
@@ -187,17 +188,7 @@ def entry_edit_view(request, pk):
         form = EntryEditForm(request.POST, instance=entry)
 
         if form.is_valid():
-            instance = form.save(commit=False)
-
-            # Si se ingresó fecha de salida → marcar como salida y calcular monto
-            if form.cleaned_data.get('departure_date_hour'):
-                instance.state = False
-                instance.final_amount = instance.calculate_amount()[1]
-            else:
-                instance.state = True
-                instance.final_amount = None
-
-            instance.save()
+            form.save()
 
             messages.success(request, "Entrada actualizada correctamente.")
             return redirect('record')
@@ -464,81 +455,153 @@ def parking_generate_reports_form(request):
     )
 
 @permission_required('parking.view_statistics_entry', raise_exception=True)
-def report_day_pdf(request):
+def report_day(request):
 
     form = ReportFilterByDayForm(request.GET)
 
     if not form.is_valid():
-        messages.error(request, "Fecha inválida para el reporte")
+        messages.error(request, "Formulario inválido para el reporte")
         return redirect("parking_reports")
 
     report_date = form.cleaned_data["date"]
 
     context = generate_day_report(report_date)
 
-    return render_pdf_response(
-        request,
-        "parking/reports/parking_day_report_pdf.html",
-        context,
-        f"reporte-dia-{report_date}.pdf"
-    )
+    match request.GET.get("format"):
+        case "pdf":
 
+            return render_pdf_response(
+                request,
+                "parking/reports/parking_day_report_pdf.html",
+                context,
+                f"reporte-dia-{report_date}.pdf"
+            )
+        
+        case "xlsx":
+
+            return export_report_excel(
+                context,
+                report_date,
+                type="day"
+            )
+        
+        case _:
+            messages.error(request, "Formato no soportado para el reporte")
+            return redirect("parking_reports")
+    
 @permission_required('parking.view_statistics_entry', raise_exception=True)
-def report_month_pdf(request):
+def report_month(request):
     
     form = ReportFilterByMonthForm(request.GET)
 
     if not form.is_valid():
-        return HttpResponseBadRequest("Formulario inválido")
+        messages.error(request, "Formulario inválido para el reporte")
+        return redirect("parking_reports")
 
     month = form.cleaned_data["month_date"]
 
     context = generate_month_report(month)
 
-    return render_pdf_response(
-        request,
-        "parking/reports/parking_month_report_pdf.html",
-        context,
-        f"reporte-mes-{month}.pdf"
-    )
+    match request.GET.get("format"):
+        case "pdf":
+
+            return render_pdf_response(
+                request,
+                "parking/reports/parking_month_report_pdf.html",
+                context,
+                f"reporte-mes-{month}.pdf"
+            )
+        
+        case "xlsx":
+
+            return export_report_excel(
+                context,
+                month,
+                type="monthly"
+            )
+        
+        case _:
+            messages.error(request, "Formato no soportado para el reporte")
+            return redirect("parking_reports")
 
 @permission_required('parking.view_statistics_entry', raise_exception=True)
-def report_period_pdf(request):
+def report_period(request):
     
     form = ReportFilterByPeriodForm(request.GET)
 
     if not form.is_valid():
-        return HttpResponseBadRequest("Formulario inválido")
+        messages.error(request, "Formulario inválido para el reporte")
+        return redirect("parking_reports")
     
     start_date = form.cleaned_data["period_start_date"]
     end_date = form.cleaned_data["period_end_date"]
 
     context = generate_period_report(start_date, end_date)
 
-    return render_pdf_response(
-        request,
-        "parking/reports/parking_period_report_pdf.html",
-        context,
-        f"reporte-periodo-{start_date}-{end_date}.pdf"
-    )
+    match request.GET.get("format"):
+        case "pdf":
+
+            return render_pdf_response(
+                request,
+                "parking/reports/parking_period_report_pdf.html",
+                context,
+                f"reporte-periodo-{start_date}-{end_date}.pdf"
+            )
+        
+        case "xlsx":
+
+            return export_report_excel(
+                context,
+                start_date,
+                end_date,
+                "period"
+            )
+        
+        case _:
+            messages.error(request, "Formato no soportado para el reporte")
+            return redirect("parking_reports")
 
 @permission_required('parking.view_statistics_entry', raise_exception=True)
-def report_plate_pdf(request):
+def report_plate(request):
 
     form = ReportFilterByPlateForm(request.GET)
 
     if not form.is_valid():
-        return HttpResponseBadRequest("Formulario inválido")
+        messages.error(request, "Formulario inválido para el reporte")
+        return redirect("parking_reports")
     
     plate = form.cleaned_data["plate"].strip().upper()
+
+    exists = Entry.objects.filter(plate=plate).exists() # que tanto afectara al rendimiento?
+    if not exists:
+        messages.error(request, f"No se encontraron registros para la placa {plate}")
+        return redirect("parking_reports")
+
     start_date = form.cleaned_data["start_date"]
     end_date = form.cleaned_data["end_date"]
 
     context = generate_plate_report(plate, start_date, end_date)
 
-    return render_pdf_response(
-        request,
-        "parking/reports/parking_plate_report_pdf.html",
-        context,
-        f"reporte-placa-{plate}.pdf"
-    )
+    match request.GET.get("format"):
+        case "pdf":
+
+            return render_pdf_response(
+                request,
+                "parking/reports/parking_plate_report_pdf.html",
+                context,
+                f"reporte-placa-{plate}.pdf"
+            )
+
+        case "xlsx":
+
+            return export_report_excel(
+                context,
+                start_date,
+                end_date,
+                "plate",
+                plate=plate
+            )
+
+        case _:
+            messages.error(request, "Formato no soportado para el reporte")
+            return redirect("parking_reports")

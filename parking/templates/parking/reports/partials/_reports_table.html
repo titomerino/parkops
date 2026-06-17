@@ -3,13 +3,10 @@
     <thead>
         <tr>
             <th>Placa</th>
-            {% if not is_day_report %}
-                <th>Fecha</th>
-            {% endif %}
             <th>Entrada</th>
             <th>Salida</th>
             <th>Tiempo</th>
-            {% if not plate %}
+            {% if not policy %}
                 <th>Tipo de cobro</th>
             {% endif %}
             <th>Monto</th>
@@ -19,20 +16,17 @@
         {% for e in entries %}
         <tr>
             <td class="plate">{{ e.plate }}</td>
-            {% if not is_day_report %}
-                <td>{{ e.entry_date_hour|date:"d/m"|default:"—" }}</td>
-            {% endif %}
-            <td>{{ e.entry_date_hour|date:"h:i A"|default:"—" }}</td>
-            <td>{{ e.departure_date_hour|date:"h:i A"|default:"—" }}</td>
+            <td>{{ e.entry_date_hour|date:"d/m - h:i A"|default:"—" }}</td>
+            <td>{{ e.departure_date_hour|date:"d/m - h:i A"|default:"—" }}</td>
             <td>{{ e.duration }}</td>
-            {% if not plate %}
+            {% if not policy %}
                 <td>{{ e.type }}{% if e.fee %} - {{ e.fee.name }}{% endif %}</td>
             {% endif %}
-            <td class="amount">${{ e.final_amount }}{% if  not e.departure_date_hour %} *{% endif %}</td>
+            <td class="amount">${{ e.final_amount }}</td>
         </tr>
         {% empty %}
             <tr>
-                <td colspan="{% if not is_day_report %}7{% else %}6{% endif %}"
+                <td colspan="7"
                     class="text-center text-muted fst-italic bg-light">No hay entradas para mostrar
                 </td>
             </tr>

@@ -54,10 +54,7 @@ class Range(models.Model):
         return f"{self.fee.name} - {self.start_minute} min: ${self.amount}"
     
 
-class EntryQuerySet(models.QuerySet):
-    def active(self):
-        return self.filter(state=True)
-    
+class EntryQuerySet(models.QuerySet):   
     def entries_today(self, date):
         return self.filter(entry_date_hour__date=date)
     
@@ -76,7 +73,7 @@ class EntryQuerySet(models.QuerySet):
         )
     
     def custom_report(self, start_date=None, end_date=None, month_date=None, n_plate=None):
-        queryset = self.filter(departure_date_hour__isnull=False)
+        queryset = self.all()
 
         # Mes
         if month_date:
@@ -92,9 +89,15 @@ class EntryQuerySet(models.QuerySet):
         # Solo fecha de inicio
         elif start_date:
             queryset = queryset.filter(
-                departure_date_hour__date=start_date
+                Q(entry_date_hour__date=start_date)
+                |
+                Q(departure_date_hour__date=start_date)
+                |
+                Q(
+                    entry_date_hour__date__lt=start_date,
+                    departure_date_hour__isnull=True
+                )
             )
-
         # Placa
         if n_plate:
             queryset = queryset.filter(plate=n_plate)
@@ -184,9 +187,53 @@ class Entry(models.Model):
         return self.plate
     
     def save(self, *args, **kwargs):
-        # Si existe una entrada activa para la misma placa, no se permite guardar una nueva
-        if self.state and Entry.objects.filter(plate=self.plate, state=True).exclude(id=self.id).exists():
-            raise ValueError(f"Ya existe una entrada activa para esta placa: {self.plate}")
+
+        # El estado siempre depende de la fecha de salida
+        self.state = self.departure_date_hour is None
+
+        # Validar entradas activas
+        if (
+            self.state
+            and Entry.objects.filter(
+                plate=self.plate,
+                state=True
+            ).exclude(pk=self.pk).exists()
+        ):
+            raise ValueError(
+                f"Ya existe una entrada activa para esta placa: {self.plate}"
+            )
+
+        departure_changed = False
+
+        if self.pk:
+
+            old = Entry.objects.only(
+                "departure_date_hour"
+            ).get(pk=self.pk)
+
+            departure_changed = (
+                old.departure_date_hour != self.departure_date_hour
+            )
+
+        elif self.departure_date_hour:
+            departure_changed = True
+
+        if departure_changed:
+
+            if self.departure_date_hour:
+
+                minutes, amount = self.calculate_amount(
+                    policy=self.policy()
+                )
+
+                self.final_minutes = minutes
+                self.final_amount = amount
+
+            else:
+
+                self.final_minutes = None
+                self.final_amount = None
+
         super().save(*args, **kwargs)
 
     def calculate_amount(self, policy=None):
@@ -220,6 +267,12 @@ class Entry(models.Model):
         retorna el formato de placa con espacios
         """
         return format_plate(self.plate)
+    
+    def policy(self):
+        """
+        Retorna la política de placa activa asociada a esta entrada, si existe
+        """
+        return PlatePolicy.objects.active().filter(plate=self.plate).first()
 
 
 class Configuration(models.Model):
@@ -247,6 +300,9 @@ class PlatePolicyQuerySet(models.QuerySet):
 class PlatePolicyManager(models.Manager):
     def get_queryset(self):
         return PlatePolicyQuerySet(self.model, using=self._db)
+    
+    def active(self):
+        return self.get_queryset().active()
 
     def total_active_monthly_subscriptions(self):
         return self.get_queryset().monthly().count()

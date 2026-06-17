@@ -70,8 +70,7 @@
                 <div id="tab-todays" class="tab-content-custom">
 
                     <form method="GET"
-                          action="{% url 'report_day_pdf' %}"
-                          target="_blank"
+                          action="{% url 'report_day' %}"
                           novalidate>
 
                         <div class="mb-3">
@@ -90,13 +89,31 @@
 
                         </div>
 
-                        <button type="submit"
-                                class="btn btn-primary rounded-pill px-4 w-100 mt-3">
+                        <div class="d-flex gap-2 mt-3">
 
-                            <i class="bi bi-file-earmark-pdf me-1"></i>
-                            Generar Reporte
+                            <button
+                                type="submit"
+                                name="format"
+                                value="pdf"
+                                class="btn btn-danger flex-fill">
+                                
+                                <i class="bi bi-file-earmark-pdf me-1"></i>
+                                Generar PDF
 
-                        </button>
+                            </button>
+
+                            <button
+                                type="submit"
+                                name="format"
+                                value="xlsx"
+                                class="btn btn-success flex-fill">
+
+                                <i class="bi bi-file-earmark-excel me-1"></i>
+                                Descargar Excel
+
+                            </button>
+
+                        </div>
 
                     </form>
 
@@ -110,8 +127,7 @@
                      class="tab-content-custom d-none">
 
                     <form method="GET"
-                          action="{% url 'report_month_pdf' %}"
-                          target="_blank"
+                          action="{% url 'report_month' %}"
                           novalidate>
 
                         <div class="mb-3">
@@ -130,13 +146,31 @@
 
                         </div>
 
-                        <button type="submit"
-                                class="btn btn-primary rounded-pill px-4 w-100 mt-3">
+                        <div class="d-flex gap-2 mt-3">
 
-                            <i class="bi bi-file-earmark-pdf me-1"></i>
-                            Generar Reporte
+                            <button
+                                type="submit"
+                                name="format"
+                                value="pdf"
+                                class="btn btn-danger flex-fill">
+                                
+                                <i class="bi bi-file-earmark-pdf me-1"></i>
+                                Generar PDF
 
-                        </button>
+                            </button>
+
+                            <button
+                                type="submit"
+                                name="format"
+                                value="xlsx"
+                                class="btn btn-success flex-fill">
+
+                                <i class="bi bi-file-earmark-excel me-1"></i>
+                                Descargar Excel
+
+                            </button>
+
+                        </div>
 
                     </form>
 
@@ -150,8 +184,7 @@
                      class="tab-content-custom d-none">
 
                     <form method="GET"
-                          action="{% url 'report_period_pdf' %}"
-                          target="_blank"
+                          action="{% url 'report_period' %}"
                           novalidate>
 
                         <div class="row">
@@ -190,13 +223,31 @@
 
                         </div>
 
-                        <button type="submit"
-                                class="btn btn-primary rounded-pill px-4 w-100 mt-3">
+                        <div class="d-flex gap-2">
 
-                            <i class="bi bi-file-earmark-pdf me-1"></i>
-                            Generar Reporte
+                            <button
+                                type="submit"
+                                name="format"
+                                value="pdf"
+                                class="btn btn-danger flex-fill">
+                                
+                                <i class="bi bi-file-earmark-pdf me-1"></i>
+                                Generar PDF
 
-                        </button>
+                            </button>
+
+                            <button
+                                type="submit"
+                                name="format"
+                                value="xlsx"
+                                class="btn btn-success flex-fill">
+
+                                <i class="bi bi-file-earmark-excel me-1"></i>
+                                Descargar Excel
+
+                            </button>
+
+                        </div>
 
                     </form>
 
@@ -210,8 +261,7 @@
                      class="tab-content-custom d-none">
 
                     <form method="GET"
-                          action="{% url 'report_plate_pdf' %}"
-                          target="_blank"
+                          action="{% url 'report_plate' %}"
                           novalidate>
 
                         <div class="mb-3">
@@ -266,13 +316,31 @@
 
                         </div>
 
-                        <button type="submit"
-                                class="btn btn-primary rounded-pill px-4 w-100 mt-3">
+                        <div class="d-flex gap-2">
 
-                            <i class="bi bi-file-earmark-pdf me-1"></i>
-                            Generar Reporte
+                            <button
+                                type="submit"
+                                name="format"
+                                value="pdf"
+                                class="btn btn-danger flex-fill">
+                                
+                                <i class="bi bi-file-earmark-pdf me-1"></i>
+                                Generar PDF
 
-                        </button>
+                            </button>
+
+                            <button
+                                type="submit"
+                                name="format"
+                                value="xlsx"
+                                class="btn btn-success flex-fill">
+
+                                <i class="bi bi-file-earmark-excel me-1"></i>
+                                Descargar Excel
+
+                            </button>
+
+                        </div>
 
                     </form>
 

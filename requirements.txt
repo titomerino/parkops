@@ -11,10 +11,12 @@ django-cors-headers==4.9.0
 django-filter==25.2
 djangorestframework==3.16.1
 djangorestframework_simplejwt==5.5.1
+et_xmlfile==2.0.0
 fonttools==4.61.1
 gunicorn==23.0.0
 idna==3.11
 iniconfig==2.3.0
+openpyxl==3.1.5
 packaging==25.0
 pillow==12.1.0
 pluggy==1.6.0

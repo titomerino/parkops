@@ -1,0 +1,16 @@
+<!-- HEADER -->
+<div class="header">
+    <table class="header-table">
+        <tr>
+            <td>
+                {% if logo_url %}
+                    <img src="{{ logo_url }}" style="height:60px;">
+                {% endif %}
+            </td>
+            <td style="text-align: right;">
+                <strong>ParkOps</strong><br>
+                {{ today|date:"j \\d\\e F \\d\\e Y - h:i A" }}
+            </td>
+        </tr>
+    </table>
+</div>

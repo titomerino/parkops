@@ -1,0 +1,33 @@
+{% extends "parking/reports/base_reports.html" %}
+
+{% block title %}ParkOps / Reporte Mensual{% endblock %}
+
+{% block content %}
+
+    {% include 'parking/reports/partials/_reports_header.html' %}
+
+    <div class="title">
+        Reporte de ingresos del mes
+    </div>
+
+    <p class="subtitle">
+        Mes: {{ date }}
+    </p>
+
+    {% include 'parking/reports/partials/_reports_total.html' %}
+
+    {% include 'parking/reports/partials/_reports_summary.html' with summary=summary %}
+
+    {% include 'parking/reports/partials/_reports_table.html' %}
+
+    {% include 'parking/reports/partials/_reports_total.html' %}
+
+    <div class="report-note">
+        <em>
+            Notas:<br>Las entradas por suscripción mensual se registran con un monto de
+            $0, pero el valor de la suscripción se agrega a los ingresos totales.
+            <br>Las entradas sin salida registrada se consideran con un monto de $0.
+        </em>
+    </div>
+
+{% endblock %}

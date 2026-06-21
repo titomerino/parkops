@@ -1,0 +1,36 @@
+{% extends "parking/reports/base_reports.html" %}
+
+{% block title %}ParkOps / Reporte de Placa{% endblock %}
+
+{% block content %}
+
+    {% include 'parking/reports/partials/_reports_header.html' %}
+
+    <div class="title">
+        Reporte de ingresos la placa {{ plate }}
+    </div>
+
+    <p class="subtitle">
+        Período: {{ start_date }} - {{ end_date }}
+    </p>
+
+    {% include 'parking/reports/partials/_reports_total.html' %}
+
+    {% include 'parking/reports/partials/_reports_summary.html' with summary=summary %}
+
+    {% include 'parking/reports/partials/_reports_table.html' %}
+
+    {% include 'parking/reports/partials/_reports_total.html' %}
+
+    <div class="report-note">
+        <em>
+            Notas:<br>
+            <Strong>Tipo de contrato</Strong> es el contrato vigente al momento de generar el reporte (Si hay montos
+            que no corresponde al contrato, posiblemente se a modificado recientemente).<br>
+            Si la placa tiene un contrato mensual vigente, las entradas por suscripción mensual se registran con un monto de
+            $0 y el reporte muestra el valor de la suscripción en el resumen, pero no se agrega a los ingresos totales del reporte. <br>
+            Las entradas sin salida registrada se consideran con un monto de $0.
+        </em>
+    </div>
+
+{% endblock %}

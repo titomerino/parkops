@@ -1,0 +1,21 @@
+<table class="summary-table">
+    <tr>
+        {% for item in summary %}
+            <td>
+                <div class="summary-title">
+                    {{ item.title }}
+                </div>
+                {% if item.text %}
+                    <div class="summary-text">
+                        {{ item.text }}
+                    </div>
+                {% else %}
+                    Total: {{ item.count }}<br>
+                    <span class="income-text">
+                        Ingresos: ${{ item.income }}
+                    </span>
+                {% endif %}
+            </td>
+        {% endfor %}
+    </tr>
+</table>

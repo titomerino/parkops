@@ -1,6 +1,8 @@
 from django import forms
 from .models import Fee, Entry, Configuration, PlatePolicy
 from django.core.validators import RegexValidator
+from django.utils.timezone import localdate
+
 import re
 
 
@@ -267,3 +269,109 @@ class PlatePolicyForm(forms.ModelForm):
 
         return cleaned_data
 
+class ReportFilterByDayForm(forms.Form):
+    date = forms.DateField(
+        label="Fecha",
+        required=True,
+        initial=localdate,
+        error_messages={
+            'required': 'La fecha es obligatoria',
+            'invalid': 'Ingresa una fecha válida'
+        },
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+
+class ReportFilterByMonthForm(forms.Form):
+    month_date = forms.DateField(
+        label="Mes",
+        input_formats=['%Y-%m'],
+        required=True,
+        initial=lambda: localdate().strftime("%Y-%m"),
+        error_messages={
+            'required': 'El mes es obligatorio',
+            'invalid': 'Ingresa un mes válido'
+        },
+        widget=forms.DateInput(attrs={
+            "type": "month",
+            "class": "form-control"
+        })
+    )
+
+class ReportFilterByPeriodForm(forms.Form):
+    period_start_date = forms.DateField(
+        label="Desde",
+        required=True,
+        initial=localdate,
+        error_messages={
+            'required': 'La fecha inicial es obligatoria',
+            'invalid': 'Ingresa una fecha válida'
+        },
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+    period_end_date = forms.DateField(
+        label="Hasta",
+        required=True,
+        initial=localdate,
+        error_messages={
+            'required': 'La fecha final es obligatoria',
+            'invalid': 'Ingresa una fecha válida'
+        },
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+
+class ReportFilterByPlateForm(forms.Form):
+    plate = forms.CharField(
+        max_length=10,
+        label="Placa",
+        required=True,
+        error_messages={
+            'required': 'El numero de placa es obligatorio',
+            'invalid': 'Ingresa un numero de placa válido'
+        },
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'P123456',
+            'oninput': "this.value = this.value.replace(/\\s+/g,'').replace(/[^a-zA-Z0-9]/g,'').toUpperCase().slice(0,10);",
+        }),
+        validators=[
+            RegexValidator(
+                regex=r'^[A-Z0-9]+$',
+                message="Solo se permiten letras y números (sin espacios)"
+            )
+        ]
+    )
+    start_date = forms.DateField(
+        label="Desde",
+        required=True,
+        initial=localdate,
+        error_messages={
+            'required': 'La fecha inicial es obligatoria',
+            'invalid': 'Ingresa una fecha válida'
+        },
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )
+    end_date = forms.DateField(
+        label="Hasta",
+        required=True,
+        initial=localdate,
+        error_messages={
+            'required': 'La fecha final es obligatoria',
+            'invalid': 'Ingresa una fecha válida'
+        },
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date'
+        })
+    )

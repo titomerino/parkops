@@ -1,0 +1,105 @@
+body {
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+}
+
+.header {
+    border-bottom: 2px solid #0d6efd;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.header-table {
+    width: 100%;
+}
+
+.header-table td {
+    vertical-align: middle;
+}
+
+.title {
+    text-align: center;
+    margin-bottom: 5px;
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.subtitle {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 12px;
+    font-style: italic;
+}
+
+.summary-table {
+    width: 100%;
+    margin-bottom: 20px;
+    border-collapse: collapse;
+}
+
+.summary-table td {
+    border: 1px solid #ccc;
+    padding: 10px;
+    text-align: center;
+}
+
+.summary-title {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.main-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.main-table th,
+.main-table td {
+    border: 1px solid black;
+    padding: 6px;
+    text-align: center;
+}
+
+.main-table th {
+    background-color: #212529;
+    color: white;
+}
+
+.main-table td.plate {
+    text-align: left;
+}
+
+.main-table td.amount {
+    text-align: right;
+}
+
+.total {
+    margin-top: 15px;
+    text-align: right;
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+.income-text {
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.report-note {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #444;
+}
+
+@page {
+    size: A4;
+    margin: 1.5cm;
+
+    @bottom-right {
+        content: counter(page) " / " counter(pages);
+        font-size: 10px;
+    }
+}

@@ -54,10 +54,7 @@ class Range(models.Model):
         return f"{self.fee.name} - {self.start_minute} min: ${self.amount}"
     
 
-class EntryQuerySet(models.QuerySet):
-    def active(self):
-        return self.filter(state=True)
-    
+class EntryQuerySet(models.QuerySet):   
     def entries_today(self, date):
         return self.filter(entry_date_hour__date=date)
     
@@ -74,19 +71,51 @@ class EntryQuerySet(models.QuerySet):
             departure_date_hour__year=year,
             departure_date_hour__month=month
         )
+    
+    def custom_report(self, start_date=None, end_date=None, month_date=None, n_plate=None):
+        queryset = self.all()
+
+        # Mes
+        if month_date:
+            queryset = queryset.filter(
+                departure_date_hour__year=month_date.year,
+                departure_date_hour__month=month_date.month
+            )
+        # Rango de fechas
+        elif start_date and end_date:
+            queryset = queryset.filter(
+                departure_date_hour__date__range=(start_date, end_date)
+            )
+        # Solo fecha de inicio
+        elif start_date:
+            queryset = queryset.filter(
+                Q(entry_date_hour__date=start_date)
+                |
+                Q(departure_date_hour__date=start_date)
+                |
+                Q(
+                    entry_date_hour__date__lt=start_date,
+                    departure_date_hour__isnull=True
+                )
+            )
+        # Placa
+        if n_plate:
+            queryset = queryset.filter(plate=n_plate)
+
+        return queryset
 
 
 class EntryManager(models.Manager):
     def get_queryset(self):
         return EntryQuerySet(self.model, using=self._db)
     
-    def entries_today(self, date):
+    def entries_today(self, date): #Se usa en dashboard
         return self.get_queryset().entries_today(date)
     
-    def entries_today_count(self, date):
+    def entries_today_count(self, date): #Se usa en dashboard
         return self.get_queryset().entries_today(date).count()
 
-    def entries_today_and_active(self, date):
+    def entries_today_and_active(self, date): #se usa
         return self.get_queryset().entries_today_and_active(date)
 
     def departure_today(self, date):
@@ -95,14 +124,14 @@ class EntryManager(models.Manager):
     def departure_month(self, year, month):
         return self.get_queryset().departure_month(year, month)
 
-    def today_income(self, date):
+    def today_income(self, date): #Se usa en dashboard
         return (
             self.departure_today(date)
             .aggregate(total=Sum("final_amount"))
             ["total"] or 0
         )
 
-    def month_income(self, year, month):
+    def month_income(self, year, month): #Se usa en dashboard
         return (
             self.departure_month(year, month)
             .aggregate(total=Sum("final_amount"))
@@ -111,6 +140,9 @@ class EntryManager(models.Manager):
 
     def total_active_vehicles(self):
         return self.get_queryset().active().count()
+    
+    def custom_report(self, start_date=None, end_date=None, month_date=None, n_plate=None):
+        return self.get_queryset().custom_report(start_date, end_date, month_date, n_plate)
 
 
 class Entry(models.Model): 
@@ -155,9 +187,53 @@ class Entry(models.Model):
         return self.plate
     
     def save(self, *args, **kwargs):
-        # Si existe una entrada activa para la misma placa, no se permite guardar una nueva
-        if self.state and Entry.objects.filter(plate=self.plate, state=True).exclude(id=self.id).exists():
-            raise ValueError(f"Ya existe una entrada activa para esta placa: {self.plate}")
+
+        # El estado siempre depende de la fecha de salida
+        self.state = self.departure_date_hour is None
+
+        # Validar entradas activas
+        if (
+            self.state
+            and Entry.objects.filter(
+                plate=self.plate,
+                state=True
+            ).exclude(pk=self.pk).exists()
+        ):
+            raise ValueError(
+                f"Ya existe una entrada activa para esta placa: {self.plate}"
+            )
+
+        departure_changed = False
+
+        if self.pk:
+
+            old = Entry.objects.only(
+                "departure_date_hour"
+            ).get(pk=self.pk)
+
+            departure_changed = (
+                old.departure_date_hour != self.departure_date_hour
+            )
+
+        elif self.departure_date_hour:
+            departure_changed = True
+
+        if departure_changed:
+
+            if self.departure_date_hour:
+
+                minutes, amount = self.calculate_amount(
+                    policy=self.policy()
+                )
+
+                self.final_minutes = minutes
+                self.final_amount = amount
+
+            else:
+
+                self.final_minutes = None
+                self.final_amount = None
+
         super().save(*args, **kwargs)
 
     def calculate_amount(self, policy=None):
@@ -191,6 +267,12 @@ class Entry(models.Model):
         retorna el formato de placa con espacios
         """
         return format_plate(self.plate)
+    
+    def policy(self):
+        """
+        Retorna la política de placa activa asociada a esta entrada, si existe
+        """
+        return PlatePolicy.objects.active().filter(plate=self.plate).first()
 
 
 class Configuration(models.Model):
@@ -218,6 +300,9 @@ class PlatePolicyQuerySet(models.QuerySet):
 class PlatePolicyManager(models.Manager):
     def get_queryset(self):
         return PlatePolicyQuerySet(self.model, using=self._db)
+    
+    def active(self):
+        return self.get_queryset().active()
 
     def total_active_monthly_subscriptions(self):
         return self.get_queryset().monthly().count()

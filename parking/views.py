@@ -2,21 +2,32 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.timezone import now, localtime
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
-from django.template.loader import render_to_string
-from django.db.models import Sum, Count
 from django.contrib.auth.decorators import permission_required
-
-import qrcode
-import base64
 from io import BytesIO
-from datetime import datetime
+
+import qrcode, base64
 
 from .models import  Entry, PlatePolicy, Range
-from bathrooms.models import BathroomEntry
-from .forms import EntryForm, EntryEditForm, PlateSearchForm, EntryExitForm, PlatePolicyForm
-from parking.utils import minutes_to_hours_and_minutes
-import weasyprint
+from .forms import (
+    EntryForm, 
+    EntryEditForm, 
+    PlateSearchForm, 
+    EntryExitForm, 
+    PlatePolicyForm, 
+    ReportFilterByDayForm,
+    ReportFilterByMonthForm,
+    ReportFilterByPeriodForm,
+    ReportFilterByPlateForm
+)
+from parking.utils import (
+    minutes_to_hours_and_minutes,
+    render_pdf_response, export_report_excel
+)
+from parking.services.report_service import (
+    generate_day_report, generate_month_report,
+    generate_period_report,
+    generate_plate_report
+)
 
 
 @permission_required('parking.add_entry', raise_exception=True)
@@ -61,7 +72,6 @@ def register(request, plate=None):
             except ValueError as e:
                 messages.error(request, str(e))
 
-            # 🔥 AQUÍ LA MAGIA
             action = request.POST.get('action')
 
             if action == 'save_print':
@@ -178,17 +188,7 @@ def entry_edit_view(request, pk):
         form = EntryEditForm(request.POST, instance=entry)
 
         if form.is_valid():
-            instance = form.save(commit=False)
-
-            # Si se ingresó fecha de salida → marcar como salida y calcular monto
-            if form.cleaned_data.get('departure_date_hour'):
-                instance.state = False
-                instance.final_amount = instance.calculate_amount()[1]
-            else:
-                instance.state = True
-                instance.final_amount = None
-
-            instance.save()
+            form.save()
 
             messages.success(request, "Entrada actualizada correctamente.")
             return redirect('record')
@@ -395,110 +395,6 @@ def save_return_url(request):
     if not path.startswith("/departure"):
         request.session['departure_return_url'] = path
 
-
-def income_day_report(date):
-
-    day = date
-
-    entries = (
-        Entry.objects
-        .entries_today(day)
-        .select_related("fee")
-        .only(
-            "plate",
-            "entry_date_hour",
-            "departure_date_hour",
-            "fee",
-            "state"
-        )
-    )
-
-    plates = entries.values_list("plate", flat=True).distinct()
-
-    policies = (
-        PlatePolicy.objects
-        .filter(plate__in=plates, active=True)
-        .only("plate", "billing_type", "amount")
-    )
-
-    policy_map = {p.plate: p for p in policies}
-
-    total_income = 0
-    daily_subscription_count = 0
-    normal_fee_count = 0
-    total_income_normal = 0
-    total_income_daily = 0
-
-    for e in entries:
-
-        policy = policy_map.get(e.plate)
-
-        if e.departure_date_hour:
-            minutes, amount = e.calculate_amount(policy=policy)
-            total_income += amount
-        else:
-            minutes, amount = 0, 0
-
-        e.hours, e.minutes = minutes_to_hours_and_minutes(minutes)
-        e.amount = amount
-
-        if policy and policy.billing_type == "DAILY":
-            daily_subscription_count += 1
-            total_income_daily += amount
-            e.type = "Suscripción - DIARIO"
-
-        elif policy and policy.billing_type == "MONTHLY":
-            e.type = "Suscripción - MENSUAL"
-
-        else:
-            normal_fee_count += 1
-            total_income_normal += amount
-            e.type = "Tarifa"
-
-    bathroom_data = (
-        BathroomEntry.objects
-        .filter(entry_date_hour__date=day)
-        .aggregate(
-            total_income=Sum("fee__amount"),
-            total_uses=Count("id")
-        )
-    )
-
-    total_use_bathroom = BathroomEntry.objects.total_today()
-    bathroom_income = float(bathroom_data["total_income"] or 0)
-
-    html_string = render_to_string(
-        "parking/reports/parking_income_day_pdf.html",
-        {
-            "entries": entries,
-            "total_income": total_income,
-            "today": day,
-            "daily_count": daily_subscription_count,
-            "normal_count": normal_fee_count,
-            "total_income_normal": total_income_normal,
-            "total_income_daily": total_income_daily,
-            "total_use_bathroom": total_use_bathroom,
-            "total_income_bathroom": bathroom_income,
-            "total_income_today": total_income + bathroom_income,
-        }
-    )
-
-    pdf = weasyprint.HTML(string=html_string).write_pdf()
-
-    response = HttpResponse(pdf, content_type="application/pdf")
-    response["Content-Disposition"] = (
-        f'inline; filename="Parqueo-Reporte_de_ingresos_{day}.pdf"'
-    )
-
-    return response
-
-@login_required(login_url='login')
-def income_today_report(request):
-    """LLama a la función de generación de reporte de ingresos del día actual"""
-    today = localtime(now()).date()
-    return income_day_report(today)
-
-
 @login_required(login_url='login')
 def imprimir_ticket(request):
     entry_id = request.GET.get('entry_id')
@@ -541,3 +437,171 @@ def imprimir_ticket(request):
     }
 
     return render(request, 'parking/ticket-template.html', context)
+
+@permission_required('parking.view_statistics_entry', raise_exception=True)
+def parking_generate_reports_form(request):
+
+    context = {
+        "formDay": ReportFilterByDayForm(),
+        "formMonth": ReportFilterByMonthForm(),
+        "formPeriod": ReportFilterByPeriodForm(),
+        "formPlate": ReportFilterByPlateForm(),
+    }
+
+    return render(
+        request,
+        "parking/generate_report_form.html",
+        context
+    )
+
+@permission_required('parking.view_statistics_entry', raise_exception=True)
+def report_day(request):
+
+    form = ReportFilterByDayForm(request.GET)
+
+    if not form.is_valid():
+        messages.error(request, "Formulario inválido para el reporte")
+        return redirect("parking_reports")
+
+    report_date = form.cleaned_data["date"]
+
+    context = generate_day_report(report_date)
+
+    match request.GET.get("format"):
+        case "pdf":
+
+            return render_pdf_response(
+                request,
+                "parking/reports/parking_day_report_pdf.html",
+                context,
+                f"reporte-dia-{report_date}.pdf"
+            )
+        
+        case "xlsx":
+
+            return export_report_excel(
+                context,
+                report_date,
+                type="day"
+            )
+        
+        case _:
+            messages.error(request, "Formato no soportado para el reporte")
+            return redirect("parking_reports")
+    
+@permission_required('parking.view_statistics_entry', raise_exception=True)
+def report_month(request):
+    
+    form = ReportFilterByMonthForm(request.GET)
+
+    if not form.is_valid():
+        messages.error(request, "Formulario inválido para el reporte")
+        return redirect("parking_reports")
+
+    month = form.cleaned_data["month_date"]
+
+    context = generate_month_report(month)
+
+    match request.GET.get("format"):
+        case "pdf":
+
+            return render_pdf_response(
+                request,
+                "parking/reports/parking_month_report_pdf.html",
+                context,
+                f"reporte-mes-{month}.pdf"
+            )
+        
+        case "xlsx":
+
+            return export_report_excel(
+                context,
+                month,
+                type="monthly"
+            )
+        
+        case _:
+            messages.error(request, "Formato no soportado para el reporte")
+            return redirect("parking_reports")
+
+@permission_required('parking.view_statistics_entry', raise_exception=True)
+def report_period(request):
+    
+    form = ReportFilterByPeriodForm(request.GET)
+
+    if not form.is_valid():
+        messages.error(request, "Formulario inválido para el reporte")
+        return redirect("parking_reports")
+    
+    start_date = form.cleaned_data["period_start_date"]
+    end_date = form.cleaned_data["period_end_date"]
+
+    context = generate_period_report(start_date, end_date)
+
+    match request.GET.get("format"):
+        case "pdf":
+
+            return render_pdf_response(
+                request,
+                "parking/reports/parking_period_report_pdf.html",
+                context,
+                f"reporte-periodo-{start_date}-{end_date}.pdf"
+            )
+        
+        case "xlsx":
+
+            return export_report_excel(
+                context,
+                start_date,
+                end_date,
+                "period"
+            )
+        
+        case _:
+            messages.error(request, "Formato no soportado para el reporte")
+            return redirect("parking_reports")
+
+@permission_required('parking.view_statistics_entry', raise_exception=True)
+def report_plate(request):
+
+    form = ReportFilterByPlateForm(request.GET)
+
+    if not form.is_valid():
+        messages.error(request, "Formulario inválido para el reporte")
+        return redirect("parking_reports")
+    
+    plate = form.cleaned_data["plate"].strip().upper()
+
+    exists = Entry.objects.filter(plate=plate).exists() # que tanto afectara al rendimiento?
+    if not exists:
+        messages.error(request, f"No se encontraron registros para la placa {plate}")
+        return redirect("parking_reports")
+
+    start_date = form.cleaned_data["start_date"]
+    end_date = form.cleaned_data["end_date"]
+
+    context = generate_plate_report(plate, start_date, end_date)
+
+    match request.GET.get("format"):
+        case "pdf":
+
+            return render_pdf_response(
+                request,
+                "parking/reports/parking_plate_report_pdf.html",
+                context,
+                f"reporte-placa-{plate}.pdf"
+            )
+
+        case "xlsx":
+
+            return export_report_excel(
+                context,
+                start_date,
+                end_date,
+                "plate",
+                plate=plate
+            )
+
+        case _:
+            messages.error(request, "Formato no soportado para el reporte")
+            return redirect("parking_reports")

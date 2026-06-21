@@ -1,0 +1,35 @@
+<!-- DETALLE -->
+<table class="main-table">
+    <thead>
+        <tr>
+            <th>Placa</th>
+            <th>Entrada</th>
+            <th>Salida</th>
+            <th>Tiempo</th>
+            {% if not policy %}
+                <th>Tipo de cobro</th>
+            {% endif %}
+            <th>Monto</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for e in entries %}
+        <tr>
+            <td class="plate">{{ e.plate }}</td>
+            <td>{{ e.entry_date_hour|date:"d/m - h:i A"|default:"—" }}</td>
+            <td>{{ e.departure_date_hour|date:"d/m - h:i A"|default:"—" }}</td>
+            <td>{{ e.duration }}</td>
+            {% if not policy %}
+                <td>{{ e.type }}{% if e.fee %} - {{ e.fee.name }}{% endif %}</td>
+            {% endif %}
+            <td class="amount">${{ e.final_amount }}</td>
+        </tr>
+        {% empty %}
+            <tr>
+                <td colspan="7"
+                    class="text-center text-muted fst-italic bg-light">No hay entradas para mostrar
+                </td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>

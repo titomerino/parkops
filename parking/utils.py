@@ -1,5 +1,6 @@
 
 from io import BytesIO
+from django.utils import timezone
 from openpyxl import Workbook
 from django.http import HttpResponse
 from django.template.loader import render_to_string
@@ -168,22 +169,26 @@ def export_report_excel(context, report_date, report_end_date=None, type=None, p
             value=entry.plate
         )
 
+        entry_date = timezone.localtime(entry.entry_date_hour)
+
         ws.cell(
             row=row,
             column=2,
-            value=entry.entry_date_hour.strftime(
+            value=entry_date.strftime(
                 "%d/%m - %I:%M %p"
             )
-            if entry.entry_date_hour else ""
+            if entry_date else ""
         )
+
+        departure_date = timezone.localtime(entry.departure_date_hour)
 
         ws.cell(
             row=row,
             column=3,
-            value=entry.departure_date_hour.strftime(
+            value=departure_date.strftime(
                 "%d/%m - %I:%M %p"
             )
-            if entry.departure_date_hour else ""
+            if departure_date else ""
         )
 
         ws.cell(

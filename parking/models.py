@@ -29,11 +29,15 @@ class Fee(models.Model):
         return self.name
     
     def calculate_fee(self, minute):
-        ranges = Range.objects.filter(fee=self).order_by('start_minute')
-        for r in ranges:
+        amount = 0
+
+        for r in Range.objects.filter(fee=self).order_by('start_minute'):
             if minute >= r.start_minute:
                 amount = r.amount
-        return amount if ranges.exists() else 0
+            else:
+                break
+            
+        return amount
 
 
 class Range(models.Model):
@@ -203,22 +207,27 @@ class Entry(models.Model):
                 f"Ya existe una entrada activa para esta placa: {self.plate}"
             )
 
-        departure_changed = False
+        # Determinar si cambio la tarifa o alguna fecha que afecte el calculo de minutos y monto final
+        data_changed = False
 
         if self.pk:
 
             old = Entry.objects.only(
-                "departure_date_hour"
+                "entry_date_hour",
+                "departure_date_hour",
+                "fee"
             ).get(pk=self.pk)
 
-            departure_changed = (
-                old.departure_date_hour != self.departure_date_hour
+            data_changed = (
+                old.entry_date_hour != self.entry_date_hour
+                or old.departure_date_hour != self.departure_date_hour
+                or old.fee_id != self.fee_id
             )
 
-        elif self.departure_date_hour:
-            departure_changed = True
+        else: data_changed = bool(self.departure_date_hour)
 
-        if departure_changed:
+        # LLama a recalcular minutos y monto final si cambio alguna fecha o tarifa
+        if data_changed:
 
             if self.departure_date_hour:
 
@@ -234,6 +243,7 @@ class Entry(models.Model):
                 self.final_minutes = None
                 self.final_amount = None
 
+        # Guardar cambios
         super().save(*args, **kwargs)
 
     def calculate_amount(self, policy=None):

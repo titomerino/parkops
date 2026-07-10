@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'shell',
     'parking',
     'bathrooms',
+    'payment',
 ]
 
 # MIDDLEWARE

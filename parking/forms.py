@@ -1,4 +1,5 @@
 from django import forms
+from django.utils import timezone
 from .models import Fee, Entry, Configuration, PlatePolicy
 from django.core.validators import RegexValidator
 from django.utils.timezone import localdate
@@ -107,6 +108,33 @@ class EntryEditForm(forms.ModelForm):
             })
         }
 
+    def clean(self):
+        cleaned_data = super().clean()
+
+        entry = cleaned_data.get("entry_date_hour")
+        departure = cleaned_data.get("departure_date_hour")
+        now = timezone.now()
+
+        if entry and entry > now:
+            self.add_error(
+                "entry_date_hour",
+                "La fecha y hora de entrada no puede ser mayor a la fecha y hora actual."
+            )
+
+        if departure and departure > now:
+            self.add_error(
+                "departure_date_hour",
+                "La fecha y hora de salida no puede ser mayor a la fecha y hora actual."
+            )
+
+        if departure and entry and departure < entry:
+            self.add_error(
+                "departure_date_hour",
+                "La fecha y hora de salida no puede ser anterior a la de entrada."
+            )
+
+        return cleaned_data
+    
     def clean_entry_date_hour(self):
         entry = self.cleaned_data.get('entry_date_hour')
         if not entry:
@@ -115,17 +143,6 @@ class EntryEditForm(forms.ModelForm):
             )
         
         return entry
-    
-    def clean_departure_date_hour(self):
-        departure = self.cleaned_data.get('departure_date_hour')
-        entry = self.cleaned_data.get('entry_date_hour')
-
-        if departure and entry and departure < entry:
-            raise forms.ValidationError(
-                "La fecha y hora de salida no puede ser anterior a la de entrada"
-            )
-        
-        return departure
     
     def clean_plate(self):
         plate = self.cleaned_data.get('plate', '').strip()
@@ -152,6 +169,15 @@ class EntryEditForm(forms.ModelForm):
         if self.fields['fee'].choices:
             choices = [(value, label) for value, label in self.fields['fee'].choices if value != '']
             self.fields['fee'].choices = [('', '--- Sin tarifa seleccionada ---')] + choices
+
+        self.fields["entry_date_hour"].error_messages.update({
+            "required": "La fecha y hora de entrada es obligatoria.",
+            "invalid": "Ingresa una fecha y hora válidas."
+        })
+
+        self.fields["departure_date_hour"].error_messages.update({
+            "invalid": "Ingresa una fecha y hora válidas."
+        })
 
 
 class ConfigurationForm(forms.ModelForm):

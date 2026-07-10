@@ -4,6 +4,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.utils.timezone import now, localtime
 
+from payment.services.payment_service import notify_pending_payments
+
 from .forms import LoginForm
 import logging
 from bathrooms.models import BathroomEntry
@@ -18,6 +20,9 @@ def dashboard(request):
     today = localtime(now()).date()
     current_year = today.year
     current_month = today.month
+
+    if request.user.has_perm("parking.view_statistics_entry"):
+        notify_pending_payments(request)
 
     context = {
         "total_daily_income": Entry.objects.today_income(today),

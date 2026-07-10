@@ -7,6 +7,8 @@ from io import BytesIO
 
 import qrcode, base64
 
+from payment.services.payment_service import notify_pending_payments
+
 from .models import  Entry, PlatePolicy, Range
 from .forms import (
     EntryForm, 
@@ -207,6 +209,9 @@ def entry_edit_view(request, pk):
 def search_plate(request):
     """Vista principal: buscar placa y decidir flujo"""
 
+    if request.user.has_perm("parking.view_statistics_entry"):
+        notify_pending_payments(request)
+
     form = PlateSearchForm()
 
     if request.method == 'POST':
@@ -242,6 +247,9 @@ def search_plate(request):
 
 @permission_required('parking.view_entry', raise_exception=True)
 def record(request):
+
+    if request.user.has_perm("parking.view_statistics_entry"):
+        notify_pending_payments(request)
 
     today = localtime(now()).date()
 

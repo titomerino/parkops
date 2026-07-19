@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 from django.utils.timezone import now
 from math import ceil
 from django.db.models import Sum
@@ -176,6 +177,24 @@ class Entry(models.Model):
         null=True,
         blank=True,
         help_text="Monto calculado al momento de registrar la salida"
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="entries_created",
+        verbose_name="Creado por",
+        editable=False,
+    )
+
+    created_at = models.DateTimeField(
+        "Fecha de creación",
+        auto_now_add=True,
+        null=True,
+        blank=True,
+        editable=False
     )
 
     objects = EntryManager()

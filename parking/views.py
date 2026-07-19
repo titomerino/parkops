@@ -61,6 +61,9 @@ def register(request, plate=None):
             entry = form.save(commit=False)
             entry.plate = plate  # aseguras formato consistente
 
+            if not entry.pk: # asigna el usuario solo si es una nueva entrada
+                entry.created_by = request.user
+
             # Si tiene suscripción → no usar tarifa por hora
             if has_subscription:
                 entry.fee = None

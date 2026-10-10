@@ -66,6 +66,33 @@
                         Sesión activa
                     </li>
 
+                    {% if current_parking %}
+                    <li class="px-3 pb-1 small">
+                        <i class="bi bi-p-square-fill text-info me-1"></i>
+                        <strong>{{ current_parking.name }}</strong>
+                    </li>
+                    {% endif %}
+
+                    {% if switchable_parkings|length > 1 %}
+                    <!-- Solo superusuario: cambiar de parqueo -->
+                    <li><hr class="dropdown-divider"></li>
+                    <li class="dropdown-header small text-muted">Cambiar de parqueo</li>
+                    {% for p in switchable_parkings %}
+                    <li>
+                        <form method="post" action="{% url 'switch_parking' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="parking_id" value="{{ p.pk }}">
+                            <input type="hidden" name="next" value="{% url 'dashboard' %}">
+                            <button type="submit"
+                                class="dropdown-item d-flex align-items-center small {% if p.pk == current_parking.pk %}active{% endif %}">
+                                {{ p.name }}
+                                {% if not p.active %}<span class="badge text-bg-secondary ms-2">suspendido</span>{% endif %}
+                            </button>
+                        </form>
+                    </li>
+                    {% endfor %}
+                    {% endif %}
+
                     <li><hr class="dropdown-divider"></li>
 
                     <li>

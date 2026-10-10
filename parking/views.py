@@ -419,11 +419,8 @@ def toggle_subscription_active(request, pk):
 
 ## functions ##
 def save_return_url(request):
-    path = request.get_full_path()
-    print("GUARDANDO:", path)
-    # Evita guardar la misma vista de departure como retorno
-    if not path.startswith("/departure"):
-        request.session['departure_return_url'] = path
+    # Solo se llama desde la búsqueda: al terminar la salida se vuelve aquí
+    request.session['departure_return_url'] = request.get_full_path()
 
 @perm_required('parking.add_entry')
 def imprimir_ticket(request):

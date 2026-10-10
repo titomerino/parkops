@@ -1,5 +1,5 @@
 from django import forms
-from bathrooms.models import BathroomFee, BathroomEntry
+from bathrooms.models import BathroomFee
 
 
 class BathroomFeeForm(forms.ModelForm):

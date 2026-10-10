@@ -95,7 +95,8 @@ class Command(BaseCommand):
         return {
             "normal": fee(
                 "Normal",
-                [(0, "1.00"), (60, "2.00"), (120, "3.00"), (240, "5.00"), (480, "8.00")],
+                # $1 la primera hora, luego +$0.50 cada media hora hasta $6
+                [(0, "1.00")] + [(60 + 30 * i, f"{1.5 + 0.5 * i:.2f}") for i in range(10)],
                 default=True,
                 description="Tarifa estándar por bloques",
             ),
@@ -240,7 +241,7 @@ class Command(BaseCommand):
 
         entries = BathroomEntry.objects.bulk_create(BathroomEntry(fee=f) for f in fees)
         # auto_now_add ignora el valor asignado: se corrige la fecha después
-        for entry, moment in zip(entries, times):
+        for entry, moment in zip(entries, times, strict=True):
             entry.entry_date_hour = moment
         BathroomEntry.objects.bulk_update(entries, ["entry_date_hour"], batch_size=500)
 

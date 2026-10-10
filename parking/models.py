@@ -144,9 +144,6 @@ class EntryManager(models.Manager):
             ["total"] or 0
         )
 
-    def total_active_vehicles(self):
-        return self.get_queryset().active().count()
-    
     def custom_report(self, start_date=None, end_date=None, month_date=None, n_plate=None):
         return self.get_queryset().custom_report(start_date, end_date, month_date, n_plate)
 

@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.timezone import now, localtime
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.decorators import permission_required
+from shell.decorators import perm_required
 from django.db import transaction
 from io import BytesIO
 
@@ -33,7 +33,7 @@ from parking.services.report_service import (
 )
 
 
-@permission_required('parking.add_entry', raise_exception=True)
+@perm_required('parking.add_entry')
 def register(request, plate=None):
     """Vista que nos lleva a la pantalla de registro de entradas"""
 
@@ -95,7 +95,7 @@ def register(request, plate=None):
         'has_subscription': has_subscription
     })
 
-@permission_required('parking.add_entry', raise_exception=True)
+@perm_required('parking.add_entry')
 def departure(request, pk):
     """ Salida del parqueo """
 
@@ -190,7 +190,7 @@ def go_to_departure(request, pk):
 
     return redirect('departure', pk)
 
-@permission_required('parking.change_entry', raise_exception=True)
+@perm_required('parking.change_entry')
 def entry_edit_view(request, pk):
     """ Vista para editar una entrada (solo admin) """
 
@@ -256,7 +256,7 @@ def search_plate(request):
         'form': form
     })
 
-@permission_required('parking.view_entry', raise_exception=True)
+@perm_required('parking.view_entry')
 def record(request):
 
     if request.user.has_perm("parking.view_statistics_entry"):
@@ -310,7 +310,7 @@ def record(request):
         "finished_entries": finished_entries,
     })
 
-@permission_required('parking.view_platepolicy', raise_exception=True)
+@perm_required('parking.view_platepolicy')
 def subscription_plate_list(request):
     """ Página de placas con pago subcripcion """
 
@@ -324,7 +324,7 @@ def subscription_plate_list(request):
         'plates': plates
     })
 
-@permission_required('parking.add_platepolicy', raise_exception=True)
+@perm_required('parking.add_platepolicy')
 def subscription_register(request):
     """ Registrar política de cobro para una placa """
 
@@ -350,7 +350,7 @@ def subscription_register(request):
         'form': form
     })
 
-@permission_required('parking.change_platepolicy', raise_exception=True)
+@perm_required('parking.change_platepolicy')
 def subscription_edit(request, pk):
     """ Editar suscripción / política de cobro de una placa """
 
@@ -383,7 +383,7 @@ def subscription_edit(request, pk):
         'policy': policy
     })
 
-@permission_required('parking.change_platepolicy', raise_exception=True)
+@perm_required('parking.change_platepolicy')
 def toggle_subscription_active(request, pk):
     """ Activa / desactiva una suscripción y recarga la lista """
 
@@ -457,7 +457,7 @@ def imprimir_ticket(request):
 
     return render(request, 'parking/ticket-template.html', context)
 
-@permission_required('parking.view_statistics_entry', raise_exception=True)
+@perm_required('parking.view_statistics_entry')
 def parking_generate_reports_form(request):
 
     context = {
@@ -473,7 +473,7 @@ def parking_generate_reports_form(request):
         context
     )
 
-@permission_required('parking.view_statistics_entry', raise_exception=True)
+@perm_required('parking.view_statistics_entry')
 def report_day(request):
 
     form = ReportFilterByDayForm(request.GET)
@@ -508,7 +508,7 @@ def report_day(request):
             messages.error(request, "Formato no soportado para el reporte")
             return redirect("parking_reports")
     
-@permission_required('parking.view_statistics_entry', raise_exception=True)
+@perm_required('parking.view_statistics_entry')
 def report_month(request):
     
     form = ReportFilterByMonthForm(request.GET)
@@ -543,7 +543,7 @@ def report_month(request):
             messages.error(request, "Formato no soportado para el reporte")
             return redirect("parking_reports")
 
-@permission_required('parking.view_statistics_entry', raise_exception=True)
+@perm_required('parking.view_statistics_entry')
 def report_period(request):
     
     form = ReportFilterByPeriodForm(request.GET)
@@ -580,7 +580,7 @@ def report_period(request):
             messages.error(request, "Formato no soportado para el reporte")
             return redirect("parking_reports")
 
-@permission_required('parking.view_statistics_entry', raise_exception=True)
+@perm_required('parking.view_statistics_entry')
 def report_plate(request):
 
     form = ReportFilterByPlateForm(request.GET)

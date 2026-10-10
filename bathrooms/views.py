@@ -3,13 +3,13 @@ from django.contrib.auth.decorators import login_required
 from django.utils.timezone import now, localtime
 from django.shortcuts import redirect
 from django.contrib import messages
-from django.contrib.auth.decorators import permission_required
+from shell.decorators import perm_required
 
 from .models import BathroomFee, BathroomEntry
 from .forms import BathroomFeeForm
 
 
-@permission_required('bathrooms.view_bathroomfee', raise_exception=True)
+@perm_required('bathrooms.view_bathroomfee')
 def fee_list_view(request):
     """ Página de listado de tarifas de baño """
 
@@ -19,7 +19,7 @@ def fee_list_view(request):
         'fees': fees
     })
 
-@permission_required('bathrooms.view_bathroomentry', raise_exception=True)
+@perm_required('bathrooms.view_bathroomentry')
 def entry_bathrooms_view(request):
     """ Página de entradas al baño del dia """
 
@@ -37,7 +37,7 @@ def entry_bathrooms_view(request):
         'fees': fees
     })
 
-@permission_required('bathrooms.add_bathroomentry', raise_exception=True)
+@perm_required('bathrooms.add_bathroomentry')
 def entry_bathroom_register_view(request, fee_id):
     """ Vista para registrar una entrada de baño """
     fee = BathroomFee.objects.get(id=fee_id)
@@ -54,7 +54,7 @@ def entry_bathroom_register_view(request, fee_id):
 
     return redirect('bathroom_entries_list')
 
-@permission_required('bathrooms.add_bathroomfee', raise_exception=True)
+@perm_required('bathrooms.add_bathroomfee')
 def fee_register_view(request):
     """ Vista para registrar una tarifa de baño """
 
@@ -74,7 +74,7 @@ def fee_register_view(request):
         'form': form,
     })
 
-@permission_required('bathrooms.change_bathroomfee', raise_exception=True)
+@perm_required('bathrooms.change_bathroomfee')
 def fee_edit_view(request, fee_id):
     """ Vista para editar una tarifa de baño """
     bathroom_fee = BathroomFee.objects.get(id=fee_id)
@@ -100,7 +100,7 @@ def fee_edit_view(request, fee_id):
         'bathroom_fee': bathroom_fee
     })
 
-@permission_required('bathrooms.change_bathroomfee', raise_exception=True)
+@perm_required('bathrooms.change_bathroomfee')
 def toggle_fee_state_view(request, fee_id):
     """ Vista para activar/desactivar una tarifa de baño """
     bathroom_fee = BathroomFee.objects.get(id=fee_id)

@@ -77,6 +77,9 @@ TEMPLATES = [
     },
 ]
 
+# AUTH
+LOGIN_URL = 'login'
+
 # WSGI
 WSGI_APPLICATION = 'parkopsbackend.wsgi.application'
 

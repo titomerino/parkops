@@ -5,8 +5,10 @@ from django.contrib.auth.decorators import login_required
 from shell.decorators import perm_required
 from shell.utils import safe_redirect_url
 from django.db import transaction
-from django.http import Http404
+from django.http import Http404, JsonResponse
+from django.views.decorators.http import require_POST
 from io import BytesIO
+import json
 
 import qrcode, base64
 
@@ -25,9 +27,10 @@ from .forms import (
     ReportFilterByPlateForm
 )
 from parking.utils import (
-    minutes_to_hours_and_minutes,
+    minutes_to_hours_and_minutes, format_plate,
     render_pdf_response, export_report_excel
 )
+from parking.services.voice_plate import interpret
 from parking.services.report_service import (
     generate_day_report, generate_month_report,
     generate_period_report,
@@ -636,3 +639,32 @@ def report_plate(request):
         case _:
             messages.error(request, "Formato no soportado para el reporte")
             return redirect("parking_reports")
+
+
+@require_POST
+@perm_required('parking.add_entry')
+def interpret_voice_plate(request):
+    """
+    Recibe las alternativas del dictado por voz y devuelve la placa
+    interpretada, si entrará o saldrá, y placas conocidas parecidas.
+    """
+    try:
+        alternatives = json.loads(request.body).get("alternatives", [])
+    except (ValueError, AttributeError):
+        return JsonResponse({"ok": False, "error": "Solicitud inválida"}, status=400)
+
+    if not isinstance(alternatives, list):
+        return JsonResponse({"ok": False, "error": "Solicitud inválida"}, status=400)
+
+    alternatives = [str(a)[:200] for a in alternatives[:10]]
+    result = interpret(alternatives)
+
+    if result["ok"]:
+        result["formatted"] = format_plate(result["plate"])
+        entry_date = result.pop("entry_date_hour")
+        result["entry_time"] = localtime(entry_date).strftime("%I:%M %p") if entry_date else None
+
+        for candidate in result["candidates"]:
+            candidate["formatted"] = format_plate(candidate["plate"])
+
+    return JsonResponse(result)

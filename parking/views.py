@@ -2,7 +2,10 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.timezone import now, localtime
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.decorators import permission_required
+from shell.decorators import perm_required
+from shell.utils import safe_redirect_url
+from django.db import transaction
+from django.http import Http404
 from io import BytesIO
 
 import qrcode, base64
@@ -32,7 +35,7 @@ from parking.services.report_service import (
 )
 
 
-@permission_required('parking.add_entry', raise_exception=True)
+@perm_required('parking.add_entry')
 def register(request, plate=None):
     """Vista que nos lleva a la pantalla de registro de entradas"""
 
@@ -94,7 +97,7 @@ def register(request, plate=None):
         'has_subscription': has_subscription
     })
 
-@permission_required('parking.add_entry', raise_exception=True)
+@perm_required('parking.add_entry')
 def departure(request, pk):
     """ Salida del parqueo """
 
@@ -102,6 +105,9 @@ def departure(request, pk):
         Entry.objects.select_related("fee"),
         pk=pk
     )
+
+    if not entry.state:
+        return _departure_already_registered(request, entry)
 
     plate = entry.plate.strip().upper()
 
@@ -119,24 +125,23 @@ def departure(request, pk):
 
     if request.method == "POST":
 
-        entry.departure_date_hour = now()
-        entry.state = False
+        with transaction.atomic():
+            # Bloquea la fila: un doble envío no registra dos salidas
+            entry = Entry.objects.select_for_update().get(pk=pk)
 
-        # 🔒 Congelar valores históricos
-        entry.final_minutes = total_minutes
-        entry.final_amount = amount
+            if not entry.state:
+                return _departure_already_registered(request, entry)
 
-        # Si es mensual o diario, ya no depende de fee
-        if billing_type in ["MONTHLY", "DAILY"]:
-            entry.fee_id = None
+            entry.departure_date_hour = now()
 
-        entry.save(update_fields=[
-            "departure_date_hour",
-            "state",
-            "final_minutes",
-            "final_amount",
-            "fee"
-        ])
+            # Si es mensual o diario, ya no depende de fee
+            if billing_type in ["MONTHLY", "DAILY"]:
+                entry.fee_id = None
+
+            # save() congela final_minutes y final_amount al cambiar la salida
+            entry.save()
+
+        amount = entry.final_amount
 
         if billing_type == "MONTHLY":
             msg = f"Salida registrada para {entry.plate} (Mensual — $0.00)"
@@ -147,7 +152,10 @@ def departure(request, pk):
 
         messages.success(request, msg)
 
-        return_url = request.session.pop("departure_return_url", None)
+        return_url = safe_redirect_url(
+            request,
+            request.session.pop("departure_return_url", None)
+        )
         return redirect(return_url or "search_plate")
 
     form = EntryExitForm(initial={
@@ -169,17 +177,25 @@ def departure(request, pk):
         "is_daily": billing_type == "DAILY",
     })
 
+def _departure_already_registered(request, entry):
+    departure = localtime(entry.departure_date_hour).strftime("%d/%m/%Y %I:%M %p")
+    messages.warning(
+        request,
+        f"La entrada de {entry.plate} ya tiene salida registrada ({departure})."
+    )
+    return redirect("search_plate")
+
 @login_required(login_url='login')
 def go_to_departure(request, pk):
     # Página REAL de donde vino el usuario
-    return_url = request.META.get('HTTP_REFERER')
+    return_url = safe_redirect_url(request, request.META.get('HTTP_REFERER'))
 
     if return_url:
         request.session['departure_return_url'] = return_url
 
     return redirect('departure', pk)
 
-@permission_required('parking.change_entry', raise_exception=True)
+@perm_required('parking.change_entry')
 def entry_edit_view(request, pk):
     """ Vista para editar una entrada (solo admin) """
 
@@ -245,7 +261,7 @@ def search_plate(request):
         'form': form
     })
 
-@permission_required('parking.view_entry', raise_exception=True)
+@perm_required('parking.view_entry')
 def record(request):
 
     if request.user.has_perm("parking.view_statistics_entry"):
@@ -253,30 +269,31 @@ def record(request):
 
     today = localtime(now()).date()
 
-    entries = (
+    entries = list(
         Entry.objects
         .entries_today_and_active(today)
         .select_related("fee")
+        .prefetch_related("fee__ranges")
         .only(
             "plate",
             "entry_date_hour",
             "departure_date_hour",
             "fee",
-            "state"
+            "state",
+            "final_minutes",
+            "final_amount"
         )
         .order_by("-state", "-entry_date_hour")
     )
 
     # Contadores para los chips
-    total_entries = entries.count()
-    active_entries = entries.filter(state=True).count()
-    finished_entries = entries.filter(state=False).count()
-
-    plates = entries.values_list("plate", flat=True)
+    total_entries = len(entries)
+    active_entries = sum(1 for e in entries if e.state)
+    finished_entries = total_entries - active_entries
 
     policies = (
         PlatePolicy.objects
-        .filter(plate__in=plates, active=True)
+        .filter(plate__in={e.plate for e in entries}, active=True)
         .only("plate", "billing_type", "amount")
     )
 
@@ -287,7 +304,12 @@ def record(request):
 
         e.billing_type = policy.billing_type if policy else "HOURLY"
 
-        minutes, amount = e.calculate_amount(policy=policy)
+        if e.state or e.final_minutes is None:
+            minutes, amount = e.calculate_amount(policy=policy)
+        else:
+            # Salida registrada: se muestra lo que se cobró, no un recálculo
+            minutes, amount = e.final_minutes, e.final_amount
+
         e.hours, e.minutes = minutes_to_hours_and_minutes(minutes)
         e.amount = amount
 
@@ -299,7 +321,7 @@ def record(request):
         "finished_entries": finished_entries,
     })
 
-@permission_required('parking.view_platepolicy', raise_exception=True)
+@perm_required('parking.view_platepolicy')
 def subscription_plate_list(request):
     """ Página de placas con pago subcripcion """
 
@@ -313,7 +335,7 @@ def subscription_plate_list(request):
         'plates': plates
     })
 
-@permission_required('parking.add_platepolicy', raise_exception=True)
+@perm_required('parking.add_platepolicy')
 def subscription_register(request):
     """ Registrar política de cobro para una placa """
 
@@ -339,7 +361,7 @@ def subscription_register(request):
         'form': form
     })
 
-@permission_required('parking.change_platepolicy', raise_exception=True)
+@perm_required('parking.change_platepolicy')
 def subscription_edit(request, pk):
     """ Editar suscripción / política de cobro de una placa """
 
@@ -372,7 +394,7 @@ def subscription_edit(request, pk):
         'policy': policy
     })
 
-@permission_required('parking.change_platepolicy', raise_exception=True)
+@perm_required('parking.change_platepolicy')
 def toggle_subscription_active(request, pk):
     """ Activa / desactiva una suscripción y recarga la lista """
 
@@ -397,16 +419,17 @@ def toggle_subscription_active(request, pk):
 
 ## functions ##
 def save_return_url(request):
-    path = request.get_full_path()
-    print("GUARDANDO:", path)
-    # Evita guardar la misma vista de departure como retorno
-    if not path.startswith("/departure"):
-        request.session['departure_return_url'] = path
+    # Solo se llama desde la búsqueda: al terminar la salida se vuelve aquí
+    request.session['departure_return_url'] = request.get_full_path()
 
-@login_required(login_url='login')
+@perm_required('parking.add_entry')
 def imprimir_ticket(request):
-    entry_id = request.GET.get('entry_id')
-    entry = Entry.objects.get(id=entry_id)
+    entry_id = request.GET.get('entry_id', '')
+
+    if not entry_id.isdigit():
+        raise Http404("Ticket no encontrado")
+
+    entry = get_object_or_404(Entry, pk=entry_id)
 
     qr_data = f"entry_id={entry.id}"
 
@@ -446,7 +469,7 @@ def imprimir_ticket(request):
 
     return render(request, 'parking/ticket-template.html', context)
 
-@permission_required('parking.view_statistics_entry', raise_exception=True)
+@perm_required('parking.view_statistics_entry')
 def parking_generate_reports_form(request):
 
     context = {
@@ -462,7 +485,7 @@ def parking_generate_reports_form(request):
         context
     )
 
-@permission_required('parking.view_statistics_entry', raise_exception=True)
+@perm_required('parking.view_statistics_entry')
 def report_day(request):
 
     form = ReportFilterByDayForm(request.GET)
@@ -497,7 +520,7 @@ def report_day(request):
             messages.error(request, "Formato no soportado para el reporte")
             return redirect("parking_reports")
     
-@permission_required('parking.view_statistics_entry', raise_exception=True)
+@perm_required('parking.view_statistics_entry')
 def report_month(request):
     
     form = ReportFilterByMonthForm(request.GET)
@@ -532,7 +555,7 @@ def report_month(request):
             messages.error(request, "Formato no soportado para el reporte")
             return redirect("parking_reports")
 
-@permission_required('parking.view_statistics_entry', raise_exception=True)
+@perm_required('parking.view_statistics_entry')
 def report_period(request):
     
     form = ReportFilterByPeriodForm(request.GET)
@@ -569,7 +592,7 @@ def report_period(request):
             messages.error(request, "Formato no soportado para el reporte")
             return redirect("parking_reports")
 
-@permission_required('parking.view_statistics_entry', raise_exception=True)
+@perm_required('parking.view_statistics_entry')
 def report_plate(request):
 
     form = ReportFilterByPlateForm(request.GET)

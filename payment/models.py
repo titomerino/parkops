@@ -1,5 +1,5 @@
 from django.db import models
-from django.utils.timezone import now
+from django.utils.timezone import localdate, now
 
 
 class Subscription(models.Model):
@@ -70,7 +70,7 @@ class Subscription(models.Model):
         Si ya existe no hace nada.
         """
 
-        today = now().date()
+        today = localdate()
 
         payment, created = self.payments.get_or_create(
             billing_date__year=today.year,
@@ -87,7 +87,7 @@ class Subscription(models.Model):
 class Payment(models.Model):
     subscription = models.ForeignKey(
         Subscription,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='payments'
     )
     billing_date = models.DateField("Período de facturación")
@@ -120,7 +120,10 @@ class Payment(models.Model):
     def save(self, *args, **kwargs):
         """ Si el estado de pago cambia, actualiza la fecha de pago. """
 
-        self.amount = self.subscription.price
+        # El monto se fija al crear el pago: un cambio de precio posterior
+        # no debe alterar pagos ya generados
+        if self._state.adding and self.amount is None:
+            self.amount = self.subscription.price
 
         if self.pk:
 

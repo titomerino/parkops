@@ -1,15 +1,15 @@
-from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, get_object_or_404
 from django.utils.timezone import now, localtime
 from django.shortcuts import redirect
 from django.contrib import messages
-from django.contrib.auth.decorators import permission_required
+from django.views.decorators.http import require_POST
+from shell.decorators import perm_required
 
 from .models import BathroomFee, BathroomEntry
 from .forms import BathroomFeeForm
 
 
-@permission_required('bathrooms.view_bathroomfee', raise_exception=True)
+@perm_required('bathrooms.view_bathroomfee')
 def fee_list_view(request):
     """ Página de listado de tarifas de baño """
 
@@ -19,7 +19,7 @@ def fee_list_view(request):
         'fees': fees
     })
 
-@permission_required('bathrooms.view_bathroomentry', raise_exception=True)
+@perm_required('bathrooms.view_bathroomentry')
 def entry_bathrooms_view(request):
     """ Página de entradas al baño del dia """
 
@@ -27,7 +27,7 @@ def entry_bathrooms_view(request):
 
     entries = BathroomEntry.objects.filter(
         entry_date_hour__date=today
-    ).order_by('-entry_date_hour')
+    ).select_related('fee').order_by('-entry_date_hour')
 
     fees = BathroomFee.objects.all().filter(state=True)
 
@@ -37,10 +37,12 @@ def entry_bathrooms_view(request):
         'fees': fees
     })
 
-@permission_required('bathrooms.add_bathroomentry', raise_exception=True)
+@require_POST
+@perm_required('bathrooms.add_bathroomentry')
 def entry_bathroom_register_view(request, fee_id):
     """ Vista para registrar una entrada de baño """
-    fee = BathroomFee.objects.get(id=fee_id)
+    # Solo tarifas activas: las inactivas no se muestran para cobrar
+    fee = get_object_or_404(BathroomFee, pk=fee_id, state=True)
 
     # Crear entrada de baño
     bathroom_entry = BathroomEntry.objects.create(
@@ -54,7 +56,7 @@ def entry_bathroom_register_view(request, fee_id):
 
     return redirect('bathroom_entries_list')
 
-@permission_required('bathrooms.add_bathroomfee', raise_exception=True)
+@perm_required('bathrooms.add_bathroomfee')
 def fee_register_view(request):
     """ Vista para registrar una tarifa de baño """
 
@@ -74,10 +76,10 @@ def fee_register_view(request):
         'form': form,
     })
 
-@permission_required('bathrooms.change_bathroomfee', raise_exception=True)
+@perm_required('bathrooms.change_bathroomfee')
 def fee_edit_view(request, fee_id):
     """ Vista para editar una tarifa de baño """
-    bathroom_fee = BathroomFee.objects.get(id=fee_id)
+    bathroom_fee = get_object_or_404(BathroomFee, pk=fee_id)
 
     if request.method == 'POST':
         form = BathroomFeeForm(request.POST, instance=bathroom_fee)
@@ -100,10 +102,11 @@ def fee_edit_view(request, fee_id):
         'bathroom_fee': bathroom_fee
     })
 
-@permission_required('bathrooms.change_bathroomfee', raise_exception=True)
+@require_POST
+@perm_required('bathrooms.change_bathroomfee')
 def toggle_fee_state_view(request, fee_id):
     """ Vista para activar/desactivar una tarifa de baño """
-    bathroom_fee = BathroomFee.objects.get(id=fee_id)
+    bathroom_fee = get_object_or_404(BathroomFee, pk=fee_id)
     bathroom_fee.state = not bathroom_fee.state
     bathroom_fee.save()
     state_text = "activada" if bathroom_fee.state else "desactivada"

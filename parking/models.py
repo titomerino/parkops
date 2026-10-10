@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.utils.timezone import now
 from math import ceil
 from django.db.models import Sum
@@ -31,7 +31,8 @@ class Fee(models.Model):
     def calculate_fee(self, minute):
         amount = 0
 
-        for r in Range.objects.filter(fee=self).order_by('start_minute'):
+        # self.ranges.all() reutiliza prefetch_related("fee__ranges") si existe
+        for r in sorted(self.ranges.all(), key=lambda r: r.start_minute):
             if minute >= r.start_minute:
                 amount = r.amount
             else:
@@ -106,7 +107,8 @@ class EntryQuerySet(models.QuerySet):
         if n_plate:
             queryset = queryset.filter(plate=n_plate)
 
-        return queryset
+        # Los reportes muestran la tarifa y pueden recalcular montos
+        return queryset.select_related("fee").prefetch_related("fee__ranges")
 
 
 class EntryManager(models.Manager):
@@ -142,9 +144,6 @@ class EntryManager(models.Manager):
             ["total"] or 0
         )
 
-    def total_active_vehicles(self):
-        return self.get_queryset().active().count()
-    
     def custom_report(self, start_date=None, end_date=None, month_date=None, n_plate=None):
         return self.get_queryset().custom_report(start_date, end_date, month_date, n_plate)
 
@@ -156,7 +155,7 @@ class Entry(models.Model):
     departure_date_hour = models.DateTimeField("Fecha y hora de salida", null=True, blank=True)
     fee = models.ForeignKey(
         Fee,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         blank=True,
         null=True,
         related_name='entry_fee'
@@ -185,6 +184,13 @@ class Entry(models.Model):
         verbose_name_plural = "Entradas"
         permissions = [
             ("view_statistics_entry", "Puede ver estadísticas de entradas"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["plate"],
+                condition=Q(state=True),
+                name="unique_active_entry_per_plate",
+            ),
         ]
 
     def __str__(self):
@@ -244,7 +250,16 @@ class Entry(models.Model):
                 self.final_amount = None
 
         # Guardar cambios
-        super().save(*args, **kwargs)
+        try:
+            with transaction.atomic():
+                super().save(*args, **kwargs)
+        except IntegrityError as e:
+            # Dos registros simultáneos de la misma placa
+            if "unique_active_entry_per_plate" in str(e):
+                raise ValueError(
+                    f"Ya existe una entrada activa para esta placa: {self.plate}"
+                ) from e
+            raise
 
     def calculate_amount(self, policy=None):
         """

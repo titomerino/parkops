@@ -1,5 +1,5 @@
 from django.db import models
-from django.utils.timezone import now
+from django.utils.timezone import localdate, now
 
 
 class Subscription(models.Model):
@@ -70,7 +70,7 @@ class Subscription(models.Model):
         Si ya existe no hace nada.
         """
 
-        today = now().date()
+        today = localdate()
 
         payment, created = self.payments.get_or_create(
             billing_date__year=today.year,

@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import pytest
 from django.db.models import ProtectedError
+from django.utils.timezone import localtime
 
 from parking.models import Entry
 
@@ -68,3 +69,72 @@ class TestDeparture:
         admin_client.post(f"/parking/salida/{entry.pk}")
         entry.refresh_from_db()
         assert entry.final_amount == 0
+
+
+@pytest.mark.django_db
+class TestReports:
+    def summary(self, report, title):
+        return next(s for s in report["summary"] if s["title"] == title)
+
+    def test_mensualidad_se_suma_una_vez_por_placa(self, make_entry, monthly_policy):
+        from parking.services.report_service import generate_month_report
+        from parking.models import PlatePolicy
+
+        PlatePolicy.objects.create(plate="P100002", billing_type="MONTHLY", amount=Decimal("40.00"))
+        for days in range(1, 6):
+            make_entry(plate=monthly_policy.plate, minutes_ago=60 * 24 * days, duration=480, fee=None)
+
+        report = generate_month_report(now_local())
+
+        assert self.summary(report, "Suscripción mensual")["income"] == Decimal("80.00")
+
+    def test_mensualidad_sin_monto_no_rompe_el_reporte(self, make_entry):
+        from parking.services.report_service import generate_month_report
+        from parking.models import PlatePolicy
+
+        PlatePolicy.objects.create(plate="P100003", billing_type="MONTHLY", amount=None)
+        make_entry(plate="P100003", duration=60, fee=None)
+
+        report = generate_month_report(now_local())
+
+        assert self.summary(report, "Suscripción mensual")["income"] == 0
+
+    def test_entrada_legacy_se_calcula_al_vuelo_sin_guardarse(self, make_entry):
+        from parking.services.report_service import generate_day_report, generate_period_report
+
+        entry = make_entry(minutes_ago=200, duration=90)
+        Entry.objects.filter(pk=entry.pk).update(final_minutes=None, final_amount=None)
+        day = localtime(entry.departure_date_hour).date()
+
+        assert generate_day_report(day)["total_income"] == Decimal("2.00")
+        assert generate_period_report(day, day)["total_income"] == Decimal("2.00")
+
+        entry.refresh_from_db()
+        assert entry.final_amount is None
+
+    def test_suscripcion_por_hora_se_reporta_como_tarifa(self, admin_client, make_entry):
+        from parking.models import PlatePolicy
+
+        PlatePolicy.objects.create(plate="P300001", billing_type="HOURLY", amount=Decimal("1.00"))
+        entry = make_entry(plate="P300001", minutes_ago=200, duration=90)
+        day = localtime(entry.departure_date_hour).date().isoformat()
+
+        excel = admin_client.get(f"/parking/reporte/hoy/?date={day}&format=xlsx")
+        plate = admin_client.get(
+            f"/parking/reporte/placa/?plate=P300001&start_date={day}&end_date={day}&format=xlsx"
+        )
+
+        assert excel.status_code == 200
+        assert plate.status_code == 200
+
+    def test_entrada_activa_no_suma_ingresos(self, make_entry):
+        from parking.services.report_service import generate_day_report
+
+        make_entry(minutes_ago=30)
+
+        assert generate_day_report(now_local())["total_income"] == 0
+
+
+def now_local():
+    from django.utils.timezone import localdate
+    return localdate()

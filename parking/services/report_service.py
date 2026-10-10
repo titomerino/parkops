@@ -1,4 +1,5 @@
 from collections import defaultdict
+from decimal import Decimal
 from django.utils.timezone import localtime, now
 
 from parking.models import Entry, PlatePolicy
@@ -50,15 +51,33 @@ def _build_summary(stats):
         },
     ]
 
-def _prepare_entry(entry):
+def _entry_type(policy):
+    """Tipo de cobro; una política por hora se cobra con la tarifa normal"""
 
-    if not entry.final_minutes:
-        entry.final_minutes, _ = entry.calculate_amount(policy=entry.policy)
-        entry.final_amount = 0
+    if policy and policy.billing_type == "DAILY":
+        return "Suscripción - DIARIO"
+
+    if policy and policy.billing_type == "MONTHLY":
+        return "Suscripción - MENSUAL"
+
+    return "Tarifa"
+
+def _prepare_entry(entry, policy):
+
+    # Entradas sin montos congelados (anteriores a la migración 0011)
+    # se calculan al vuelo; no se guardan.
+    if entry.final_minutes is None:
+        entry.final_minutes, amount = entry.calculate_amount(policy=policy)
+
+        # Entrada aún activa: todavía no hay cobro
+        entry.final_amount = (
+            Decimal(str(amount)) if entry.departure_date_hour else Decimal("0")
+        )
 
     hours, mins = minutes_to_hours_and_minutes(entry.final_minutes)
 
     entry.duration = f"{hours:02}:{mins:02}"
+    entry.type = _entry_type(policy)
 
     return entry
 
@@ -74,29 +93,21 @@ def generate_day_report(report_date):
 
         policy = policy_map.get(entry.plate)
 
-        entry.policy = policy
-        _prepare_entry(entry)
+        _prepare_entry(entry, policy)
 
         stats["total_income"] += entry.final_amount
 
-        if policy:
+        if entry.type == "Suscripción - DIARIO":
 
-            if policy.billing_type == "DAILY":
+            stats["daily_count"] += 1
+            stats["total_income_daily"] += entry.final_amount
 
-                entry.type = "Suscripción - DIARIO"
+        elif entry.type == "Suscripción - MENSUAL":
 
-                stats["daily_count"] += 1
-                stats["total_income_daily"] += entry.final_amount
-
-            elif policy.billing_type == "MONTHLY":
-
-                entry.type = "Suscripción - MENSUAL"
-
-                stats["monthly_count"] += 1
+            stats["monthly_count"] += 1
+            stats["total_income_monthly"] += entry.final_amount
 
         else:
-
-            entry.type = "Tarifa"
 
             stats["normal_count"] += 1
             stats["total_income_normal"] += entry.final_amount
@@ -122,35 +133,31 @@ def generate_month_report(date):
 
         policy = policy_map.get(entry.plate)
 
-        entry.policy = policy
-        _prepare_entry(entry)
+        _prepare_entry(entry, policy)
 
         stats["total_income"] += entry.final_amount
 
-        if policy:
+        if entry.type == "Suscripción - DIARIO":
 
-            if policy.billing_type == "DAILY":
+            stats["daily_count"] += 1
+            stats["total_income_daily"] += entry.final_amount
 
-                entry.type = "Suscripción - DIARIO"
+        elif entry.type == "Suscripción - MENSUAL":
 
-                stats["daily_count"] += 1
-                stats["total_income_daily"] += entry.final_amount
-
-            elif policy.billing_type == "MONTHLY":
-
-                entry.type = "Suscripción - MENSUAL"
-
-                stats["monthly_count"] += 1
-                stats["total_income_monthly"] += policy.amount
-                stats["total_income"] += policy.amount
+            stats["monthly_count"] += 1
+            stats["total_income_monthly"] += entry.final_amount
 
         else:
-
-            entry.type = "Tarifa"
 
             stats["normal_count"] += 1
             stats["total_income_normal"] += entry.final_amount
 
+    # Cada mensualidad activa se suma una sola vez (igual que el dashboard),
+    # no una vez por cada entrada de la placa
+    monthly_income = PlatePolicy.objects.month_income()
+
+    stats["total_income_monthly"] += monthly_income
+    stats["total_income"] += monthly_income
 
     return {
         "date": date.strftime('%m/%Y'),
@@ -172,29 +179,21 @@ def generate_period_report(start_date, end_date):
 
         policy = policy_map.get(entry.plate)
 
-        _prepare_entry(entry)
+        _prepare_entry(entry, policy)
 
         stats["total_income"] += entry.final_amount
 
-        if policy:
+        if entry.type == "Suscripción - DIARIO":
 
-            if policy.billing_type == "DAILY":
+            stats["daily_count"] += 1
+            stats["total_income_daily"] += entry.final_amount
 
-                entry.type = "Suscripción - DIARIO"
+        elif entry.type == "Suscripción - MENSUAL":
 
-                stats["daily_count"] += 1
-                stats["total_income_daily"] += entry.final_amount
-
-            elif policy.billing_type == "MONTHLY":
-
-                entry.type = "Suscripción - MENSUAL"
-
-                stats["monthly_count"] += 1
-                stats["total_income_monthly"] += entry.final_amount
+            stats["monthly_count"] += 1
+            stats["total_income_monthly"] += entry.final_amount
 
         else:
-
-            entry.type = "Tarifa"
 
             stats["normal_count"] += 1
             stats["total_income_normal"] += entry.final_amount
@@ -221,20 +220,18 @@ def generate_plate_report(n_plate, start_date, end_date):
             case "DAILY":
                 billing_type = "Suscripción - DIARIO" + (f" - ${policy.amount}")
             case "MONTHLY":
-                billing_type = "Suscripción - MENSUAL" + (f" - ${policy.amount}")
+                billing_type = "Suscripción - MENSUAL" + (f" - ${policy.amount or 0}")
             case _:
-                return
+                billing_type = "Suscripción - POR HORA (tarifa normal)"
     else:
         billing_type = "Sin suscripción"
 
     for entry in entries:
 
-        _prepare_entry(entry)
+        _prepare_entry(entry, policy)
 
-        if policy:
+        if entry.type != "Tarifa":
             entry.type = billing_type
-        else:
-            entry.type = "Tarifa"
 
         total_income += entry.final_amount
 

@@ -44,5 +44,11 @@ else:
     print("⚠️ Variables de superuser no definidas, saltando...")
 EOF
 
-echo "🚀 Iniciando Gunicorn..."
-exec gunicorn parkopsbackend.wsgi:application --bind 0.0.0.0:8000
+# Un solo worker (valor por defecto) atiende una petición a la vez: un PDF o
+# reporte lento bloqueaba al resto de usuarios. Ajustable desde Railway.
+echo "🚀 Iniciando Gunicorn (workers=${WEB_CONCURRENCY:-3}, timeout=${GUNICORN_TIMEOUT:-60}s)..."
+exec gunicorn parkopsbackend.wsgi:application \
+  --bind 0.0.0.0:8000 \
+  --workers "${WEB_CONCURRENCY:-3}" \
+  --timeout "${GUNICORN_TIMEOUT:-60}" \
+  --access-logfile -

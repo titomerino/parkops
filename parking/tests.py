@@ -189,3 +189,24 @@ class TestTicket:
     def test_ticket_requiere_permiso(self, client, django_user_model, make_entry):
         client.force_login(django_user_model.objects.create_user("sin_permiso", password="x"))
         assert client.get(f"/parking/ticket/?entry_id={make_entry().pk}").status_code == 403
+
+
+class TestPdfStaticFiles:
+    def test_css_se_lee_de_disco_sin_peticion_http(self):
+        from pathlib import Path
+        from django.conf import settings
+        from parking.utils import StaticFilesURLFetcher
+
+        fetcher = StaticFilesURLFetcher("http://servidor-inexistente.invalid/")
+        response = fetcher.fetch("http://servidor-inexistente.invalid/static/css/styles.css")
+        body = response.read()
+
+        assert body == (Path(settings.BASE_DIR) / "static/css/styles.css").read_bytes()
+        assert response.headers.get_content_type() == "text/css"
+
+    def test_estatico_inexistente_falla_sin_ir_a_la_red(self):
+        from parking.utils import StaticFilesURLFetcher
+
+        fetcher = StaticFilesURLFetcher("http://servidor-inexistente.invalid/")
+        with pytest.raises(FileNotFoundError):
+            fetcher.fetch("http://servidor-inexistente.invalid/static/no-existe.css")

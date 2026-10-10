@@ -263,3 +263,107 @@ def test_activar_y_desactivar_suscripcion(admin_client, monthly_policy):
     admin_client.post(url)
     monthly_policy.refresh_from_db()
     assert monthly_policy.active is True
+
+
+class TestDictadoPlaca:
+    @pytest.mark.parametrize("dicho,placa", [
+        # Palabras agrupadas como se lee la placa
+        ("pe ciento setenta y uno setecientos treinta y siete", "P171737"),
+        ("pe cuarenta ochocientos siete", "P40807"),
+        ("eme novecientos once ciento dieciséis", "M911116"),
+        ("ce veintidós cero cero cinco", "C22005"),
+        # Dígito por dígito
+        ("pe uno siete uno siete tres siete", "P171737"),
+        ("pe cero cero uno", "P001"),
+        # El navegador ya entrega dígitos o letras
+        ("P 171 737", "P171737"),
+        ("p171737", "P171737"),
+        ("P-40807", "P40807"),
+        ("pe 171737", "P171737"),
+        # Placas alfanuméricas y prefijos de dos letras
+        ("pe ocho e noventa y ocho", "P8E98"),
+        ("a be cien", "AB100"),
+        ("a b 100", "AB100"),
+        # Relleno, acentos y mayúsculas
+        ("la placa es pe cuatro cero ocho cero siete", "P40807"),
+        ("Placa número PE 40 807", "P40807"),
+        ("pe cuatro mil ochocientos siete", "P4807"),
+    ])
+    def test_interpreta_lo_dicho(self, dicho, placa):
+        from parking.services.voice_plate import parse_plate
+        assert parse_plate(dicho) == placa
+
+    @pytest.mark.parametrize("dicho", ["", "hola", "ciento setenta", "pe"])
+    def test_texto_sin_placa_valida(self, dicho):
+        from parking.services.voice_plate import is_valid_plate, parse_plate
+        assert not is_valid_plate(parse_plate(dicho))
+
+
+@pytest.mark.django_db
+class TestDictadoEndpoint:
+    url = "/parking/busqueda/voz/"
+
+    def post(self, client, alternatives):
+        import json
+        return client.post(self.url, json.dumps({"alternatives": alternatives}), content_type="application/json")
+
+    def test_placa_nueva_registrara_entrada(self, admin_client, fee):
+        data = self.post(admin_client, ["pe ciento setenta y uno setecientos treinta y siete"]).json()
+
+        assert data["ok"] is True
+        assert data["plate"] == "P171737"
+        assert data["formatted"] == "P 171 737"
+        assert data["action"] == "entrada"
+
+    def test_placa_adentro_registrara_salida(self, admin_client, make_entry):
+        make_entry(plate="P171737")
+        data = self.post(admin_client, ["P 171 737"]).json()
+
+        assert data["action"] == "salida"
+        assert data["entry_time"]
+
+    def test_sugiere_placa_parecida_que_esta_adentro(self, admin_client, make_entry):
+        make_entry(plate="P171737")
+        data = self.post(admin_client, ["P 171 787"]).json()
+
+        assert data["plate"] == "P171787"
+        assert data["candidates"][0]["plate"] == "P171737"
+        assert data["candidates"][0]["active"] is True
+
+    def test_prefiere_la_alternativa_que_es_placa_conocida(self, admin_client, make_entry):
+        make_entry(plate="P171737")
+        data = self.post(admin_client, ["pe ciento setenta y uno setecientos ochenta y siete", "P 171 737"]).json()
+
+        assert data["plate"] == "P171737"
+        assert data["action"] == "salida"
+
+    def test_texto_sin_placa(self, admin_client):
+        data = self.post(admin_client, ["buenos días"]).json()
+        assert data["ok"] is False
+
+    @pytest.mark.parametrize("body", ["no es json", '{"alternatives": "texto"}'])
+    def test_solicitud_invalida(self, admin_client, body):
+        response = admin_client.post(self.url, body, content_type="application/json")
+        assert response.status_code == 400
+
+    def test_requiere_permiso(self, client, django_user_model):
+        client.force_login(django_user_model.objects.create_user("sin_permiso", password="x"))
+        assert self.post(client, ["P 171 737"]).status_code == 403
+
+    def test_requiere_csrf(self, django_user_model):
+        import json
+        from django.test import Client
+
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(django_user_model.objects.create_superuser("a", "a@a.com", "x"))
+        response = client.post(self.url, json.dumps({"alternatives": ["P1"]}), content_type="application/json")
+
+        assert response.status_code == 403
+
+    def test_pantalla_de_busqueda_tiene_boton_y_modal(self, admin_client):
+        html = admin_client.get("/parking/busqueda/").content.decode()
+
+        assert "Escanear ticket" in html
+        assert "Dictar placa" in html
+        assert 'id="voicePlateModal"' in html
+        assert 'id="plateInput"' in html

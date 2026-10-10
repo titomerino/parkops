@@ -59,3 +59,19 @@ class TestAccionesSoloPost:
             html = admin_client.get(url).content.decode()
             assert 'method="post"' in html
             assert "csrfmiddlewaretoken" in html
+
+
+@pytest.mark.django_db
+class TestTarifaInexistente:
+    @pytest.mark.parametrize("method,url", [
+        ("get", "/baños/tarifas/editar/999999/"),
+        ("post", "/baños/tarifas/estado/999999/"),
+        ("post", "/baños/entradas/registrar/999999/"),
+    ])
+    def test_da_404(self, admin_client, method, url):
+        assert getattr(admin_client, method)(url).status_code == 404
+
+    def test_no_se_cobra_con_tarifa_inactiva(self, admin_client):
+        fee = BathroomFee.objects.create(name="Vieja", amount=Decimal("0.10"), state=False)
+        assert admin_client.post(f"/baños/entradas/registrar/{fee.pk}/").status_code == 404
+        assert not BathroomEntry.objects.exists()

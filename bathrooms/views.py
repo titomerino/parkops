@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.utils.timezone import now, localtime
 from django.shortcuts import redirect
@@ -42,7 +42,8 @@ def entry_bathrooms_view(request):
 @perm_required('bathrooms.add_bathroomentry')
 def entry_bathroom_register_view(request, fee_id):
     """ Vista para registrar una entrada de baño """
-    fee = BathroomFee.objects.get(id=fee_id)
+    # Solo tarifas activas: las inactivas no se muestran para cobrar
+    fee = get_object_or_404(BathroomFee, pk=fee_id, state=True)
 
     # Crear entrada de baño
     bathroom_entry = BathroomEntry.objects.create(
@@ -79,7 +80,7 @@ def fee_register_view(request):
 @perm_required('bathrooms.change_bathroomfee')
 def fee_edit_view(request, fee_id):
     """ Vista para editar una tarifa de baño """
-    bathroom_fee = BathroomFee.objects.get(id=fee_id)
+    bathroom_fee = get_object_or_404(BathroomFee, pk=fee_id)
 
     if request.method == 'POST':
         form = BathroomFeeForm(request.POST, instance=bathroom_fee)
@@ -106,7 +107,7 @@ def fee_edit_view(request, fee_id):
 @perm_required('bathrooms.change_bathroomfee')
 def toggle_fee_state_view(request, fee_id):
     """ Vista para activar/desactivar una tarifa de baño """
-    bathroom_fee = BathroomFee.objects.get(id=fee_id)
+    bathroom_fee = get_object_or_404(BathroomFee, pk=fee_id)
     bathroom_fee.state = not bathroom_fee.state
     bathroom_fee.save()
     state_text = "activada" if bathroom_fee.state else "desactivada"

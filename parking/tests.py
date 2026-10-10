@@ -174,3 +174,18 @@ def test_excel_deja_vacia_la_salida_de_entradas_activas(admin_client, make_entry
 
     assert rows["PACTIVA"][2] in ("", None)
     assert rows["PCERRADA"][2]
+
+
+@pytest.mark.django_db
+class TestTicket:
+    @pytest.mark.parametrize("query", ["", "?entry_id=", "?entry_id=abc", "?entry_id=999999"])
+    def test_ticket_invalido_da_404(self, admin_client, query):
+        assert admin_client.get(f"/parking/ticket/{query}").status_code == 404
+
+    def test_ticket_valido(self, admin_client, make_entry):
+        entry = make_entry()
+        assert admin_client.get(f"/parking/ticket/?entry_id={entry.pk}").status_code == 200
+
+    def test_ticket_requiere_permiso(self, client, django_user_model, make_entry):
+        client.force_login(django_user_model.objects.create_user("sin_permiso", password="x"))
+        assert client.get(f"/parking/ticket/?entry_id={make_entry().pk}").status_code == 403

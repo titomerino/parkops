@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from shell.decorators import perm_required
 from shell.utils import safe_redirect_url
 from django.db import transaction
+from django.http import Http404
 from io import BytesIO
 
 import qrcode, base64
@@ -418,10 +419,14 @@ def save_return_url(request):
     if not path.startswith("/departure"):
         request.session['departure_return_url'] = path
 
-@login_required(login_url='login')
+@perm_required('parking.add_entry')
 def imprimir_ticket(request):
-    entry_id = request.GET.get('entry_id')
-    entry = Entry.objects.get(id=entry_id)
+    entry_id = request.GET.get('entry_id', '')
+
+    if not entry_id.isdigit():
+        raise Http404("Ticket no encontrado")
+
+    entry = get_object_or_404(Entry, pk=entry_id)
 
     qr_data = f"entry_id={entry.id}"
 

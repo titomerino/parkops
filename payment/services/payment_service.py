@@ -1,7 +1,7 @@
 from django.contrib import messages
 
 from payment.models import Subscription
-from django.utils.timezone import now
+from django.utils.timezone import localdate
 from payment.models import Payment
 
 
@@ -16,7 +16,7 @@ def get_pending_payments():
     Devuelve todos los pagos pendientes que ya deben notificarse.
     """
 
-    today = now().date()
+    today = localdate()
 
     payments = (
         Payment.objects
@@ -44,7 +44,11 @@ def get_pending_payments():
 def notify_pending_payments(request):
     """
     Genera un mensaje de Django por cada pago pendiente.
+    Antes asegura que exista el pago del mes de cada suscripción activa
+    (get_or_create: no duplica aunque se llame en cada visita).
     """
+
+    generate_current_month_payments()
 
     for payment in get_pending_payments():
         messages.error(request, str(payment))

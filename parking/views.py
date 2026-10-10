@@ -3,6 +3,7 @@ from django.utils.timezone import now, localtime
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.decorators import permission_required
+from django.db import transaction
 from io import BytesIO
 
 import qrcode, base64
@@ -103,6 +104,9 @@ def departure(request, pk):
         pk=pk
     )
 
+    if not entry.state:
+        return _departure_already_registered(request, entry)
+
     plate = entry.plate.strip().upper()
 
     policy = (
@@ -119,24 +123,23 @@ def departure(request, pk):
 
     if request.method == "POST":
 
-        entry.departure_date_hour = now()
-        entry.state = False
+        with transaction.atomic():
+            # Bloquea la fila: un doble envío no registra dos salidas
+            entry = Entry.objects.select_for_update().get(pk=pk)
 
-        # 🔒 Congelar valores históricos
-        entry.final_minutes = total_minutes
-        entry.final_amount = amount
+            if not entry.state:
+                return _departure_already_registered(request, entry)
 
-        # Si es mensual o diario, ya no depende de fee
-        if billing_type in ["MONTHLY", "DAILY"]:
-            entry.fee_id = None
+            entry.departure_date_hour = now()
 
-        entry.save(update_fields=[
-            "departure_date_hour",
-            "state",
-            "final_minutes",
-            "final_amount",
-            "fee"
-        ])
+            # Si es mensual o diario, ya no depende de fee
+            if billing_type in ["MONTHLY", "DAILY"]:
+                entry.fee_id = None
+
+            # save() congela final_minutes y final_amount al cambiar la salida
+            entry.save()
+
+        amount = entry.final_amount
 
         if billing_type == "MONTHLY":
             msg = f"Salida registrada para {entry.plate} (Mensual — $0.00)"
@@ -168,6 +171,14 @@ def departure(request, pk):
         "is_monthly": billing_type == "MONTHLY",
         "is_daily": billing_type == "DAILY",
     })
+
+def _departure_already_registered(request, entry):
+    departure = localtime(entry.departure_date_hour).strftime("%d/%m/%Y %I:%M %p")
+    messages.warning(
+        request,
+        f"La entrada de {entry.plate} ya tiene salida registrada ({departure})."
+    )
+    return redirect("search_plate")
 
 @login_required(login_url='login')
 def go_to_departure(request, pk):

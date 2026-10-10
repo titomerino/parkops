@@ -3,6 +3,7 @@ from django.utils.timezone import now, localtime
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from shell.decorators import perm_required
+from shell.utils import safe_redirect_url
 from django.db import transaction
 from io import BytesIO
 
@@ -150,7 +151,10 @@ def departure(request, pk):
 
         messages.success(request, msg)
 
-        return_url = request.session.pop("departure_return_url", None)
+        return_url = safe_redirect_url(
+            request,
+            request.session.pop("departure_return_url", None)
+        )
         return redirect(return_url or "search_plate")
 
     form = EntryExitForm(initial={
@@ -183,7 +187,7 @@ def _departure_already_registered(request, entry):
 @login_required(login_url='login')
 def go_to_departure(request, pk):
     # Página REAL de donde vino el usuario
-    return_url = request.META.get('HTTP_REFERER')
+    return_url = safe_redirect_url(request, request.META.get('HTTP_REFERER'))
 
     if return_url:
         request.session['departure_return_url'] = return_url

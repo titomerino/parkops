@@ -38,3 +38,36 @@ class TestLogout:
         response = admin_client.post("/logout/")
         assert response.url == "/login/"
         assert admin_client.get("/").status_code == 302
+
+
+@pytest.mark.django_db
+class TestRedireccionSegura:
+    @pytest.fixture
+    def user(self, django_user_model):
+        return django_user_model.objects.create_user("u", password="clave-segura-123")
+
+    def login(self, client, next_url):
+        return client.post(f"/login/?next={next_url}", {"username": "u", "password": "clave-segura-123"})
+
+    @pytest.mark.parametrize("next_url", [
+        "https://sitio-malicioso.example/",
+        "//sitio-malicioso.example/",
+        "http://testserver.sitio-malicioso.example/",
+    ])
+    def test_login_ignora_next_externo(self, client, user, next_url):
+        assert self.login(client, next_url).url == "/"
+
+    def test_login_respeta_next_interno(self, client, user):
+        assert self.login(client, "/parking/historial/").url == "/parking/historial/"
+
+    def test_salida_ignora_referer_externo(self, admin_client, make_entry):
+        entry = make_entry()
+        admin_client.get(f"/parking/go-to-departure/{entry.pk}/", HTTP_REFERER="https://sitio-malicioso.example/")
+        response = admin_client.post(f"/parking/salida/{entry.pk}")
+        assert response.url == "/parking/busqueda/"
+
+    def test_salida_vuelve_a_la_pagina_interna(self, admin_client, make_entry):
+        entry = make_entry()
+        admin_client.get(f"/parking/go-to-departure/{entry.pk}/", HTTP_REFERER="http://testserver/parking/historial/")
+        response = admin_client.post(f"/parking/salida/{entry.pk}")
+        assert response.url == "http://testserver/parking/historial/"

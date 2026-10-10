@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 import dj_database_url
 
@@ -11,14 +12,19 @@ if os.getenv("DJANGO_ENV", "local") == "local":
     load_dotenv(BASE_DIR / '.env')
 
 # SECURITY
+DJANGO_ENV = os.getenv("DJANGO_ENV", "local")
+
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-key")
 
-DJANGO_ENV = os.getenv("DJANGO_ENV", "local")
+# Con la clave por defecto cualquiera puede firmar sesiones válidas
+if DJANGO_ENV == "production" and SECRET_KEY in ("", "dev-insecure-key"):
+    raise ImproperlyConfigured("Define la variable SECRET_KEY en producción")
 
 DEBUG = os.getenv("DEBUG", "False") == "True"
 
 if DJANGO_ENV == "production":
-    ALLOWED_HOSTS = ["*"]
+    # Definir ALLOWED_HOSTS (p. ej. "midominio.com,.railway.app") restringe los hosts
+    ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "*").split(",")
 else:
     ALLOWED_HOSTS = os.getenv(
         "ALLOWED_HOSTS",
@@ -129,7 +135,20 @@ STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
 
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# STATICFILES_STORAGE se eliminó en Django 5.1: sin STORAGES WhiteNoise no comprime
+# ni versiona. El manifest solo en producción (requiere collectstatic).
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": (
+            "whitenoise.storage.CompressedManifestStaticFilesStorage"
+            if DJANGO_ENV == "production"
+            else "django.contrib.staticfiles.storage.StaticFilesStorage"
+        ),
+    },
+}
 
 # CORS
 # CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL", "True") == "True"

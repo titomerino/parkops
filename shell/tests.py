@@ -71,3 +71,21 @@ class TestRedireccionSegura:
         admin_client.get(f"/parking/go-to-departure/{entry.pk}/", HTTP_REFERER="http://testserver/parking/historial/")
         response = admin_client.post(f"/parking/salida/{entry.pk}")
         assert response.url == "http://testserver/parking/historial/"
+
+
+def test_todos_los_static_de_las_plantillas_existen():
+    """En producción (manifest de WhiteNoise) un static inexistente da error 500."""
+    import re
+    from pathlib import Path
+    from django.conf import settings
+    from django.contrib.staticfiles import finders
+
+    pattern = re.compile(r"""{%\s*static\s+['"]([^'"]+)['"]\s*%}""")
+    missing = [
+        f"{template.relative_to(settings.BASE_DIR)}: {name}"
+        for template in Path(settings.BASE_DIR).glob("*/templates/**/*.html")
+        for name in pattern.findall(template.read_text())
+        if not finders.find(name)
+    ]
+
+    assert not missing, "Archivos estáticos inexistentes:\n" + "\n".join(missing)

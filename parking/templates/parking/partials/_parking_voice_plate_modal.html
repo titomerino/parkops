@@ -95,6 +95,16 @@
   </div>
 </div>
 
+<style>
+  .voice-plate-listening {
+    animation: voice-plate-pulse 1.2s ease-out infinite;
+  }
+  @keyframes voice-plate-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(220, 53, 69, .6); }
+    100% { box-shadow: 0 0 0 22px rgba(220, 53, 69, 0); }
+  }
+</style>
+
 <script>
 const VoicePlate = (function () {
 
@@ -112,13 +122,21 @@ const VoicePlate = (function () {
 
     const $ = (id) => document.getElementById(id);
 
-    // WebKit (todos los navegadores de iPhone y Safari en Mac): el sistema ya procesa
-    // el micrófono y abrirlo por separado puede chocar con el dictado.
+    // En celulares el dictado lo hace el servicio de voz del sistema (Google en
+    // Android, Apple en iOS), que usa el micrófono por su cuenta. Si la página abre
+    // el micrófono al mismo tiempo, el sistema deja al dictado sin audio: se ve el
+    // volumen pero nunca llega el texto. Solo en computadora se abre por separado.
     const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
         || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const IS_ANDROID = /Android/i.test(navigator.userAgent);
     const IS_SAFARI = /^((?!chrome|chromium|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent);
-    // Chrome, Edge y demás Chromium: micrófono propio con filtros de ruido para el dictado
-    const CAN_FILTER_NOISE = !IS_IOS && !IS_SAFARI && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    // Chrome/Edge de escritorio: micrófono propio con filtros de ruido para el dictado
+    const CAN_FILTER_NOISE = !IS_IOS && !IS_ANDROID && !IS_SAFARI
+        && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+    // Si el dictado no entrega nada en este tiempo, se detiene y se avisa
+    const LISTEN_TIMEOUT_MS = 10000;
+    let listenTimer = null;
 
     async function openMicrophone() {
         if (!CAN_FILTER_NOISE) return null;
@@ -210,7 +228,22 @@ const VoicePlate = (function () {
         const btn = $("voicePlateRecordBtn");
         btn.classList.toggle("btn-danger", value);
         btn.classList.toggle("btn-outline-danger", !value);
-        if (value) setStatus("Escuchando… toca para detener");
+        // Pulso visible mientras escucha (en celular no hay barra de volumen)
+        btn.classList.toggle("voice-plate-listening", value);
+
+        clearTimeout(listenTimer);
+        if (value) {
+            setStatus("Escuchando… toca para detener");
+            listenTimer = setTimeout(onListenTimeout, LISTEN_TIMEOUT_MS);
+        }
+    }
+
+    function onListenTimeout() {
+        if (!listening) return;
+
+        stop();
+        showError("No se captó la placa. Toca el micrófono e intenta de nuevo, cerca del teléfono.");
+        setStatus("Toca el micrófono y di la placa");
     }
 
     function showError(text) {

@@ -24,7 +24,7 @@
     </div>
     {% endif %}
 
-    {% if perms.bathrooms.view_statistics_bathroomentry %}
+    {% if perms.bathrooms.view_statistics_bathroomentry and current_parking.bathrooms_enabled %}
     <!-- Resumen baños -->
     <div class="col-12 col-lg-4">
         {% include 'partials/_bathrooms_summary.html' with parking_total=total_daily_income today_entries=total_today_count_entries parking_month_total=total_monthly_income %}
@@ -53,7 +53,7 @@
     </div>
     {% endif %}
 
-    {% if perms.bathrooms.view_bathroomentry %}
+    {% if perms.bathrooms.view_bathroomentry and current_parking.bathrooms_enabled %}
     <!-- Baños -->
     <div class="col-12 col-md-6 col-lg-4">
         {% include 'partials/_bathrooms_principal_access_button.html' %}

@@ -2,7 +2,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils.timezone import now, localtime
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from shell.decorators import perm_required
+from django.contrib.admin.models import DELETION, LogEntry
+from shell.decorators import perm_required, superuser_required
 from shell.utils import safe_redirect_url
 from django.db import transaction
 from django.http import Http404, JsonResponse
@@ -223,6 +224,35 @@ def entry_edit_view(request, pk):
         "entry": entry,
         "policy": policy
     })
+
+@require_POST
+@superuser_required
+def entry_delete_view(request, pk):
+    """ Elimina una entrada (solo superusuario) y deja registro en el historial del admin """
+
+    entry = get_object_or_404(Entry, pk=pk)
+
+    def fmt(value):
+        return localtime(value).strftime("%d/%m/%Y %I:%M %p") if value else "sin salida"
+
+    detail = (
+        f"Placa {entry.plate} | entrada {fmt(entry.entry_date_hour)} | "
+        f"salida {fmt(entry.departure_date_hour)} | monto ${entry.final_amount or 0}"
+    )
+
+    # Queda en Admin → Acciones recientes / historial con usuario y fecha
+    LogEntry.objects.log_actions(
+        user_id=request.user.pk,
+        queryset=[entry],
+        action_flag=DELETION,
+        change_message=f"Eliminada desde la app. {detail}",
+        single_object=True,
+    )
+
+    entry.delete()
+
+    messages.success(request, f"Entrada eliminada: {detail}")
+    return redirect('record')
 
 @login_required(login_url='login')
 def search_plate(request):

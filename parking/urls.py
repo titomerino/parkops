@@ -1,5 +1,6 @@
 from .views import (
     entry_edit_view,
+    entry_delete_view,
     register,
     search_plate,
     departure,
@@ -27,6 +28,7 @@ urlpatterns = [
     path("historial/", record, name="record"),
     path('go-to-departure/<int:pk>/', go_to_departure, name='go_to_departure'),
     path('editar/<int:pk>/', entry_edit_view, name='edit_entry'),
+    path('eliminar/<int:pk>/', entry_delete_view, name='delete_entry'),
     path('suscripciones/', subscription_plate_list, name='subscription_plate_list'),
     path('suscripciones/registrar', subscription_register, name='subscription_register'),
     path('suscripciones/<int:pk>', subscription_edit, name='subscription_edit'),

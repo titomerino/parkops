@@ -35,6 +35,11 @@ COPY . .
 # Local (Docker Compose)
 # ======================
 FROM base AS local
+
+# Herramientas de prueba solo en desarrollo (no van a la imagen de producción)
+COPY requirements-dev.txt .
+RUN pip install --no-cache-dir -r requirements-dev.txt
+
 EXPOSE 8000
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 

@@ -3,6 +3,14 @@ from django.utils.timezone import localdate, now
 
 
 class Subscription(models.Model):
+    """Mensualidad que el parqueo (cliente) paga por usar ParkOps."""
+
+    parking = models.ForeignKey(
+        "tenants.Parking",
+        on_delete=models.PROTECT,
+        related_name="subscriptions",
+        verbose_name="Parqueo",
+    )
     activation_date = models.DateTimeField(
         "Fecha de activación de la suscripción",
         blank=True,

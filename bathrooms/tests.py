@@ -75,3 +75,20 @@ class TestTarifaInexistente:
         fee = BathroomFee.objects.create(name="Vieja", amount=Decimal("0.10"), state=False)
         assert admin_client.post(f"/baños/entradas/registrar/{fee.pk}/").status_code == 404
         assert not BathroomEntry.objects.exists()
+
+
+@pytest.mark.django_db
+def test_entradas_de_bano_con_consultas_constantes(admin_client, bathroom_fee):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    def count():
+        with CaptureQueriesContext(connection) as ctx:
+            admin_client.get("/baños/entradas/")
+        return len(ctx.captured_queries)
+
+    BathroomEntry.objects.create(fee=bathroom_fee)
+    few = count()
+    BathroomEntry.objects.bulk_create(BathroomEntry(fee=bathroom_fee) for _ in range(20))
+
+    assert count() == few

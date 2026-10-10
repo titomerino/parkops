@@ -210,3 +210,44 @@ class TestPdfStaticFiles:
         fetcher = StaticFilesURLFetcher("http://servidor-inexistente.invalid/")
         with pytest.raises(FileNotFoundError):
             fetcher.fetch("http://servidor-inexistente.invalid/static/no-existe.css")
+
+
+@pytest.mark.django_db
+class TestConsultasConstantes:
+    """El número de consultas no debe crecer con la cantidad de registros (N+1)."""
+
+    def count_queries(self, client, url):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as ctx:
+            assert client.get(url).status_code == 200
+        return len(ctx.captured_queries)
+
+    def add_entries(self, make_entry, prefix, n):
+        for i in range(n):
+            make_entry(plate=f"{prefix}{i}", minutes_ago=300 - i, duration=60 if i % 2 else None)
+
+    @pytest.mark.parametrize("url", [
+        "/parking/historial/",
+        "/parking/reporte/hoy/?date={d}&format=xlsx",
+        "/parking/reporte/periodo/?period_start_date={d}&period_end_date={d}&format=xlsx",
+    ])
+    def test_parqueo(self, admin_client, make_entry, url):
+        url = url.format(d=now_local())
+        self.add_entries(make_entry, "PA", 2)
+        few = self.count_queries(admin_client, url)
+
+        self.add_entries(make_entry, "PB", 10)
+        many = self.count_queries(admin_client, url)
+
+        assert many == few
+
+    def test_historial_muestra_lo_cobrado_aunque_cambie_la_tarifa(self, admin_client, make_entry, fee):
+        entry = make_entry(minutes_ago=200, duration=90)
+        fee.ranges.update(amount=Decimal("99.00"))
+
+        response = admin_client.get("/parking/historial/")
+        shown = next(e for e in response.context["entries"] if e.pk == entry.pk)
+
+        assert shown.amount == Decimal("2.00")

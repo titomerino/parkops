@@ -34,3 +34,37 @@ class TestCalculateFee:
     def test_tarifa_sin_rangos_no_cobra(self, fee):
         fee.ranges.all().delete()
         assert fee.calculate_fee(30) == 0
+
+
+@pytest.mark.django_db
+class TestDeparture:
+    def test_registra_salida_y_congela_monto(self, admin_client, make_entry):
+        entry = make_entry(minutes_ago=90)
+        response = admin_client.post(f"/parking/salida/{entry.pk}")
+        entry.refresh_from_db()
+        assert response.status_code == 302
+        assert entry.state is False
+        assert entry.departure_date_hour is not None
+        assert entry.final_minutes in (90, 91)  # minutos parciales se redondean hacia arriba
+        assert entry.final_amount == Decimal("2.00")
+
+    def test_segunda_salida_no_modifica_la_entrada(self, admin_client, make_entry):
+        entry = make_entry(minutes_ago=300, duration=30)
+        before = (entry.departure_date_hour, entry.final_minutes, entry.final_amount)
+
+        response = admin_client.post(f"/parking/salida/{entry.pk}")
+        entry.refresh_from_db()
+
+        assert response.status_code == 302
+        assert (entry.departure_date_hour, entry.final_minutes, entry.final_amount) == before
+
+    def test_get_de_entrada_cerrada_redirige(self, admin_client, make_entry):
+        entry = make_entry(duration=30)
+        response = admin_client.get(f"/parking/salida/{entry.pk}")
+        assert response.status_code == 302
+
+    def test_salida_mensual_no_cobra(self, admin_client, make_entry, monthly_policy):
+        entry = make_entry(plate=monthly_policy.plate, minutes_ago=300, fee=None)
+        admin_client.post(f"/parking/salida/{entry.pk}")
+        entry.refresh_from_db()
+        assert entry.final_amount == 0

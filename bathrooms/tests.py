@@ -7,17 +7,17 @@ from bathrooms.models import BathroomEntry, BathroomFee
 
 
 @pytest.mark.django_db
-def test_no_se_puede_borrar_tarifa_de_bano_con_usos():
-    fee = BathroomFee.objects.create(name="Sanitario", amount=Decimal("0.25"))
-    BathroomEntry.objects.create(fee=fee)
+def test_no_se_puede_borrar_tarifa_de_bano_con_usos(parking):
+    fee = BathroomFee.objects.create(parking=parking, name="Sanitario", amount=Decimal("0.25"))
+    BathroomEntry.objects.create(parking=parking, fee=fee)
     with pytest.raises(ProtectedError):
         fee.delete()
     assert BathroomEntry.objects.count() == 1
 
 
 @pytest.fixture
-def bathroom_fee(db):
-    return BathroomFee.objects.create(name="Sanitario", amount=Decimal("0.25"))
+def bathroom_fee(parking):
+    return BathroomFee.objects.create(parking=parking, name="Sanitario", amount=Decimal("0.25"))
 
 
 @pytest.mark.django_db
@@ -71,8 +71,8 @@ class TestTarifaInexistente:
     def test_da_404(self, admin_client, method, url):
         assert getattr(admin_client, method)(url).status_code == 404
 
-    def test_no_se_cobra_con_tarifa_inactiva(self, admin_client):
-        fee = BathroomFee.objects.create(name="Vieja", amount=Decimal("0.10"), state=False)
+    def test_no_se_cobra_con_tarifa_inactiva(self, admin_client, bathroom_fee):
+        fee = BathroomFee.objects.create(parking=bathroom_fee.parking, name="Vieja", amount=Decimal("0.10"), state=False)
         assert admin_client.post(f"/baños/entradas/registrar/{fee.pk}/").status_code == 404
         assert not BathroomEntry.objects.exists()
 
@@ -87,8 +87,8 @@ def test_entradas_de_bano_con_consultas_constantes(admin_client, bathroom_fee):
             admin_client.get("/baños/entradas/")
         return len(ctx.captured_queries)
 
-    BathroomEntry.objects.create(fee=bathroom_fee)
+    BathroomEntry.objects.create(parking=bathroom_fee.parking, fee=bathroom_fee)
     few = count()
-    BathroomEntry.objects.bulk_create(BathroomEntry(fee=bathroom_fee) for _ in range(20))
+    BathroomEntry.objects.bulk_create(BathroomEntry(parking=bathroom_fee.parking, fee=bathroom_fee) for _ in range(20))
 
     assert count() == few

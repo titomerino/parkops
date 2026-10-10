@@ -8,8 +8,8 @@ from payment.models import Payment, Subscription
 
 
 @pytest.fixture
-def subscription(db):
-    return Subscription.objects.create(name="ParkOps mensual", price=Decimal("25.00"), active=True)
+def subscription(parking):
+    return Subscription.objects.create(parking=parking, name="ParkOps mensual", price=Decimal("25.00"), active=True)
 
 
 @pytest.mark.django_db
@@ -42,8 +42,8 @@ class TestGeneracionAutomatica:
     def test_genera_un_solo_pago_por_mes(self, subscription):
         from payment.services.payment_service import generate_current_month_payments
 
-        generate_current_month_payments()
-        generate_current_month_payments()
+        generate_current_month_payments(subscription.parking)
+        generate_current_month_payments(subscription.parking)
 
         payments = Payment.objects.filter(subscription=subscription)
         assert payments.count() == 1
@@ -56,15 +56,15 @@ class TestGeneracionAutomatica:
         manual = Payment.objects.create(
             subscription=subscription, billing_date=localdate().replace(day=1), amount=Decimal("20.00")
         )
-        generate_current_month_payments()
+        generate_current_month_payments(subscription.parking)
 
         assert list(Payment.objects.all()) == [manual]
 
-    def test_no_genera_pagos_de_suscripciones_inactivas(self, db):
+    def test_no_genera_pagos_de_suscripciones_inactivas(self, parking):
         from payment.services.payment_service import generate_current_month_payments
 
-        Subscription.objects.create(name="Inactiva", price=Decimal("10.00"), active=False)
-        generate_current_month_payments()
+        Subscription.objects.create(parking=parking, name="Inactiva", price=Decimal("10.00"), active=False)
+        generate_current_month_payments(parking)
 
         assert not Payment.objects.exists()
 

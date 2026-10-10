@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'parking',
     'bathrooms',
     'payment',
+    'tenants',
 ]
 
 # MIDDLEWARE
@@ -56,6 +57,8 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    # Después de sesión, autenticación y mensajes
+    'tenants.middleware.CurrentParkingMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -73,6 +76,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'tenants.context_processors.current_parking',
             ],
         },
     },

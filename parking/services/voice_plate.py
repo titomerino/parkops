@@ -146,15 +146,18 @@ def _similarity(a, b):
     return SequenceMatcher(None, a, b).ratio()
 
 
-def find_candidates(plate, limit=3):
+def find_candidates(parking, plate, limit=3):
     """
     Placas conocidas parecidas: vehículos dentro del parqueo y suscripciones.
     En la salida la placa casi siempre está entre los vehículos activos.
     """
+    entries = Entry.objects.for_parking(parking)
+    policies = PlatePolicy.objects.for_parking(parking)
+
     active = {
-        e.plate: e for e in Entry.objects.filter(state=True).only("plate", "entry_date_hour")
+        e.plate: e for e in entries.filter(state=True).only("plate", "entry_date_hour")
     }
-    subscribed = set(PlatePolicy.objects.active().values_list("plate", flat=True))
+    subscribed = set(policies.active().values_list("plate", flat=True))
 
     scored = [
         (_similarity(plate, known), known)
@@ -169,7 +172,7 @@ def find_candidates(plate, limit=3):
     ]
 
 
-def interpret(alternatives):
+def interpret(parking, alternatives):
     """
     Recibe las alternativas del reconocimiento de voz (la primera es la más
     probable) y devuelve la placa elegida con sugerencias.
@@ -184,12 +187,15 @@ def interpret(alternatives):
         heard = parsed[0][0] if parsed else ""
         return {"ok": False, "heard": heard, "plate": parsed[0][1] if parsed else ""}
 
-    known = set(Entry.objects.filter(state=True, plate__in=[p for _, p in valid]).values_list("plate", flat=True))
-    known |= set(PlatePolicy.objects.active().filter(plate__in=[p for _, p in valid]).values_list("plate", flat=True))
+    entries = Entry.objects.for_parking(parking)
+    policies = PlatePolicy.objects.for_parking(parking)
+
+    known = set(entries.filter(state=True, plate__in=[p for _, p in valid]).values_list("plate", flat=True))
+    known |= set(policies.active().filter(plate__in=[p for _, p in valid]).values_list("plate", flat=True))
 
     heard, plate = next(((t, p) for t, p in valid if p in known), valid[0])
 
-    active_entry = Entry.objects.filter(plate=plate, state=True).only("entry_date_hour").first()
+    active_entry = entries.filter(plate=plate, state=True).only("entry_date_hour").first()
 
     return {
         "ok": True,
@@ -197,5 +203,5 @@ def interpret(alternatives):
         "plate": plate,
         "action": "salida" if active_entry else "entrada",
         "entry_date_hour": active_entry.entry_date_hour if active_entry else None,
-        "candidates": find_candidates(plate),
+        "candidates": find_candidates(parking, plate),
     }

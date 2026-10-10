@@ -26,15 +26,20 @@ def dashboard(request):
     if request.user.has_perm("parking.view_statistics_entry"):
         notify_pending_payments(request)
 
+    # Todos los totales son del parqueo actual
+    entries = Entry.objects.for_parking(request.parking)
+    bathroom_entries = BathroomEntry.objects.for_parking(request.parking)
+    policies = PlatePolicy.objects.for_parking(request.parking)
+
     context = {
-        "total_daily_income": Entry.objects.today_income(today),
-        "total_monthly_income": Entry.objects.month_income(current_year, current_month),
-        "total_today_count_entries": Entry.objects.entries_today_count(today),
-        "daily_bathroom_income": BathroomEntry.objects.today_income(),
-        "monthly_bathroom_income": BathroomEntry.objects.month_income(),
-        "today_total_count": BathroomEntry.objects.total_today(),
-        "total_subscriptions_month_income": PlatePolicy.objects.month_income(),
-        "total_active_subscriptions": PlatePolicy.objects.total_active_monthly_subscriptions(),
+        "total_daily_income": entries.today_income(today),
+        "total_monthly_income": entries.month_income(current_year, current_month),
+        "total_today_count_entries": entries.entries_today_count(today),
+        "daily_bathroom_income": bathroom_entries.today_income(),
+        "monthly_bathroom_income": bathroom_entries.month_income(),
+        "today_total_count": bathroom_entries.total_today(),
+        "total_subscriptions_month_income": policies.month_income(),
+        "total_active_subscriptions": policies.total_active_monthly_subscriptions(),
     }
 
     return render(request, "shell/dashboard.html", context)

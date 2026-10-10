@@ -50,7 +50,7 @@ def register(request, plate=None):
     plate = plate.strip().upper()
 
     # Buscar política activa para la placa
-    policy = PlatePolicy.objects.filter(
+    policy = PlatePolicy.objects.for_parking(request.parking).filter(
         plate=plate,
         active=True
     ).first()
@@ -59,13 +59,14 @@ def register(request, plate=None):
     has_subscription = policy and policy.billing_type in ["MONTHLY", "DAILY"]
 
     if request.method == 'POST':
-        form = EntryForm(request.POST)
+        form = EntryForm(request.POST, parking=request.parking)
 
         if has_subscription and 'fee' in form.fields:
             form.fields.pop('fee')
 
         if form.is_valid():
             entry = form.save(commit=False)
+            entry.parking = request.parking
             entry.plate = plate  # aseguras formato consistente
 
             # Si tiene suscripción → no usar tarifa por hora
@@ -89,7 +90,7 @@ def register(request, plate=None):
             
             return redirect('search_plate')
     else:
-        form = EntryForm(initial={'plate': plate})
+        form = EntryForm(initial={'plate': plate}, parking=request.parking)
 
         if has_subscription and 'fee' in form.fields:
             form.fields.pop('fee')
@@ -106,7 +107,7 @@ def departure(request, pk):
     """ Salida del parqueo """
 
     entry = get_object_or_404(
-        Entry.objects.select_related("fee"),
+        Entry.objects.for_parking(request.parking).select_related("fee"),
         pk=pk
     )
 
@@ -116,7 +117,7 @@ def departure(request, pk):
     plate = entry.plate.strip().upper()
 
     policy = (
-        PlatePolicy.objects
+        PlatePolicy.objects.for_parking(request.parking)
         .filter(plate=plate, active=True)
         .only("billing_type", "amount")
         .first()
@@ -131,7 +132,7 @@ def departure(request, pk):
 
         with transaction.atomic():
             # Bloquea la fila: un doble envío no registra dos salidas
-            entry = Entry.objects.select_for_update().get(pk=pk)
+            entry = Entry.objects.for_parking(request.parking).select_for_update().get(pk=pk)
 
             if not entry.state:
                 return _departure_already_registered(request, entry)
@@ -203,11 +204,11 @@ def go_to_departure(request, pk):
 def entry_edit_view(request, pk):
     """ Vista para editar una entrada (solo admin) """
 
-    entry = get_object_or_404(Entry, pk=pk)
-    policy = PlatePolicy.objects.filter(plate=entry.plate, active=True).first()
+    entry = get_object_or_404(Entry, pk=pk, parking=request.parking)
+    policy = PlatePolicy.objects.for_parking(request.parking).filter(plate=entry.plate, active=True).first()
 
     if request.method == "POST":
-        form = EntryEditForm(request.POST, instance=entry)
+        form = EntryEditForm(request.POST, instance=entry, parking=request.parking)
 
         if form.is_valid():
             form.save()
@@ -217,7 +218,7 @@ def entry_edit_view(request, pk):
         else:
             messages.error(request, "Corrige los errores del formulario.")
     else:
-        form = EntryEditForm(instance=entry)
+        form = EntryEditForm(instance=entry, parking=request.parking)
 
     return render(request, "parking/entry_edit_form.html", {
         "form": form,
@@ -230,7 +231,7 @@ def entry_edit_view(request, pk):
 def entry_delete_view(request, pk):
     """ Elimina una entrada (solo superusuario) y deja registro en el historial del admin """
 
-    entry = get_object_or_404(Entry, pk=pk)
+    entry = get_object_or_404(Entry, pk=pk, parking=request.parking)
 
     def fmt(value):
         return localtime(value).strftime("%d/%m/%Y %I:%M %p") if value else "sin salida"
@@ -269,7 +270,7 @@ def search_plate(request):
         if form.is_valid():
             plate = form.cleaned_data['plate'].upper()
 
-            entry = Entry.objects.filter(
+            entry = Entry.objects.for_parking(request.parking).filter(
                 plate=plate,
                 state=True
             ).first()
@@ -303,7 +304,7 @@ def record(request):
     today = localtime(now()).date()
 
     entries = list(
-        Entry.objects
+        Entry.objects.for_parking(request.parking)
         .entries_today_and_active(today)
         .select_related("fee")
         .prefetch_related("fee__ranges")
@@ -325,7 +326,7 @@ def record(request):
     finished_entries = total_entries - active_entries
 
     policies = (
-        PlatePolicy.objects
+        PlatePolicy.objects.for_parking(request.parking)
         .filter(plate__in={e.plate for e in entries}, active=True)
         .only("plate", "billing_type", "amount")
     )
@@ -358,7 +359,7 @@ def record(request):
 def subscription_plate_list(request):
     """ Página de placas con pago subcripcion """
 
-    plates = PlatePolicy.objects.all().order_by(
+    plates = PlatePolicy.objects.for_parking(request.parking).order_by(
         '-active',
         'billing_type',
         'plate'
@@ -373,7 +374,7 @@ def subscription_register(request):
     """ Registrar política de cobro para una placa """
 
     if request.method == 'POST':
-        form = PlatePolicyForm(request.POST)
+        form = PlatePolicyForm(request.POST, parking=request.parking)
 
         if form.is_valid():
             form.save()
@@ -388,7 +389,7 @@ def subscription_register(request):
                 "Corrige los errores del formulario"
             )
     else:
-        form = PlatePolicyForm()
+        form = PlatePolicyForm(parking=request.parking)
 
     return render(request, "parking/subscription_register.html", {
         'form': form
@@ -398,12 +399,13 @@ def subscription_register(request):
 def subscription_edit(request, pk):
     """ Editar suscripción / política de cobro de una placa """
 
-    policy = get_object_or_404(PlatePolicy, pk=pk)
+    policy = get_object_or_404(PlatePolicy, pk=pk, parking=request.parking)
 
     if request.method == 'POST':
         form = PlatePolicyForm(
             request.POST,
-            instance=policy
+            instance=policy,
+            parking=request.parking
         )
 
         if form.is_valid():
@@ -419,7 +421,7 @@ def subscription_edit(request, pk):
                 "Corrige los errores del formulario"
             )
     else:
-        form = PlatePolicyForm(instance=policy)
+        form = PlatePolicyForm(instance=policy, parking=request.parking)
 
     return render(request, "parking/subscription_register.html", {
         'form': form,
@@ -431,7 +433,7 @@ def subscription_edit(request, pk):
 def toggle_subscription_active(request, pk):
     """ Activa / desactiva una suscripción y recarga la lista """
 
-    policy = get_object_or_404(PlatePolicy, pk=pk)
+    policy = get_object_or_404(PlatePolicy, pk=pk, parking=request.parking)
 
     if request.method == "POST":
         policy.active = not policy.active
@@ -462,7 +464,7 @@ def imprimir_ticket(request):
     if not entry_id.isdigit():
         raise Http404("Ticket no encontrado")
 
-    entry = get_object_or_404(Entry, pk=entry_id)
+    entry = get_object_or_404(Entry, pk=entry_id, parking=request.parking)
 
     qr_data = f"entry_id={entry.id}"
 
@@ -473,7 +475,7 @@ def imprimir_ticket(request):
     qr_base64 = base64.b64encode(buffer.getvalue()).decode()
 
     # 🔥 Buscar suscripción activa
-    policy = PlatePolicy.objects.filter(
+    policy = PlatePolicy.objects.for_parking(request.parking).filter(
         plate=entry.plate,
         active=True
     ).first()
@@ -497,7 +499,8 @@ def imprimir_ticket(request):
         'hora_llegada': localtime(entry.entry_date_hour).strftime('%I:%M %p'),
         'costo_hora': costo,
         'qr_code': qr_base64,
-        'policy': policy  # 🔥 opcional para usar en template
+        'policy': policy,  # 🔥 opcional para usar en template
+        'parking': request.parking,
     }
 
     return render(request, 'parking/ticket-template.html', context)
@@ -529,7 +532,7 @@ def report_day(request):
 
     report_date = form.cleaned_data["date"]
 
-    context = generate_day_report(report_date)
+    context = generate_day_report(request.parking, report_date)
 
     match request.GET.get("format"):
         case "pdf":
@@ -564,7 +567,7 @@ def report_month(request):
 
     month = form.cleaned_data["month_date"]
 
-    context = generate_month_report(month)
+    context = generate_month_report(request.parking, month)
 
     match request.GET.get("format"):
         case "pdf":
@@ -600,7 +603,7 @@ def report_period(request):
     start_date = form.cleaned_data["period_start_date"]
     end_date = form.cleaned_data["period_end_date"]
 
-    context = generate_period_report(start_date, end_date)
+    context = generate_period_report(request.parking, start_date, end_date)
 
     match request.GET.get("format"):
         case "pdf":
@@ -636,7 +639,7 @@ def report_plate(request):
     
     plate = form.cleaned_data["plate"].strip().upper()
 
-    exists = Entry.objects.filter(plate=plate).exists() # que tanto afectara al rendimiento?
+    exists = Entry.objects.for_parking(request.parking).filter(plate=plate).exists()
     if not exists:
         messages.error(request, f"No se encontraron registros para la placa {plate}")
         return redirect("parking_reports")
@@ -644,7 +647,7 @@ def report_plate(request):
     start_date = form.cleaned_data["start_date"]
     end_date = form.cleaned_data["end_date"]
 
-    context = generate_plate_report(plate, start_date, end_date)
+    context = generate_plate_report(request.parking, plate, start_date, end_date)
 
     match request.GET.get("format"):
         case "pdf":
@@ -687,7 +690,7 @@ def interpret_voice_plate(request):
         return JsonResponse({"ok": False, "error": "Solicitud inválida"}, status=400)
 
     alternatives = [str(a)[:200] for a in alternatives[:10]]
-    result = interpret(alternatives)
+    result = interpret(request.parking, alternatives)
 
     if result["ok"]:
         result["formatted"] = format_plate(result["plate"])

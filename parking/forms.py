@@ -1,20 +1,42 @@
 from django import forms
 from django.utils import timezone
-from .models import Fee, Entry, Configuration, PlatePolicy
+from .models import Fee, Entry, PlatePolicy
 from django.core.validators import RegexValidator
 from django.utils.timezone import localdate
 
 import re
 
 
-class EntryForm(forms.ModelForm):
+class ParkingFormMixin:
+    """
+    Formularios de datos de un parqueo: reciben parking=, lo asignan al
+    registro nuevo y limitan el selector de tarifa a las de ese parqueo.
+    Exigir el parqueo evita que un formulario sin él mezcle datos.
+    """
+
+    def __init__(self, *args, parking=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if parking is None and not self.instance.parking_id:
+            raise ValueError(f"{type(self).__name__} requiere parking=")
+
+        self.parking = parking or self.instance.parking
+
+        if not self.instance.parking_id:
+            self.instance.parking = self.parking
+
+        if "fee" in self.fields:
+            self.fields["fee"].queryset = Fee.objects.for_parking(self.parking)
+
+
+class EntryForm(ParkingFormMixin, forms.ModelForm):
     """ Formulario para entradas """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Buscar tarifa por defecto
-        default_fee = Fee.objects.filter(default=True).first()
+        # Buscar tarifa por defecto del parqueo
+        default_fee = Fee.objects.for_parking(self.parking).filter(default=True).first()
 
         if default_fee:
             self.fields['fee'].initial = default_fee.id
@@ -64,7 +86,7 @@ class EntryExitForm(forms.ModelForm):
         fields = []  # no editamos nada directamente
 
 
-class EntryEditForm(forms.ModelForm):
+class EntryEditForm(ParkingFormMixin, forms.ModelForm):
     """ Formulario para editar entradas (solo admin) """
 
     class Meta:
@@ -154,7 +176,7 @@ class EntryEditForm(forms.ModelForm):
             )
         
         # Validar duplicados en entradas activas (excluyendo el registro actual)
-        qs = Entry.objects.filter(plate=plate, state=True).exclude(pk=self.instance.pk)
+        qs = Entry.objects.for_parking(self.parking).filter(plate=plate, state=True).exclude(pk=self.instance.pk)
         
         if qs.exists():
             raise forms.ValidationError(
@@ -180,28 +202,6 @@ class EntryEditForm(forms.ModelForm):
         })
 
 
-class ConfigurationForm(forms.ModelForm):
-    """ Formulario para configuraciones """
-
-    class Meta:
-        model = Configuration
-        fields = [
-            'name',
-            'ability'
-        ]
-        widgets = {
-            'name': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Nombre de la configuración'
-            }),
-            'ability': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': 0,
-                'placeholder': 'Cantidad de espacios disponibles'
-            })
-        }
-
-
 class PlateSearchForm(forms.Form):
     plate = forms.CharField(
         max_length=10,
@@ -219,7 +219,7 @@ class PlateSearchForm(forms.Form):
     )
 
 
-class PlatePolicyForm(forms.ModelForm):
+class PlatePolicyForm(ParkingFormMixin, forms.ModelForm):
     class Meta:
         model = PlatePolicy
         fields = ['plate', 'owner_name', 'billing_type', 'amount', 'active']
@@ -265,7 +265,7 @@ class PlatePolicyForm(forms.ModelForm):
                 "La placa solo puede contener letras y números"
             )
 
-        qs = PlatePolicy.objects.filter(plate=plate)
+        qs = PlatePolicy.objects.for_parking(self.parking).filter(plate=plate)
 
         if self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)

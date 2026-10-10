@@ -156,7 +156,7 @@ class Entry(models.Model):
     departure_date_hour = models.DateTimeField("Fecha y hora de salida", null=True, blank=True)
     fee = models.ForeignKey(
         Fee,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         blank=True,
         null=True,
         related_name='entry_fee'

@@ -65,7 +65,7 @@ class BathroomEntry(models.Model):
     entry_date_hour = models.DateTimeField("Fecha y hora de entrada", auto_now_add=True)
     fee = models.ForeignKey(
         BathroomFee,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         blank=True,
         null=True,
         related_name='bathroom_entry_fee'

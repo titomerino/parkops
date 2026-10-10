@@ -1,4 +1,3 @@
-from datetime import timedelta
 from decimal import Decimal
 
 import pytest
@@ -251,3 +250,16 @@ class TestConsultasConstantes:
         shown = next(e for e in response.context["entries"] if e.pk == entry.pk)
 
         assert shown.amount == Decimal("2.00")
+
+
+@pytest.mark.django_db
+def test_activar_y_desactivar_suscripcion(admin_client, monthly_policy):
+    url = f"/parking/suscripciones/estado/{monthly_policy.pk}"
+
+    admin_client.post(url)
+    monthly_policy.refresh_from_db()
+    assert monthly_policy.active is False
+
+    admin_client.post(url)
+    monthly_policy.refresh_from_db()
+    assert monthly_policy.active is True

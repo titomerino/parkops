@@ -31,7 +31,8 @@ class Fee(models.Model):
     def calculate_fee(self, minute):
         amount = 0
 
-        for r in Range.objects.filter(fee=self).order_by('start_minute'):
+        # self.ranges.all() reutiliza prefetch_related("fee__ranges") si existe
+        for r in sorted(self.ranges.all(), key=lambda r: r.start_minute):
             if minute >= r.start_minute:
                 amount = r.amount
             else:
@@ -106,7 +107,8 @@ class EntryQuerySet(models.QuerySet):
         if n_plate:
             queryset = queryset.filter(plate=n_plate)
 
-        return queryset
+        # Los reportes muestran la tarifa y pueden recalcular montos
+        return queryset.select_related("fee").prefetch_related("fee__ranges")
 
 
 class EntryManager(models.Manager):

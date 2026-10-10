@@ -269,30 +269,31 @@ def record(request):
 
     today = localtime(now()).date()
 
-    entries = (
+    entries = list(
         Entry.objects
         .entries_today_and_active(today)
         .select_related("fee")
+        .prefetch_related("fee__ranges")
         .only(
             "plate",
             "entry_date_hour",
             "departure_date_hour",
             "fee",
-            "state"
+            "state",
+            "final_minutes",
+            "final_amount"
         )
         .order_by("-state", "-entry_date_hour")
     )
 
     # Contadores para los chips
-    total_entries = entries.count()
-    active_entries = entries.filter(state=True).count()
-    finished_entries = entries.filter(state=False).count()
-
-    plates = entries.values_list("plate", flat=True)
+    total_entries = len(entries)
+    active_entries = sum(1 for e in entries if e.state)
+    finished_entries = total_entries - active_entries
 
     policies = (
         PlatePolicy.objects
-        .filter(plate__in=plates, active=True)
+        .filter(plate__in={e.plate for e in entries}, active=True)
         .only("plate", "billing_type", "amount")
     )
 
@@ -303,7 +304,12 @@ def record(request):
 
         e.billing_type = policy.billing_type if policy else "HOURLY"
 
-        minutes, amount = e.calculate_amount(policy=policy)
+        if e.state or e.final_minutes is None:
+            minutes, amount = e.calculate_amount(policy=policy)
+        else:
+            # Salida registrada: se muestra lo que se cobró, no un recálculo
+            minutes, amount = e.final_minutes, e.final_amount
+
         e.hours, e.minutes = minutes_to_hours_and_minutes(minutes)
         e.amount = amount
 

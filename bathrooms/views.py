@@ -28,7 +28,7 @@ def entry_bathrooms_view(request):
 
     entries = BathroomEntry.objects.filter(
         entry_date_hour__date=today
-    ).order_by('-entry_date_hour')
+    ).select_related('fee').order_by('-entry_date_hour')
 
     fees = BathroomFee.objects.all().filter(state=True)
 

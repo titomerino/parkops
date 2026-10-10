@@ -145,10 +145,71 @@
                 </div>
             </form>
 
+            {% if request.user.is_superuser %}
+            <!-- Eliminar entrada: solo superusuario -->
+            <div class="card-body pt-0">
+                <button type="button"
+                    class="btn btn-outline-danger rounded-pill px-4 w-100"
+                    data-bs-toggle="modal"
+                    data-bs-target="#deleteEntryModal">
+                    <i class="bi bi-trash3 me-1"></i>
+                    Eliminar entrada
+                </button>
+            </div>
+            {% endif %}
+
         </div>
 
     </div>
 </div>
+
+
+{% if request.user.is_superuser %}
+<div class="modal fade" id="deleteEntryModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-light border border-danger rounded-4">
+
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title text-danger">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          Eliminar entrada
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <p class="mb-3">Esta acción <strong>no se puede deshacer</strong>. Se eliminará:</p>
+
+        <ul class="list-unstyled small mb-3">
+          <li><span class="text-muted">Placa:</span> <strong>{{ entry.formatted_plate }}</strong></li>
+          <li><span class="text-muted">Entrada:</span> {{ entry.entry_date_hour|date:"d/m/Y h:i A" }}</li>
+          <li><span class="text-muted">Salida:</span> {% if entry.departure_date_hour %}{{ entry.departure_date_hour|date:"d/m/Y h:i A" }}{% else %}sin salida (vehículo adentro){% endif %}</li>
+          <li><span class="text-muted">Monto cobrado:</span> ${{ entry.final_amount|default:"0"|floatformat:2 }}</li>
+        </ul>
+
+        <div class="small text-muted">
+          El ingreso dejará de aparecer en reportes y en el dashboard. Quedará registrado
+          quién la eliminó en el historial del administrador.
+        </div>
+      </div>
+
+      <div class="modal-footer border-secondary">
+        <button type="button" class="btn btn-outline-secondary rounded-pill flex-fill" data-bs-dismiss="modal">
+          Cancelar
+        </button>
+        <form method="POST" action="{% url 'delete_entry' entry.pk %}" class="flex-fill">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger rounded-pill w-100">
+            <i class="bi bi-trash3 me-1"></i>
+            Sí, eliminar
+          </button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endif %}
 
 {% endblock %}
 

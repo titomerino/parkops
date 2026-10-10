@@ -367,3 +367,63 @@ class TestDictadoEndpoint:
         assert "Dictar placa" in html
         assert 'id="voicePlateModal"' in html
         assert 'id="plateInput"' in html
+
+
+@pytest.mark.django_db
+class TestEliminarEntrada:
+    def url(self, entry):
+        return f"/parking/eliminar/{entry.pk}/"
+
+    def test_superusuario_elimina_y_queda_registro(self, admin_client, make_entry):
+        from django.contrib.admin.models import DELETION, LogEntry
+
+        entry = make_entry(plate="P171737", minutes_ago=120, duration=60)
+        response = admin_client.post(self.url(entry))
+
+        assert response.status_code == 302
+        assert response.url == "/parking/historial/"
+        assert not Entry.objects.filter(pk=entry.pk).exists()
+
+        log = LogEntry.objects.get(action_flag=DELETION)
+        assert log.user.username == "admin"
+        assert log.object_id == str(entry.pk)
+        assert "P171737" in log.change_message
+        assert "$2.00" in log.change_message
+
+    def test_staff_con_todos_los_permisos_no_puede(self, client, django_user_model, make_entry):
+        from django.contrib.auth.models import Permission
+
+        user = django_user_model.objects.create_user("jefe", password="x", is_staff=True)
+        user.user_permissions.set(Permission.objects.filter(content_type__app_label="parking"))
+        client.force_login(user)
+        entry = make_entry()
+
+        assert client.post(self.url(entry)).status_code == 403
+        assert Entry.objects.filter(pk=entry.pk).exists()
+
+    def test_get_no_elimina(self, admin_client, make_entry):
+        entry = make_entry()
+        assert admin_client.get(self.url(entry)).status_code == 405
+        assert Entry.objects.filter(pk=entry.pk).exists()
+
+    def test_anonimo_va_al_login(self, client, make_entry):
+        entry = make_entry()
+        response = client.post(self.url(entry))
+        assert response.status_code == 302 and response.url.startswith("/login/")
+        assert Entry.objects.filter(pk=entry.pk).exists()
+
+    def test_entrada_inexistente(self, admin_client):
+        assert admin_client.post("/parking/eliminar/999999/").status_code == 404
+
+    def test_boton_solo_visible_para_superusuario(self, admin_client, client, django_user_model, make_entry):
+        from django.contrib.auth.models import Permission
+
+        entry = make_entry()
+        assert "Eliminar entrada" in admin_client.get(f"/parking/editar/{entry.pk}/").content.decode()
+
+        user = django_user_model.objects.create_user("editor", password="x")
+        user.user_permissions.add(Permission.objects.get(codename="change_entry"))
+        client.force_login(user)
+        html = client.get(f"/parking/editar/{entry.pk}/").content.decode()
+        assert "Eliminar entrada" not in html
+        assert "deleteEntryModal" not in html

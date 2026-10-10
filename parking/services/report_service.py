@@ -81,9 +81,15 @@ def _prepare_entry(entry, policy):
 
     return entry
 
-def generate_day_report(report_date):
+# Clave de estadísticas por tipo de cobro (ver _entry_type)
+_STATS_KEY = {
+    "Tarifa": "normal",
+    "Suscripción - DIARIO": "daily",
+    "Suscripción - MENSUAL": "monthly",
+}
 
-    entries = Entry.objects.custom_report(report_date)
+def _summarize(entries):
+    """Prepara cada entrada y acumula cantidad e ingresos por tipo de cobro."""
 
     policy_map = _get_policy_map(entries)
 
@@ -91,66 +97,42 @@ def generate_day_report(report_date):
 
     for entry in entries:
 
-        policy = policy_map.get(entry.plate)
+        _prepare_entry(entry, policy_map.get(entry.plate))
 
-        _prepare_entry(entry, policy)
+        key = _STATS_KEY[entry.type]
 
         stats["total_income"] += entry.final_amount
+        stats[f"{key}_count"] += 1
+        stats[f"total_income_{key}"] += entry.final_amount
 
-        if entry.type == "Suscripción - DIARIO":
+    return stats
 
-            stats["daily_count"] += 1
-            stats["total_income_daily"] += entry.final_amount
-
-        elif entry.type == "Suscripción - MENSUAL":
-
-            stats["monthly_count"] += 1
-            stats["total_income_monthly"] += entry.final_amount
-
-        else:
-
-            stats["normal_count"] += 1
-            stats["total_income_normal"] += entry.final_amount
+def _report_context(entries, stats, **extra):
 
     return {
-        "is_day_report": True,
-        "date": report_date.strftime('%d/%m/%Y'),
+        **extra,
         "entries": entries,
         "today": localtime(now()),
         "total_income": stats["total_income"],
         "summary": _build_summary(stats),
     }
 
+def generate_day_report(report_date):
+
+    entries = Entry.objects.custom_report(report_date)
+
+    return _report_context(
+        entries,
+        _summarize(entries),
+        is_day_report=True,
+        date=report_date.strftime('%d/%m/%Y'),
+    )
+
 def generate_month_report(date):
-    
+
     entries = Entry.objects.custom_report(month_date=date)
 
-    policy_map = _get_policy_map(entries)
-
-    stats = defaultdict(int)
-
-    for entry in entries:
-
-        policy = policy_map.get(entry.plate)
-
-        _prepare_entry(entry, policy)
-
-        stats["total_income"] += entry.final_amount
-
-        if entry.type == "Suscripción - DIARIO":
-
-            stats["daily_count"] += 1
-            stats["total_income_daily"] += entry.final_amount
-
-        elif entry.type == "Suscripción - MENSUAL":
-
-            stats["monthly_count"] += 1
-            stats["total_income_monthly"] += entry.final_amount
-
-        else:
-
-            stats["normal_count"] += 1
-            stats["total_income_normal"] += entry.final_amount
+    stats = _summarize(entries)
 
     # Cada mensualidad activa se suma una sola vez (igual que el dashboard),
     # no una vez por cada entrada de la placa
@@ -159,53 +141,22 @@ def generate_month_report(date):
     stats["total_income_monthly"] += monthly_income
     stats["total_income"] += monthly_income
 
-    return {
-        "date": date.strftime('%m/%Y'),
-        "entries": entries,
-        "today": localtime(now()),
-        "total_income": stats["total_income"],
-        "summary": _build_summary(stats),
-    }
+    return _report_context(
+        entries,
+        stats,
+        date=date.strftime('%m/%Y'),
+    )
 
 def generate_period_report(start_date, end_date):
-    
+
     entries = Entry.objects.custom_report(start_date, end_date)
 
-    policy_map = _get_policy_map(entries)
-
-    stats = defaultdict(int)
-
-    for entry in entries:
-
-        policy = policy_map.get(entry.plate)
-
-        _prepare_entry(entry, policy)
-
-        stats["total_income"] += entry.final_amount
-
-        if entry.type == "Suscripción - DIARIO":
-
-            stats["daily_count"] += 1
-            stats["total_income_daily"] += entry.final_amount
-
-        elif entry.type == "Suscripción - MENSUAL":
-
-            stats["monthly_count"] += 1
-            stats["total_income_monthly"] += entry.final_amount
-
-        else:
-
-            stats["normal_count"] += 1
-            stats["total_income_normal"] += entry.final_amount
-
-    return {
-        "start_date": start_date.strftime('%d/%m/%Y'),
-        "end_date": end_date.strftime('%d/%m/%Y'),
-        "entries": entries,
-        "today": localtime(now()),
-        "total_income": stats["total_income"],
-        "summary": _build_summary(stats),
-    }
+    return _report_context(
+        entries,
+        _summarize(entries),
+        start_date=start_date.strftime('%d/%m/%Y'),
+        end_date=end_date.strftime('%d/%m/%Y'),
+    )
 
 def generate_plate_report(n_plate, start_date, end_date):
 

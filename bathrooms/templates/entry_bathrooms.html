@@ -24,12 +24,19 @@
 
                 <div class="col-6 col-lg-3">
 
-                    <a
-                        href="{% url 'bathroom_entry_register' fee.id %}"
-                        class="btn btn-{{ fee.color }} me-2 mb-2 w-100"
+                    <form
+                        method="post"
+                        action="{% url 'bathroom_entry_register' fee.id %}"
+                        onsubmit="this.querySelector('button').disabled = true"
                     >
-                        {{ fee.name }} - <strong>${{ fee.amount|floatformat:2 }}</strong>
-                    </a>
+                        {% csrf_token %}
+                        <button
+                            type="submit"
+                            class="btn btn-{{ fee.color }} me-2 mb-2 w-100"
+                        >
+                            {{ fee.name }} - <strong>${{ fee.amount|floatformat:2 }}</strong>
+                        </button>
+                    </form>
 
                 </div>
 

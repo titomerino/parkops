@@ -26,3 +26,15 @@ class TestPermisos:
 
     def test_usuario_con_permiso_entra(self, admin_client):
         assert admin_client.get("/parking/historial/").status_code == 200
+
+
+@pytest.mark.django_db
+class TestLogout:
+    def test_get_no_cierra_sesion(self, admin_client):
+        assert admin_client.get("/logout/").status_code == 405
+        assert admin_client.get("/").status_code == 200
+
+    def test_post_cierra_sesion(self, admin_client):
+        response = admin_client.post("/logout/")
+        assert response.url == "/login/"
+        assert admin_client.get("/").status_code == 302

@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 from django.utils.timezone import now, localtime
 
 from payment.services.payment_service import notify_pending_payments
@@ -69,6 +70,7 @@ def custom_login(request):
     return render(request, "shell/login.html", {"form": form})
 
 
+@require_POST
 def custom_logout(request):
     """Cerrar sesión del usuario"""
     logout(request)

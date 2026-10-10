@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.utils.timezone import now, localtime
 from django.shortcuts import redirect
 from django.contrib import messages
+from django.views.decorators.http import require_POST
 from shell.decorators import perm_required
 
 from .models import BathroomFee, BathroomEntry
@@ -37,6 +38,7 @@ def entry_bathrooms_view(request):
         'fees': fees
     })
 
+@require_POST
 @perm_required('bathrooms.add_bathroomentry')
 def entry_bathroom_register_view(request, fee_id):
     """ Vista para registrar una entrada de baño """
@@ -100,6 +102,7 @@ def fee_edit_view(request, fee_id):
         'bathroom_fee': bathroom_fee
     })
 
+@require_POST
 @perm_required('bathrooms.change_bathroomfee')
 def toggle_fee_state_view(request, fee_id):
     """ Vista para activar/desactivar una tarifa de baño """

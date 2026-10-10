@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.utils.timezone import now
 from math import ceil
 from django.db.models import Sum
@@ -186,6 +186,13 @@ class Entry(models.Model):
         permissions = [
             ("view_statistics_entry", "Puede ver estadísticas de entradas"),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["plate"],
+                condition=Q(state=True),
+                name="unique_active_entry_per_plate",
+            ),
+        ]
 
     def __str__(self):
         return self.plate
@@ -244,7 +251,16 @@ class Entry(models.Model):
                 self.final_amount = None
 
         # Guardar cambios
-        super().save(*args, **kwargs)
+        try:
+            with transaction.atomic():
+                super().save(*args, **kwargs)
+        except IntegrityError as e:
+            # Dos registros simultáneos de la misma placa
+            if "unique_active_entry_per_plate" in str(e):
+                raise ValueError(
+                    f"Ya existe una entrada activa para esta placa: {self.plate}"
+                ) from e
+            raise
 
     def calculate_amount(self, policy=None):
         """

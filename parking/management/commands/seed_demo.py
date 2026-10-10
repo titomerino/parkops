@@ -5,7 +5,8 @@ Genera ~60 días de operación (parqueo, suscripciones y baños) e incluye
 a propósito casos que pueden existir en producción:
 
 - Entradas antiguas sin final_minutes / final_amount (anteriores a la migración 0011).
-- Una placa con dos entradas activas (posible por condición de carrera).
+- Una placa con dos entradas activas (posible por condición de carrera),
+  solo si la base aún no tiene la restricción unique_active_entry_per_plate.
 - Suscripción mensual sin monto y suscripción por hora.
 - Tarifa cuyo primer rango no inicia en el minuto 0.
 
@@ -19,7 +20,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from bathrooms.models import BathroomEntry, BathroomFee
@@ -204,10 +205,17 @@ class Command(BaseCommand):
     def _create_duplicate_active(self):
         # bulk_create omite la validación de save(): simula una condición de carrera
         start = self.now - timedelta(minutes=45)
-        Entry.objects.bulk_create([
-            Entry(plate=DUPLICATE_PLATE, entry_date_hour=start, fee=Fee.objects.get(default=True)),
-            Entry(plate=DUPLICATE_PLATE, entry_date_hour=start + timedelta(seconds=2), fee=Fee.objects.get(default=True)),
-        ])
+        try:
+            with transaction.atomic():
+                Entry.objects.bulk_create([
+                    Entry(plate=DUPLICATE_PLATE, entry_date_hour=start, fee=Fee.objects.get(default=True)),
+                    Entry(plate=DUPLICATE_PLATE, entry_date_hour=start + timedelta(seconds=2), fee=Fee.objects.get(default=True)),
+                ])
+            self.stats["duplicate"] = True
+        except IntegrityError:
+            # La restricción de la base impide el duplicado: se carga una sola
+            Entry.objects.create(plate=DUPLICATE_PLATE, entry_date_hour=start, fee=Fee.objects.get(default=True))
+            self.stats["duplicate"] = False
 
     def _create_bathroom_data(self):
         sanitario = BathroomFee.objects.create(name="Sanitario", amount=Decimal("0.25"), color="primary")
@@ -255,9 +263,13 @@ class Command(BaseCommand):
     def _print_summary(self):
         self.stdout.write(self.style.SUCCESS("Datos de demostración cargados"))
         self.stdout.write(f"  Entradas cerradas:        {self.stats['closed']}")
-        self.stdout.write(f"  Entradas activas:         {self.stats['active'] + 2}")
+        self.stdout.write(f"  Entradas activas:         {Entry.objects.filter(state=True).count()}")
         self.stdout.write(f"  Entradas legacy (sin $):  {self.stats['legacy']}")
-        self.stdout.write(f"  Placa duplicada activa:   {DUPLICATE_PLATE}")
+        self.stdout.write(
+            f"  Placa duplicada activa:   {DUPLICATE_PLATE}"
+            if self.stats["duplicate"]
+            else "  Placa duplicada activa:   bloqueada por la base de datos"
+        )
         self.stdout.write(f"  Suscripciones:            {PlatePolicy.objects.count()}")
         self.stdout.write(f"  Usos de baño:             {BathroomEntry.objects.count()}")
         self.stdout.write("  Usuario operador:         operador / default")

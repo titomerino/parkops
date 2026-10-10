@@ -138,3 +138,24 @@ class TestReports:
 def now_local():
     from django.utils.timezone import localdate
     return localdate()
+
+
+@pytest.mark.django_db(transaction=True)
+class TestUniqueActiveEntry:
+    def test_base_de_datos_impide_dos_entradas_activas(self, fee):
+        from django.db import IntegrityError
+
+        Entry.objects.bulk_create([Entry(plate="P555555", fee=fee)])
+        with pytest.raises(IntegrityError):
+            Entry.objects.bulk_create([Entry(plate="P555555", fee=fee)])
+
+    def test_save_traduce_el_error_a_mensaje_claro(self, make_entry):
+        make_entry(plate="P555555")
+        with pytest.raises(ValueError, match="Ya existe una entrada activa"):
+            make_entry(plate="P555555")
+
+    def test_misma_placa_puede_tener_varias_entradas_cerradas(self, make_entry):
+        make_entry(plate="P555555", minutes_ago=300, duration=30)
+        make_entry(plate="P555555", minutes_ago=200, duration=30)
+        make_entry(plate="P555555")
+        assert Entry.objects.filter(plate="P555555").count() == 3

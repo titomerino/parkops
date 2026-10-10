@@ -1,10 +1,18 @@
 
 from io import BytesIO
+import mimetypes
+import os
+from urllib.parse import unquote, urljoin
+
+from django.conf import settings
+from django.contrib.staticfiles import finders
+from django.contrib.staticfiles.storage import staticfiles_storage
 from django.utils import timezone
 from openpyxl import Workbook
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 import weasyprint
+from weasyprint.urls import URLFetcher, URLFetcherResponse
 
 from openpyxl.styles import (
     Font,
@@ -59,6 +67,48 @@ def format_plate(plate: str) -> str:
     return f"{first} {' '.join(groups)}"
 
 
+def _static_file_path(name):
+    """Ruta en disco de un archivo estático (collectstatic o carpetas de la app)."""
+
+    try:
+        path = staticfiles_storage.path(name)
+        if os.path.exists(path):
+            return path
+    except NotImplementedError:
+        pass
+
+    return finders.find(name)
+
+
+class StaticFilesURLFetcher(URLFetcher):
+    """
+    Lee los archivos de /static/ desde disco.
+
+    Pedirlos por HTTP al propio servidor bloqueaba al worker de Gunicorn
+    que genera el PDF: tardaba el timeout completo (10 s) y el PDF salía
+    sin estilos.
+    """
+
+    def __init__(self, base_url, **kwargs):
+        super().__init__(**kwargs)
+        self._static_prefix = urljoin(base_url, settings.STATIC_URL)
+
+    def fetch(self, url, headers=None):
+        if url.startswith(self._static_prefix):
+            name = unquote(url[len(self._static_prefix):].split("?")[0])
+            path = _static_file_path(name)
+
+            if path is None:
+                raise FileNotFoundError(f"Archivo estático no encontrado: {name}")
+
+            content_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
+
+            with open(path, "rb") as f:
+                return URLFetcherResponse(url, body=f.read(), headers={"Content-Type": content_type})
+
+        return super().fetch(url, headers)
+
+
 def render_pdf_response(
     request,
     template_name,
@@ -70,9 +120,12 @@ def render_pdf_response(
         context
     )
 
+    base_url = request.build_absolute_uri("/")
+
     pdf = weasyprint.HTML(
         string=html_string,
-        base_url=request.build_absolute_uri("/")
+        base_url=base_url,
+        url_fetcher=StaticFilesURLFetcher(base_url)
     ).write_pdf()
 
     response = HttpResponse(

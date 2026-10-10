@@ -2,11 +2,13 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 from django.utils.timezone import now, localtime
 
 from payment.services.payment_service import notify_pending_payments
 
 from .forms import LoginForm
+from .utils import safe_redirect_url
 import logging
 from bathrooms.models import BathroomEntry
 from parking.models import Entry, PlatePolicy
@@ -59,8 +61,9 @@ def custom_login(request):
             if user is not None:
                 login(request, user)
                 messages.success(request, f"Bienvenido {user.username}")
-                next_url = request.GET.get('next')  # opcional: redirigir a la página original
-                return redirect(next_url if next_url else 'dashboard')
+                # Solo se redirige a páginas del propio sitio
+                next_url = safe_redirect_url(request, request.GET.get('next'))
+                return redirect(next_url or 'dashboard')
             else:
                 messages.error(request, "Usuario o contraseña incorrectos")
     else:
@@ -69,6 +72,7 @@ def custom_login(request):
     return render(request, "shell/login.html", {"form": form})
 
 
+@require_POST
 def custom_logout(request):
     """Cerrar sesión del usuario"""
     logout(request)

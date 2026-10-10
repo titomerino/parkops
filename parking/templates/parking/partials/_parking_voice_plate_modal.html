@@ -30,6 +30,11 @@
           <i class="bi bi-mic-fill"></i>
         </button>
 
+        <!-- Nivel del micrófono (solo donde se controla el micrófono: Chrome/Android) -->
+        <div id="voicePlateLevel" class="progress mx-auto mt-3 d-none" style="height: 6px; max-width: 200px;">
+          <div id="voicePlateLevelBar" class="progress-bar bg-secondary" style="width: 0%; transition: width .08s;"></div>
+        </div>
+
         <div id="voicePlateStatus" class="small text-muted mt-2">
           Toca el micrófono y di la placa
         </div>
@@ -103,8 +108,75 @@ const VoicePlate = (function () {
     let languageIndex = 0;
     let selected = null;
     let modal = null;
+    let audio = null;
 
     const $ = (id) => document.getElementById(id);
+
+    // WebKit (todos los navegadores de iPhone y Safari en Mac): el sistema ya procesa
+    // el micrófono y abrirlo por separado puede chocar con el dictado.
+    const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const IS_SAFARI = /^((?!chrome|chromium|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent);
+    // Chrome, Edge y demás Chromium: micrófono propio con filtros de ruido para el dictado
+    const CAN_FILTER_NOISE = !IS_IOS && !IS_SAFARI && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+    async function openMicrophone() {
+        if (!CAN_FILTER_NOISE) return null;
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    noiseSuppression: true,
+                    echoCancellation: true,
+                    autoGainControl: true,
+                    channelCount: 1,
+                },
+            });
+
+            const context = new AudioContext();
+            const analyser = context.createAnalyser();
+            analyser.fftSize = 512;
+            context.createMediaStreamSource(stream).connect(analyser);
+
+            const samples = new Uint8Array(analyser.fftSize);
+            const bar = $("voicePlateLevelBar");
+
+            audio = { stream, context, frame: null };
+
+            const draw = () => {
+                analyser.getByteTimeDomainData(samples);
+                let peak = 0;
+                for (const value of samples) peak = Math.max(peak, Math.abs(value - 128));
+
+                const level = Math.min(1, peak / 64);
+                bar.style.width = `${Math.round(level * 100)}%`;
+                bar.classList.toggle("bg-success", level > 0.25);
+                bar.classList.toggle("bg-secondary", level <= 0.25);
+
+                audio.frame = requestAnimationFrame(draw);
+            };
+
+            $("voicePlateLevel").classList.remove("d-none");
+            draw();
+
+            return stream.getAudioTracks()[0];
+
+        } catch (error) {
+            // Sin permiso o sin soporte: el dictado usa el micrófono por defecto
+            return null;
+        }
+    }
+
+    function closeMicrophone() {
+        if (!audio) return;
+
+        cancelAnimationFrame(audio.frame);
+        audio.stream.getTracks().forEach((track) => track.stop());
+        audio.context.close();
+        audio = null;
+
+        $("voicePlateLevel").classList.add("d-none");
+    }
 
     function open() {
         if (!modal) modal = new bootstrap.Modal($("voicePlateModal"));
@@ -150,16 +222,19 @@ const VoicePlate = (function () {
         listening ? stop() : start();
     }
 
-    function start() {
+    async function start() {
         if (!Recognition) return;
 
         reset();
+        closeMicrophone();
 
         recognition = new Recognition();
         recognition.lang = LANGUAGES[languageIndex];
         recognition.interimResults = true;
         recognition.maxAlternatives = 5;
         recognition.continuous = false;
+
+        recognition.onspeechstart = () => setStatus("Te escucho…");
 
         recognition.onresult = (event) => {
             const result = event.results[event.results.length - 1];
@@ -175,6 +250,7 @@ const VoicePlate = (function () {
 
         recognition.onerror = (event) => {
             setListening(false);
+            closeMicrophone();
 
             if (event.error === "language-not-supported" && languageIndex < LANGUAGES.length - 1) {
                 languageIndex += 1;
@@ -196,19 +272,37 @@ const VoicePlate = (function () {
         };
 
         recognition.onend = () => {
+            closeMicrophone();
+
             if (listening) {
                 setListening(false);
                 if (!selected) setStatus("Toca el micrófono y di la placa");
             }
         };
 
-        recognition.start();
         setListening(true);
+
+        const track = await openMicrophone();
+
+        // Se detuvo o se cerró la modal mientras se abría el micrófono
+        if (!listening) {
+            closeMicrophone();
+            return;
+        }
+
+        try {
+            // Navegadores sin soporte ignoran el track y usan su micrófono
+            track ? recognition.start(track) : recognition.start();
+        } catch (error) {
+            closeMicrophone();
+            recognition.start();
+        }
     }
 
     function stop() {
         if (recognition && listening) recognition.stop();
         setListening(false);
+        closeMicrophone();
     }
 
     async function interpret(alternatives) {

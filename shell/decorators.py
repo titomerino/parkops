@@ -26,3 +26,23 @@ def perm_required(perm):
         return wrapper
 
     return decorator
+
+
+def superuser_required(view_func):
+    """
+    Solo superusuarios (admin root).
+    Sin sesión → login; con sesión pero sin ser superusuario → 403.
+    """
+
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+
+        if not request.user.is_superuser:
+            raise PermissionDenied
+
+        return view_func(request, *args, **kwargs)
+
+    return wrapper

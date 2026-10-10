@@ -1,0 +1,401 @@
+<!-- DICTADO DE PLACA POR VOZ -->
+<div class="modal fade" id="voicePlateModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-light border border-secondary rounded-4">
+
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title d-flex align-items-center gap-2">
+          <i class="bi bi-mic-fill"></i>
+          Dictar placa
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body text-center">
+
+        <!-- Navegador sin soporte -->
+        <div id="voicePlateUnsupported" class="alert alert-warning small text-start d-none">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          Este navegador no permite dictar. Usa Chrome en Android o Safari en iPhone.
+        </div>
+
+        <!-- Botón grabar -->
+        <button
+          type="button"
+          id="voicePlateRecordBtn"
+          class="btn btn-outline-danger rounded-circle d-inline-flex align-items-center justify-content-center"
+          style="width: 96px; height: 96px; font-size: 2.5rem;"
+          onclick="VoicePlate.toggleRecording()"
+        >
+          <i class="bi bi-mic-fill"></i>
+        </button>
+
+        <!-- Nivel del micrófono (solo donde se controla el micrófono: Chrome/Android) -->
+        <div id="voicePlateLevel" class="progress mx-auto mt-3 d-none" style="height: 6px; max-width: 200px;">
+          <div id="voicePlateLevelBar" class="progress-bar bg-secondary" style="width: 0%; transition: width .08s;"></div>
+        </div>
+
+        <div id="voicePlateStatus" class="small text-muted mt-2">
+          Toca el micrófono y di la placa
+        </div>
+        <div id="voicePlateHint" class="small text-secondary">
+          Ej.: «pe ciento setenta y uno, setecientos treinta y siete»
+        </div>
+
+        <!-- Resultado -->
+        <div id="voicePlateResult" class="mt-4 d-none">
+
+          <div class="small text-muted">
+            Escuché: «<span id="voicePlateHeard"></span>»
+          </div>
+
+          <div
+            id="voicePlateValue"
+            class="display-5 fw-bold my-2"
+            style="letter-spacing: .08em;"
+          ></div>
+
+          <span id="voicePlateAction" class="badge rounded-pill fs-6"></span>
+
+          <!-- Placas conocidas parecidas -->
+          <div id="voicePlateCandidates" class="mt-3 d-none">
+            <div class="small text-muted mb-1">¿O quisiste decir?</div>
+            <div id="voicePlateCandidateList" class="d-flex flex-wrap justify-content-center gap-2"></div>
+          </div>
+
+        </div>
+
+        <!-- Error -->
+        <div id="voicePlateError" class="alert alert-warning small mt-4 mb-0 d-none"></div>
+
+      </div>
+
+      <div class="modal-footer border-secondary">
+        <button
+          type="button"
+          class="btn btn-outline-secondary rounded-pill flex-fill"
+          onclick="VoicePlate.discard()"
+        >
+          <i class="bi bi-x-lg me-1"></i>
+          Descartar
+        </button>
+        <button
+          type="button"
+          id="voicePlateConfirmBtn"
+          class="btn btn-success rounded-pill flex-fill"
+          onclick="VoicePlate.confirm()"
+          disabled
+        >
+          <i class="bi bi-check-lg me-1"></i>
+          Confirmar
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const VoicePlate = (function () {
+
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const INTERPRET_URL = "{% url 'interpret_voice_plate' %}";
+    // es-SV primero; si el navegador no lo soporta se prueban variantes cercanas
+    const LANGUAGES = ["es-SV", "es-MX", "es-US", "es-ES"];
+
+    let recognition = null;
+    let listening = false;
+    let languageIndex = 0;
+    let selected = null;
+    let modal = null;
+    let audio = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    // WebKit (todos los navegadores de iPhone y Safari en Mac): el sistema ya procesa
+    // el micrófono y abrirlo por separado puede chocar con el dictado.
+    const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const IS_SAFARI = /^((?!chrome|chromium|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent);
+    // Chrome, Edge y demás Chromium: micrófono propio con filtros de ruido para el dictado
+    const CAN_FILTER_NOISE = !IS_IOS && !IS_SAFARI && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+    async function openMicrophone() {
+        if (!CAN_FILTER_NOISE) return null;
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    noiseSuppression: true,
+                    echoCancellation: true,
+                    autoGainControl: true,
+                    channelCount: 1,
+                },
+            });
+
+            const context = new AudioContext();
+            const analyser = context.createAnalyser();
+            analyser.fftSize = 512;
+            context.createMediaStreamSource(stream).connect(analyser);
+
+            const samples = new Uint8Array(analyser.fftSize);
+            const bar = $("voicePlateLevelBar");
+
+            audio = { stream, context, frame: null };
+
+            const draw = () => {
+                analyser.getByteTimeDomainData(samples);
+                let peak = 0;
+                for (const value of samples) peak = Math.max(peak, Math.abs(value - 128));
+
+                const level = Math.min(1, peak / 64);
+                bar.style.width = `${Math.round(level * 100)}%`;
+                bar.classList.toggle("bg-success", level > 0.25);
+                bar.classList.toggle("bg-secondary", level <= 0.25);
+
+                audio.frame = requestAnimationFrame(draw);
+            };
+
+            $("voicePlateLevel").classList.remove("d-none");
+            draw();
+
+            return stream.getAudioTracks()[0];
+
+        } catch (error) {
+            // Sin permiso o sin soporte: el dictado usa el micrófono por defecto
+            return null;
+        }
+    }
+
+    function closeMicrophone() {
+        if (!audio) return;
+
+        cancelAnimationFrame(audio.frame);
+        audio.stream.getTracks().forEach((track) => track.stop());
+        audio.context.close();
+        audio = null;
+
+        $("voicePlateLevel").classList.add("d-none");
+    }
+
+    function open() {
+        if (!modal) modal = new bootstrap.Modal($("voicePlateModal"));
+
+        reset();
+        $("voicePlateUnsupported").classList.toggle("d-none", !!Recognition);
+        $("voicePlateRecordBtn").disabled = !Recognition;
+
+        // Al cerrar la modal se detiene el micrófono
+        $("voicePlateModal").addEventListener("hidden.bs.modal", stop, { once: true });
+
+        modal.show();
+    }
+
+    function reset() {
+        selected = null;
+        $("voicePlateResult").classList.add("d-none");
+        $("voicePlateCandidates").classList.add("d-none");
+        $("voicePlateError").classList.add("d-none");
+        $("voicePlateConfirmBtn").disabled = true;
+        $("voicePlateHint").classList.remove("d-none");
+        setStatus("Toca el micrófono y di la placa");
+    }
+
+    function setStatus(text) {
+        $("voicePlateStatus").innerText = text;
+    }
+
+    function setListening(value) {
+        listening = value;
+        const btn = $("voicePlateRecordBtn");
+        btn.classList.toggle("btn-danger", value);
+        btn.classList.toggle("btn-outline-danger", !value);
+        if (value) setStatus("Escuchando… toca para detener");
+    }
+
+    function showError(text) {
+        $("voicePlateError").innerText = text;
+        $("voicePlateError").classList.remove("d-none");
+    }
+
+    function toggleRecording() {
+        listening ? stop() : start();
+    }
+
+    async function start() {
+        if (!Recognition) return;
+
+        reset();
+        closeMicrophone();
+
+        recognition = new Recognition();
+        recognition.lang = LANGUAGES[languageIndex];
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 5;
+        recognition.continuous = false;
+
+        recognition.onspeechstart = () => setStatus("Te escucho…");
+
+        recognition.onresult = (event) => {
+            const result = event.results[event.results.length - 1];
+
+            if (!result.isFinal) {
+                setStatus(`«${result[0].transcript}»`);
+                return;
+            }
+
+            const alternatives = Array.from(result, (alt) => alt.transcript);
+            interpret(alternatives);
+        };
+
+        recognition.onerror = (event) => {
+            setListening(false);
+            closeMicrophone();
+
+            if (event.error === "language-not-supported" && languageIndex < LANGUAGES.length - 1) {
+                languageIndex += 1;
+                start();
+                return;
+            }
+
+            const errors = {
+                "not-allowed": "Permite el uso del micrófono para este sitio.",
+                "service-not-allowed": "Permite el uso del micrófono para este sitio.",
+                "no-speech": "No se escuchó nada. Intenta de nuevo, más cerca del teléfono.",
+                "audio-capture": "No se encontró un micrófono.",
+                "network": "Se necesita internet para dictar.",
+            };
+            if (event.error !== "aborted") {
+                showError(errors[event.error] || "No se pudo reconocer la voz. Intenta de nuevo.");
+            }
+            setStatus("Toca el micrófono y di la placa");
+        };
+
+        recognition.onend = () => {
+            closeMicrophone();
+
+            if (listening) {
+                setListening(false);
+                if (!selected) setStatus("Toca el micrófono y di la placa");
+            }
+        };
+
+        setListening(true);
+
+        const track = await openMicrophone();
+
+        // Se detuvo o se cerró la modal mientras se abría el micrófono
+        if (!listening) {
+            closeMicrophone();
+            return;
+        }
+
+        try {
+            // Navegadores sin soporte ignoran el track y usan su micrófono
+            track ? recognition.start(track) : recognition.start();
+        } catch (error) {
+            closeMicrophone();
+            recognition.start();
+        }
+    }
+
+    function stop() {
+        if (recognition && listening) recognition.stop();
+        setListening(false);
+        closeMicrophone();
+    }
+
+    async function interpret(alternatives) {
+        setListening(false);
+        setStatus("Interpretando…");
+
+        try {
+            const response = await fetch(INTERPRET_URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value,
+                },
+                body: JSON.stringify({ alternatives }),
+            });
+            const data = await response.json();
+
+            $("voicePlateHeard").innerText = data.heard || alternatives[0] || "";
+
+            if (!data.ok) {
+                $("voicePlateResult").classList.remove("d-none");
+                $("voicePlateValue").innerText = "—";
+                $("voicePlateAction").className = "badge rounded-pill fs-6 d-none";
+                showError("No se reconoció una placa válida. Intenta de nuevo, por ejemplo: «pe uno siete uno, siete tres siete».");
+                setStatus("Toca el micrófono para intentar de nuevo");
+                return;
+            }
+
+            select(data.plate, data.formatted, data.action, data.entry_time);
+            renderCandidates(data.candidates || []);
+            setStatus("Confirma la placa o descártala");
+
+        } catch (error) {
+            showError("No se pudo interpretar la placa. Revisa la conexión.");
+            setStatus("Toca el micrófono para intentar de nuevo");
+        }
+    }
+
+    function select(plate, formatted, action, entryTime) {
+        selected = plate;
+
+        $("voicePlateResult").classList.remove("d-none");
+        $("voicePlateError").classList.add("d-none");
+        $("voicePlateHint").classList.add("d-none");
+        $("voicePlateValue").innerText = formatted;
+
+        const badge = $("voicePlateAction");
+        if (action === "salida") {
+            badge.className = "badge rounded-pill fs-6 text-bg-warning";
+            badge.innerText = entryTime ? `Registrará SALIDA · entró ${entryTime}` : "Registrará SALIDA";
+        } else {
+            badge.className = "badge rounded-pill fs-6 text-bg-success";
+            badge.innerText = "Registrará ENTRADA";
+        }
+
+        $("voicePlateConfirmBtn").disabled = false;
+    }
+
+    function renderCandidates(candidates) {
+        const list = $("voicePlateCandidateList");
+        list.innerHTML = "";
+
+        candidates.forEach((c) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn btn-sm btn-outline-info rounded-pill";
+            btn.innerText = c.formatted + (c.active ? " · adentro" : c.subscribed ? " · suscripción" : "");
+            btn.onclick = () => {
+                select(c.plate, c.formatted, c.active ? "salida" : "entrada", null);
+                $("voicePlateCandidates").classList.add("d-none");
+            };
+            list.appendChild(btn);
+        });
+
+        $("voicePlateCandidates").classList.toggle("d-none", candidates.length === 0);
+    }
+
+    function confirm() {
+        if (!selected) return;
+
+        // Usa el formulario de búsqueda existente: mismo flujo que al digitar
+        const input = document.getElementById("plateInput");
+        input.value = selected;
+        stop();
+        input.form.requestSubmit ? input.form.requestSubmit() : input.form.submit();
+    }
+
+    function discard() {
+        stop();
+        reset();
+    }
+
+    return { open, toggleRecording, confirm, discard };
+
+})();
+</script>

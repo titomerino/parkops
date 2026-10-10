@@ -15,11 +15,13 @@ from .views import (
     report_month,
     report_period,
     report_plate,
+    interpret_voice_plate,
 )
 from django.urls import path
 
 urlpatterns = [
     path("busqueda/", search_plate, name="search_plate"),
+    path("busqueda/voz/", interpret_voice_plate, name="interpret_voice_plate"),
     path("registro/<str:plate>", register, name="register"),
     path("salida/<int:pk>", departure, name="departure"),
     path("historial/", record, name="record"),

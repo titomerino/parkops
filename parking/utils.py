@@ -87,6 +87,14 @@ def render_pdf_response(
     return response
 
 
+def _format_excel_datetime(value):
+    # localtime(None) devuelve la hora actual: una entrada activa mostraría salida
+    if not value:
+        return ""
+
+    return timezone.localtime(value).strftime("%d/%m - %I:%M %p")
+
+
 def export_report_excel(context, report_date, report_end_date=None, type=None, plate=None):
 
     wb = Workbook()
@@ -169,26 +177,16 @@ def export_report_excel(context, report_date, report_end_date=None, type=None, p
             value=entry.plate
         )
 
-        entry_date = timezone.localtime(entry.entry_date_hour)
-
         ws.cell(
             row=row,
             column=2,
-            value=entry_date.strftime(
-                "%d/%m - %I:%M %p"
-            )
-            if entry_date else ""
+            value=_format_excel_datetime(entry.entry_date_hour)
         )
-
-        departure_date = timezone.localtime(entry.departure_date_hour)
 
         ws.cell(
             row=row,
             column=3,
-            value=departure_date.strftime(
-                "%d/%m - %I:%M %p"
-            )
-            if departure_date else ""
+            value=_format_excel_datetime(entry.departure_date_hour)
         )
 
         ws.cell(

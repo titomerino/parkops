@@ -159,3 +159,18 @@ class TestUniqueActiveEntry:
         make_entry(plate="P555555", minutes_ago=200, duration=30)
         make_entry(plate="P555555")
         assert Entry.objects.filter(plate="P555555").count() == 3
+
+
+@pytest.mark.django_db
+def test_excel_deja_vacia_la_salida_de_entradas_activas(admin_client, make_entry):
+    from io import BytesIO
+    from openpyxl import load_workbook
+
+    make_entry(plate="PACTIVA", minutes_ago=30)
+    make_entry(plate="PCERRADA", minutes_ago=200, duration=60)
+
+    response = admin_client.get(f"/parking/reporte/hoy/?date={now_local()}&format=xlsx")
+    rows = {r[0]: r for r in load_workbook(BytesIO(response.content)).active.iter_rows(min_row=4, values_only=True)}
+
+    assert rows["PACTIVA"][2] in ("", None)
+    assert rows["PCERRADA"][2]

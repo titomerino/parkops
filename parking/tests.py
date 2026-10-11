@@ -79,22 +79,22 @@ class TestReports:
         from parking.services.report_service import generate_month_report
         from parking.models import PlatePolicy
 
-        PlatePolicy.objects.create(plate="P100002", billing_type="MONTHLY", amount=Decimal("40.00"))
+        PlatePolicy.objects.create(parking=monthly_policy.parking, plate="P100002", billing_type="MONTHLY", amount=Decimal("40.00"))
         for days in range(1, 6):
             make_entry(plate=monthly_policy.plate, minutes_ago=60 * 24 * days, duration=480, fee=None)
 
-        report = generate_month_report(now_local())
+        report = generate_month_report(PARKING(), now_local())
 
         assert self.summary(report, "Suscripción mensual")["income"] == Decimal("80.00")
 
-    def test_mensualidad_sin_monto_no_rompe_el_reporte(self, make_entry):
+    def test_mensualidad_sin_monto_no_rompe_el_reporte(self, make_entry, parking):
         from parking.services.report_service import generate_month_report
         from parking.models import PlatePolicy
 
-        PlatePolicy.objects.create(plate="P100003", billing_type="MONTHLY", amount=None)
+        PlatePolicy.objects.create(parking=parking, plate="P100003", billing_type="MONTHLY", amount=None)
         make_entry(plate="P100003", duration=60, fee=None)
 
-        report = generate_month_report(now_local())
+        report = generate_month_report(PARKING(), now_local())
 
         assert self.summary(report, "Suscripción mensual")["income"] == 0
 
@@ -105,16 +105,16 @@ class TestReports:
         Entry.objects.filter(pk=entry.pk).update(final_minutes=None, final_amount=None)
         day = localtime(entry.departure_date_hour).date()
 
-        assert generate_day_report(day)["total_income"] == Decimal("2.00")
-        assert generate_period_report(day, day)["total_income"] == Decimal("2.00")
+        assert generate_day_report(entry.parking, day)["total_income"] == Decimal("2.00")
+        assert generate_period_report(entry.parking, day, day)["total_income"] == Decimal("2.00")
 
         entry.refresh_from_db()
         assert entry.final_amount is None
 
-    def test_suscripcion_por_hora_se_reporta_como_tarifa(self, admin_client, make_entry):
+    def test_suscripcion_por_hora_se_reporta_como_tarifa(self, admin_client, make_entry, parking):
         from parking.models import PlatePolicy
 
-        PlatePolicy.objects.create(plate="P300001", billing_type="HOURLY", amount=Decimal("1.00"))
+        PlatePolicy.objects.create(parking=parking, plate="P300001", billing_type="HOURLY", amount=Decimal("1.00"))
         entry = make_entry(plate="P300001", minutes_ago=200, duration=90)
         day = localtime(entry.departure_date_hour).date().isoformat()
 
@@ -131,7 +131,12 @@ class TestReports:
 
         make_entry(minutes_ago=30)
 
-        assert generate_day_report(now_local())["total_income"] == 0
+        assert generate_day_report(PARKING(), now_local())["total_income"] == 0
+
+
+def PARKING():
+    from tenants.models import Parking
+    return Parking.objects.order_by("pk").first()
 
 
 def now_local():
@@ -144,9 +149,9 @@ class TestUniqueActiveEntry:
     def test_base_de_datos_impide_dos_entradas_activas(self, fee):
         from django.db import IntegrityError
 
-        Entry.objects.bulk_create([Entry(plate="P555555", fee=fee)])
+        Entry.objects.bulk_create([Entry(parking=fee.parking, plate="P555555", fee=fee)])
         with pytest.raises(IntegrityError):
-            Entry.objects.bulk_create([Entry(plate="P555555", fee=fee)])
+            Entry.objects.bulk_create([Entry(parking=fee.parking, plate="P555555", fee=fee)])
 
     def test_save_traduce_el_error_a_mensaje_claro(self, make_entry):
         make_entry(plate="P555555")
@@ -185,8 +190,8 @@ class TestTicket:
         entry = make_entry()
         assert admin_client.get(f"/parking/ticket/?entry_id={entry.pk}").status_code == 200
 
-    def test_ticket_requiere_permiso(self, client, django_user_model, make_entry):
-        client.force_login(django_user_model.objects.create_user("sin_permiso", password="x"))
+    def test_ticket_requiere_permiso(self, client, django_user_model, make_entry, member):
+        client.force_login(member(django_user_model.objects.create_user("sin_permiso", password="x")))
         assert client.get(f"/parking/ticket/?entry_id={make_entry().pk}").status_code == 403
 
 
@@ -346,11 +351,11 @@ class TestDictadoEndpoint:
         response = admin_client.post(self.url, body, content_type="application/json")
         assert response.status_code == 400
 
-    def test_requiere_permiso(self, client, django_user_model):
-        client.force_login(django_user_model.objects.create_user("sin_permiso", password="x"))
+    def test_requiere_permiso(self, client, django_user_model, member):
+        client.force_login(member(django_user_model.objects.create_user("sin_permiso", password="x")))
         assert self.post(client, ["P 171 737"]).status_code == 403
 
-    def test_requiere_csrf(self, django_user_model):
+    def test_requiere_csrf(self, django_user_model, parking):
         import json
         from django.test import Client
 
@@ -390,10 +395,10 @@ class TestEliminarEntrada:
         assert "P171737" in log.change_message
         assert "$2.00" in log.change_message
 
-    def test_staff_con_todos_los_permisos_no_puede(self, client, django_user_model, make_entry):
+    def test_staff_con_todos_los_permisos_no_puede(self, client, django_user_model, make_entry, member):
         from django.contrib.auth.models import Permission
 
-        user = django_user_model.objects.create_user("jefe", password="x", is_staff=True)
+        user = member(django_user_model.objects.create_user("jefe", password="x", is_staff=True))
         user.user_permissions.set(Permission.objects.filter(content_type__app_label="parking"))
         client.force_login(user)
         entry = make_entry()
@@ -415,13 +420,13 @@ class TestEliminarEntrada:
     def test_entrada_inexistente(self, admin_client):
         assert admin_client.post("/parking/eliminar/999999/").status_code == 404
 
-    def test_boton_solo_visible_para_superusuario(self, admin_client, client, django_user_model, make_entry):
+    def test_boton_solo_visible_para_superusuario(self, admin_client, client, django_user_model, make_entry, member):
         from django.contrib.auth.models import Permission
 
         entry = make_entry()
         assert "Eliminar entrada" in admin_client.get(f"/parking/editar/{entry.pk}/").content.decode()
 
-        user = django_user_model.objects.create_user("editor", password="x")
+        user = member(django_user_model.objects.create_user("editor", password="x"))
         user.user_permissions.add(Permission.objects.get(codename="change_entry"))
         client.force_login(user)
         html = client.get(f"/parking/editar/{entry.pk}/").content.decode()

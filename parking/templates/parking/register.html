@@ -48,7 +48,7 @@
             <hr>
             <div class="text-muted small">Vehículo</div>
             <div class="display-6 fw-bold tracking-wide">
-                {{ plate|default:form.initial.plate }}
+                {{ plate }}
             </div>
         </div>
 
@@ -84,7 +84,7 @@
             {% endif %}
 
             <!-- Hidden placa -->
-            <input type="hidden" name="plate" value="{{ plate|default:form.initial.plate }}">
+            <input type="hidden" name="plate" value="{{ plate }}">
             
             <div class="row">
                 <div class="col-12 col-md-6 mb-3">

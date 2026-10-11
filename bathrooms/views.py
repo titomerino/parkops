@@ -7,29 +7,32 @@ from shell.decorators import perm_required
 
 from .models import BathroomFee, BathroomEntry
 from .forms import BathroomFeeForm
+from tenants.decorators import bathrooms_enabled_required
 
 
 @perm_required('bathrooms.view_bathroomfee')
+@bathrooms_enabled_required
 def fee_list_view(request):
     """ Página de listado de tarifas de baño """
 
-    fees = BathroomFee.objects.all().order_by('-id')
+    fees = BathroomFee.objects.for_parking(request.parking).order_by('-id')
 
     return render(request, "fee_list.html", {
         'fees': fees
     })
 
 @perm_required('bathrooms.view_bathroomentry')
+@bathrooms_enabled_required
 def entry_bathrooms_view(request):
     """ Página de entradas al baño del dia """
 
     today = localtime(now()).date()
 
-    entries = BathroomEntry.objects.filter(
+    entries = BathroomEntry.objects.for_parking(request.parking).filter(
         entry_date_hour__date=today
     ).select_related('fee').order_by('-entry_date_hour')
 
-    fees = BathroomFee.objects.all().filter(state=True)
+    fees = BathroomFee.objects.for_parking(request.parking).filter(state=True)
 
     return render(request, "entry_bathrooms.html", {
         'entries': entries,
@@ -39,13 +42,15 @@ def entry_bathrooms_view(request):
 
 @require_POST
 @perm_required('bathrooms.add_bathroomentry')
+@bathrooms_enabled_required
 def entry_bathroom_register_view(request, fee_id):
     """ Vista para registrar una entrada de baño """
     # Solo tarifas activas: las inactivas no se muestran para cobrar
-    fee = get_object_or_404(BathroomFee, pk=fee_id, state=True)
+    fee = get_object_or_404(BathroomFee, pk=fee_id, state=True, parking=request.parking)
 
     # Crear entrada de baño
     bathroom_entry = BathroomEntry.objects.create(
+        parking=request.parking,
         fee=fee
     )
     bathroom_entry.save()
@@ -57,11 +62,12 @@ def entry_bathroom_register_view(request, fee_id):
     return redirect('bathroom_entries_list')
 
 @perm_required('bathrooms.add_bathroomfee')
+@bathrooms_enabled_required
 def fee_register_view(request):
     """ Vista para registrar una tarifa de baño """
 
     if request.method == 'POST':
-        form = BathroomFeeForm(request.POST)
+        form = BathroomFeeForm(request.POST, parking=request.parking)
         if form.is_valid():
             bathroom_fee = form.save()
             messages.success(
@@ -70,16 +76,17 @@ def fee_register_view(request):
             )
             return redirect('bathroom_fees_list')
     else:
-        form = BathroomFeeForm()
+        form = BathroomFeeForm(parking=request.parking)
 
     return render(request, "fee_register.html", {
         'form': form,
     })
 
 @perm_required('bathrooms.change_bathroomfee')
+@bathrooms_enabled_required
 def fee_edit_view(request, fee_id):
     """ Vista para editar una tarifa de baño """
-    bathroom_fee = get_object_or_404(BathroomFee, pk=fee_id)
+    bathroom_fee = get_object_or_404(BathroomFee, pk=fee_id, parking=request.parking)
 
     if request.method == 'POST':
         form = BathroomFeeForm(request.POST, instance=bathroom_fee)
@@ -104,9 +111,10 @@ def fee_edit_view(request, fee_id):
 
 @require_POST
 @perm_required('bathrooms.change_bathroomfee')
+@bathrooms_enabled_required
 def toggle_fee_state_view(request, fee_id):
     """ Vista para activar/desactivar una tarifa de baño """
-    bathroom_fee = get_object_or_404(BathroomFee, pk=fee_id)
+    bathroom_fee = get_object_or_404(BathroomFee, pk=fee_id, parking=request.parking)
     bathroom_fee.state = not bathroom_fee.state
     bathroom_fee.save()
     state_text = "activada" if bathroom_fee.state else "desactivada"

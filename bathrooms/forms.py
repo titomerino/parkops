@@ -1,8 +1,9 @@
 from django import forms
 from bathrooms.models import BathroomFee
+from parking.forms import ParkingFormMixin
 
 
-class BathroomFeeForm(forms.ModelForm):
+class BathroomFeeForm(ParkingFormMixin, forms.ModelForm):
     """ Formulario para tarifas de baño """
     
     class Meta:
@@ -51,7 +52,7 @@ class BathroomFeeForm(forms.ModelForm):
     def clean_name(self):
         name = self.cleaned_data.get('name')
 
-        qs = BathroomFee.objects.filter(name__iexact=name)
+        qs = BathroomFee.objects.for_parking(self.parking).filter(name__iexact=name)
 
         # Si estoy editando, excluyo el registro actual
         if self.instance.pk:

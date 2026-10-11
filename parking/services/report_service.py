@@ -6,7 +6,7 @@ from parking.models import Entry, PlatePolicy
 from parking.utils import minutes_to_hours_and_minutes
 
 
-def _get_policy_map(entries):
+def _get_policy_map(parking, entries):
 
     plates = entries.values_list(
         "plate",
@@ -14,7 +14,7 @@ def _get_policy_map(entries):
     ).distinct()
 
     policies = (
-        PlatePolicy.objects
+        PlatePolicy.objects.for_parking(parking)
         .filter(
             plate__in=plates,
             active=True
@@ -88,10 +88,10 @@ _STATS_KEY = {
     "Suscripción - MENSUAL": "monthly",
 }
 
-def _summarize(entries):
+def _summarize(parking, entries):
     """Prepara cada entrada y acumula cantidad e ingresos por tipo de cobro."""
 
-    policy_map = _get_policy_map(entries)
+    policy_map = _get_policy_map(parking, entries)
 
     stats = defaultdict(int)
 
@@ -117,26 +117,27 @@ def _report_context(entries, stats, **extra):
         "summary": _build_summary(stats),
     }
 
-def generate_day_report(report_date):
+def generate_day_report(parking, report_date):
 
-    entries = Entry.objects.custom_report(report_date)
+    entries = Entry.objects.for_parking(parking).custom_report(report_date)
 
     return _report_context(
         entries,
-        _summarize(entries),
+        _summarize(parking, entries),
+        parking=parking,
         is_day_report=True,
         date=report_date.strftime('%d/%m/%Y'),
     )
 
-def generate_month_report(date):
+def generate_month_report(parking, date):
 
-    entries = Entry.objects.custom_report(month_date=date)
+    entries = Entry.objects.for_parking(parking).custom_report(month_date=date)
 
-    stats = _summarize(entries)
+    stats = _summarize(parking, entries)
 
     # Cada mensualidad activa se suma una sola vez (igual que el dashboard),
     # no una vez por cada entrada de la placa
-    monthly_income = PlatePolicy.objects.month_income()
+    monthly_income = PlatePolicy.objects.for_parking(parking).month_income()
 
     stats["total_income_monthly"] += monthly_income
     stats["total_income"] += monthly_income
@@ -144,27 +145,29 @@ def generate_month_report(date):
     return _report_context(
         entries,
         stats,
+        parking=parking,
         date=date.strftime('%m/%Y'),
     )
 
-def generate_period_report(start_date, end_date):
+def generate_period_report(parking, start_date, end_date):
 
-    entries = Entry.objects.custom_report(start_date, end_date)
+    entries = Entry.objects.for_parking(parking).custom_report(start_date, end_date)
 
     return _report_context(
         entries,
-        _summarize(entries),
+        _summarize(parking, entries),
+        parking=parking,
         start_date=start_date.strftime('%d/%m/%Y'),
         end_date=end_date.strftime('%d/%m/%Y'),
     )
 
-def generate_plate_report(n_plate, start_date, end_date):
+def generate_plate_report(parking, n_plate, start_date, end_date):
 
     total_income = 0
 
-    entries = Entry.objects.custom_report(start_date, end_date, n_plate=n_plate)
+    entries = Entry.objects.for_parking(parking).custom_report(start_date, end_date, n_plate=n_plate)
 
-    policy = PlatePolicy.objects.filter(plate=n_plate, active=True).first()
+    policy = PlatePolicy.objects.for_parking(parking).filter(plate=n_plate, active=True).first()
 
     if policy:
         match policy.billing_type:
@@ -206,4 +209,5 @@ def generate_plate_report(n_plate, start_date, end_date):
         "total_income": total_income,
         "summary": summary,
         "policy": policy,
+        "parking": parking,
     }

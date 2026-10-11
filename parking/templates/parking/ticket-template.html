@@ -55,7 +55,9 @@
 
     <!-- HEADER -->
     <div>
-      <h3>PARQUEO</h3>
+      <h3>{{ parking.name|upper }}</h3>
+      {% if parking.address %}<p>{{ parking.address }}</p>{% endif %}
+      {% if parking.phone %}<p>Tel. {{ parking.phone }}</p>{% endif %}
       <p>¡BIENVENIDO! <br> {{ fecha_llegada }}</p>
     </div>
 

@@ -2,8 +2,8 @@ import pytest
 
 
 @pytest.fixture
-def operator_client(client, django_user_model):
-    user = django_user_model.objects.create_user("operador", password="x")
+def operator_client(client, django_user_model, member):
+    user = member(django_user_model.objects.create_user("operador", password="x"))
     client.force_login(user)
     return client
 
@@ -43,8 +43,8 @@ class TestLogout:
 @pytest.mark.django_db
 class TestRedireccionSegura:
     @pytest.fixture
-    def user(self, django_user_model):
-        return django_user_model.objects.create_user("u", password="clave-segura-123")
+    def user(self, django_user_model, member):
+        return member(django_user_model.objects.create_user("u", password="clave-segura-123"))
 
     def login(self, client, next_url):
         return client.post(f"/login/?next={next_url}", {"username": "u", "password": "clave-segura-123"})

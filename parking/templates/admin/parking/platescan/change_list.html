@@ -1,0 +1,12 @@
+{% extends "admin/change_list.html" %}
+
+{% block result_list %}
+  {% if scan_totals %}
+    <p style="margin: 0 0 12px; font-size: 14px;">
+      <strong>{{ scan_totals.scans }}</strong> escaneos ·
+      costo <strong>${{ scan_totals.cost|default:0|floatformat:4 }}</strong> USD
+      <span style="color: var(--body-quiet-color);">(según el filtro aplicado)</span>
+    </p>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

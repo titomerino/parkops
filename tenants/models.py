@@ -1,5 +1,8 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
+from django.utils.timezone import localdate
 
 
 class Parking(models.Model):
@@ -52,3 +55,117 @@ class ParkingMember(models.Model):
 
     def __str__(self):
         return f"{self.user} → {self.parking}"
+
+
+class AiSettings(models.Model):
+    """
+    Configuración global de la IA (una sola fila). La API key se puede
+    poner aquí o en la variable ANTHROPIC_API_KEY; la del admin tiene prioridad.
+    """
+
+    api_key = models.CharField(
+        "API key de Anthropic",
+        max_length=255,
+        blank=True,
+        help_text="Se crea en console.anthropic.com → API Keys. Déjala vacía para usar la variable de entorno",
+    )
+    model = models.CharField(
+        "Modelo",
+        max_length=60,
+        default="claude-haiku-4-5-20251001",
+        help_text="Haiku 4.5 es el más económico. Cambiarlo afecta el costo de cada escaneo",
+    )
+    price_input = models.DecimalField(
+        "Precio entrada (USD por millón de tokens)",
+        max_digits=8, decimal_places=4, default=Decimal("1"),
+    )
+    price_output = models.DecimalField(
+        "Precio salida (USD por millón de tokens)",
+        max_digits=8, decimal_places=4, default=Decimal("5"),
+    )
+
+    class Meta:
+        verbose_name = "Configuración de IA"
+        verbose_name_plural = "Configuración de IA"
+
+    def __str__(self):
+        return "Configuración de IA"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        # Solo lectura: si nunca se guardó, valores por defecto sin escribir en la base
+        return cls.objects.filter(pk=1).first() or cls(pk=1)
+
+    @property
+    def effective_api_key(self):
+        return self.api_key or settings.ANTHROPIC_API_KEY
+
+
+class AiPackage(models.Model):
+    """
+    Paquete de escaneos con IA. Se incluye en un plan (Admin → Planes)
+    o se vende como recarga del mes (paquete extra en el parqueo).
+    """
+
+    name = models.CharField("Nombre", max_length=80)
+    scans = models.PositiveIntegerField("Escaneos incluidos")
+    price = models.DecimalField(
+        "Precio al cliente (USD)",
+        max_digits=8, decimal_places=2,
+        help_text="Lo que cobras si se vende solo o como recarga",
+    )
+    active = models.BooleanField("Disponible", default=True)
+
+    class Meta:
+        verbose_name = "Paquete de IA"
+        verbose_name_plural = "Paquetes de IA"
+        ordering = ["price"]
+
+    def __str__(self):
+        return f"{self.name} · {self.scans:,} escaneos · ${self.price}"
+
+
+def first_day_of_month():
+    return localdate().replace(day=1)
+
+
+class AiTopUp(models.Model):
+    """Paquete extra comprado para un mes, cuando el parqueo agotó el suyo."""
+
+    parking = models.ForeignKey(
+        Parking,
+        on_delete=models.CASCADE,
+        related_name="ai_top_ups",
+        verbose_name="Parqueo",
+    )
+    package = models.ForeignKey(
+        AiPackage,
+        on_delete=models.PROTECT,
+        verbose_name="Paquete",
+    )
+    month = models.DateField("Mes", default=first_day_of_month, help_text="Solo cuenta para este mes")
+    scans = models.PositiveIntegerField("Escaneos", blank=True)
+    price = models.DecimalField("Precio cobrado (USD)", max_digits=8, decimal_places=2, blank=True)
+    paid = models.BooleanField("Pagado", default=False)
+    created_at = models.DateTimeField("Agregado", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Paquete extra de IA"
+        verbose_name_plural = "Paquetes extra de IA"
+        ordering = ["-month", "-created_at"]
+
+    def __str__(self):
+        return f"{self.package.name} · {self.month:%m/%Y}"
+
+    def save(self, *args, **kwargs):
+        # Se guarda lo vendido: si después cambia el paquete, la recarga no cambia
+        self.month = self.month.replace(day=1)
+        if self.scans is None:
+            self.scans = self.package.scans
+        if self.price is None:
+            self.price = self.package.price
+        super().save(*args, **kwargs)

@@ -17,7 +17,16 @@
         <div id="plateCameraStage" class="plate-camera-stage mx-auto">
           <video id="plateCameraVideo" class="plate-camera-video" playsinline muted autoplay></video>
           <div id="plateCameraFrame" class="plate-camera-frame"></div>
-          <div class="plate-camera-tip small">Centra la placa dentro del recuadro</div>
+          <div class="plate-camera-tip small">La placa completa dentro del recuadro<br>Si está lejos, usa el zoom o pellizca la imagen</div>
+        </div>
+
+        <!-- Zoom: para tomar la placa desde lejos (también se puede pellizcar la imagen) -->
+        <div id="plateCameraZoom" class="d-flex align-items-center gap-2 mx-auto mt-2" style="max-width: 480px;">
+          <i class="bi bi-zoom-out text-muted"></i>
+          <input type="range" id="plateCameraZoomRange" class="form-range flex-fill"
+                 min="1" max="4" step="0.1" value="1" oninput="PlateCamera.setZoom(this.value)">
+          <i class="bi bi-zoom-in text-muted"></i>
+          <span id="plateCameraZoomValue" class="small text-muted" style="width: 3rem;">1.0×</span>
         </div>
 
         <button
@@ -106,7 +115,9 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    transform-origin: center center;
   }
+  .plate-camera-stage { touch-action: none; }
   /* Placa de El Salvador ≈ 30 × 15 cm (2:1). Lo de afuera se oscurece. */
   .plate-camera-frame {
     position: absolute;
@@ -141,6 +152,14 @@ const PlateCamera = (function () {
     let selected = null;
     let busy = false;
 
+    // Zoom de la cámara (Android) o, si el navegador no lo permite, digital (CSS)
+    const DIGITAL_ZOOM_MAX = 4;
+    const NATIVE_ZOOM_MAX = 10;
+    let zoom = { native: false, min: 1, max: DIGITAL_ZOOM_MAX, value: 1 };
+    let pinch = null;
+    // Con zoom digital se amplían píxeles: se pide la mayor resolución una sola vez
+    let highResRequested = false;
+
     const $ = (id) => document.getElementById(id);
 
     async function open() {
@@ -150,6 +169,10 @@ const PlateCamera = (function () {
         if (window.QrScanner) QrScanner.stop();
 
         $("plateCameraModal").addEventListener("hidden.bs.modal", close, { once: true });
+        if (!$("plateCameraStage").dataset.pinch) {
+            setupPinch();
+            $("plateCameraStage").dataset.pinch = "1";
+        }
         modal.show();
 
         reset();
@@ -176,6 +199,7 @@ const PlateCamera = (function () {
             video.srcObject = stream;
             await video.play();
 
+            setupZoom();
             $("plateCameraShotBtn").disabled = false;
             setStatus("Toca el botón para tomar la foto");
         } catch (error) {
@@ -186,7 +210,88 @@ const PlateCamera = (function () {
         }
     }
 
+    function setupZoom() {
+        const track = stream && stream.getVideoTracks()[0];
+        const caps = track && track.getCapabilities ? track.getCapabilities() : {};
+
+        if (caps.zoom && caps.zoom.max > caps.zoom.min) {
+            zoom = {
+                native: true,
+                min: caps.zoom.min,
+                max: Math.min(caps.zoom.max, NATIVE_ZOOM_MAX),
+                value: caps.zoom.min,
+            };
+        } else {
+            zoom = { native: false, min: 1, max: DIGITAL_ZOOM_MAX, value: 1 };
+        }
+
+        const range = $("plateCameraZoomRange");
+        range.min = zoom.min;
+        range.max = zoom.max;
+        range.value = zoom.value;
+        setZoom(zoom.value);
+    }
+
+    async function setZoom(value) {
+        value = Math.min(zoom.max, Math.max(zoom.min, Number(value)));
+        zoom.value = value;
+        $("plateCameraZoomRange").value = value;
+        $("plateCameraZoomValue").innerText = `${value.toFixed(1)}×`;
+
+        const video = $("plateCameraVideo");
+        if (zoom.native) {
+            video.style.transform = "";
+            const track = stream && stream.getVideoTracks()[0];
+            try {
+                if (track) await track.applyConstraints({ advanced: [{ zoom: value }] });
+            } catch (error) {
+                // Si la cámara rechaza el zoom, se pasa a zoom digital
+                zoom = { native: false, min: 1, max: DIGITAL_ZOOM_MAX, value: 1 };
+                $("plateCameraZoomRange").min = 1;
+                $("plateCameraZoomRange").max = DIGITAL_ZOOM_MAX;
+                setZoom(1);
+            }
+        } else {
+            // El recorte usa el tamaño en pantalla del video, así que respeta esta escala
+            video.style.transform = value > 1 ? `scale(${value})` : "";
+            if (value > 1.5) requestHighResolution();
+        }
+    }
+
+    async function requestHighResolution() {
+        const track = stream && stream.getVideoTracks()[0];
+        if (highResRequested || !track) return;
+        highResRequested = true;
+        try {
+            await track.applyConstraints({ width: { ideal: 3840 }, height: { ideal: 2160 } });
+        } catch (error) {
+            // La cámara sigue con la resolución que tenía
+        }
+    }
+
+    // Pellizcar con dos dedos sobre la imagen
+    function pinchDistance(touches) {
+        return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+    }
+
+    function setupPinch() {
+        const stage = $("plateCameraStage");
+        stage.addEventListener("touchstart", (event) => {
+            if (event.touches.length === 2) {
+                pinch = { distance: pinchDistance(event.touches), zoom: zoom.value };
+            }
+        }, { passive: true });
+        stage.addEventListener("touchmove", (event) => {
+            if (pinch && event.touches.length === 2) {
+                event.preventDefault();
+                setZoom(pinch.zoom * pinchDistance(event.touches) / pinch.distance);
+            }
+        }, { passive: false });
+        stage.addEventListener("touchend", () => { pinch = null; });
+    }
+
     function stopCamera() {
+        highResRequested = false;
         if (stream) stream.getTracks().forEach((track) => track.stop());
         stream = null;
         $("plateCameraVideo").srcObject = null;
@@ -314,6 +419,7 @@ const PlateCamera = (function () {
 
     function showStage(visible) {
         $("plateCameraStage").classList.toggle("d-none", !visible);
+        $("plateCameraZoom").classList.toggle("d-none", !visible);
         $("plateCameraShotBtn").classList.toggle("d-none", !visible);
     }
 
@@ -358,7 +464,7 @@ const PlateCamera = (function () {
         $("plateCameraError").classList.remove("d-none");
     }
 
-    return { open, shoot, retake, confirm };
+    return { open, shoot, retake, confirm, setZoom };
 
 })();
 </script>

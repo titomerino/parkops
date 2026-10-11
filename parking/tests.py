@@ -525,7 +525,13 @@ class TestEscaneoPlaca:
                 usage=SimpleNamespace(input_tokens=400, output_tokens=8),
             )
 
-        monkeypatch.setattr(plate_scan, "_client", lambda: SimpleNamespace(messages=SimpleNamespace(create=create)))
+        self.keys = []
+
+        def client(api_key):
+            self.keys.append(api_key)
+            return SimpleNamespace(messages=SimpleNamespace(create=create))
+
+        monkeypatch.setattr(plate_scan, "_client", client)
 
     @staticmethod
     def image(width=600, height=300):
@@ -620,17 +626,54 @@ class TestEscaneoPlaca:
         settings.ANTHROPIC_API_KEY = ""
         assert self.post(admin_client).status_code == 403
 
-    def test_limite_mensual(self, admin_client, parking, fee):
-        parking.plate_scan_monthly_limit = 2
+    @staticmethod
+    def give_package(parking, scans):
+        from tenants.models import AiPackage
+
+        parking.ai_package = AiPackage.objects.create(name="Básico", scans=scans, price=Decimal("5"))
         parking.save()
+        return parking.ai_package
+
+    def test_paquete_agotado_bloquea_el_escaneo(self, admin_client, parking, fee):
+        self.give_package(parking, 2)
 
         assert self.post(admin_client).status_code == 200
         assert self.post(admin_client).status_code == 200
         response = self.post(admin_client)
 
         assert response.status_code == 429
-        assert "límite" in response.json()["error"]
+        assert "paquete de IA" in response.json()["error"]
         assert len(self.calls) == 2
+
+    def test_paquete_extra_del_mes_amplia_el_limite(self, admin_client, parking, fee):
+        from tenants.models import AiTopUp
+
+        package = self.give_package(parking, 1)
+        assert self.post(admin_client).status_code == 200
+        assert self.post(admin_client).status_code == 429
+
+        top_up = AiTopUp.objects.create(parking=parking, package=package)
+        assert (top_up.scans, top_up.price) == (1, Decimal("5"))
+        assert self.post(admin_client).status_code == 200
+        assert self.post(admin_client).status_code == 429
+
+    def test_paquete_extra_de_otro_mes_no_cuenta(self, admin_client, parking, fee):
+        from datetime import date
+        from tenants.models import AiTopUp
+
+        package = self.give_package(parking, 1)
+        AiTopUp.objects.create(parking=parking, package=package, month=date(2020, 1, 1))
+        assert self.post(admin_client).status_code == 200
+        assert self.post(admin_client).status_code == 429
+
+    def test_escaneos_del_mes_pasado_no_cuentan(self, admin_client, parking, fee):
+        from datetime import timedelta
+        from django.utils.timezone import now
+        from parking.models import PlateScan
+
+        self.give_package(parking, 1)
+        PlateScan.objects.create(parking=parking, model="x", created_at=now() - timedelta(days=40))
+        assert self.post(admin_client).status_code == 200
 
     def test_limite_por_minuto(self, admin_client, fee):
         from parking.views import SCAN_RATE_PER_MINUTE
@@ -644,10 +687,64 @@ class TestEscaneoPlaca:
         from parking.models import PlateScan
 
         PlateScan.objects.create(parking=other_parking, model="x")
-        parking.plate_scan_monthly_limit = 1
-        parking.save()
+        self.give_package(parking, 1)
 
         assert self.post(admin_client).status_code == 200
+
+    def test_usa_la_api_key_y_el_modelo_del_admin(self, admin_client, fee):
+        from parking.models import PlateScan
+        from tenants.models import AiSettings
+
+        config = AiSettings.load()
+        config.api_key = "sk-ant-admin"
+        config.model = "claude-sonnet-5"
+        config.price_input = Decimal("3")
+        config.price_output = Decimal("15")
+        config.save()
+
+        self.post(admin_client)
+
+        assert self.keys == ["sk-ant-admin"]
+        assert self.calls[0]["model"] == "claude-sonnet-5"
+        assert PlateScan.objects.get().cost == Decimal("0.001320")  # 400 × $3/M + 8 × $15/M
+
+    def test_boton_desactivado_y_alerta_cuando_se_agota(self, admin_client, parking, fee):
+        from parking.models import PlateScan
+
+        self.give_package(parking, 1)
+        PlateScan.objects.create(parking=parking, model="x")
+
+        html = admin_client.get("/parking/busqueda/").content.decode()
+        assert "Paquete de IA agotado" in html
+        assert "plateCameraModal" not in html
+        assert "Tu paquete de IA para escanear placas se terminó" in html
+
+        # El resto sigue funcionando
+        assert admin_client.get("/").status_code == 200
+
+    def test_alerta_cuando_queda_poco(self, admin_client, parking, fee):
+        from parking.models import PlateScan
+
+        self.give_package(parking, 10)
+        PlateScan.objects.bulk_create(PlateScan(parking=parking, model="x") for _ in range(8))
+
+        html = admin_client.get("/parking/busqueda/").content.decode()
+        assert "Te quedan 2 de 10 escaneos" in html
+        assert "Escanear placa" in html
+
+    def test_operador_no_ve_la_alerta_pero_si_el_boton_desactivado(self, client, django_user_model, member, parking, fee):
+        from django.contrib.auth.models import Permission
+        from parking.models import PlateScan
+
+        self.give_package(parking, 1)
+        PlateScan.objects.create(parking=parking, model="x")
+        user = member(django_user_model.objects.create_user("op", password="x"))
+        user.user_permissions.add(Permission.objects.get(codename="add_entry"))
+        client.force_login(user)
+
+        html = client.get("/parking/busqueda/").content.decode()
+        assert "Paquete de IA agotado" in html
+        assert "aiScanAlert" not in html
 
     def test_requiere_permiso(self, client, django_user_model, member):
         client.force_login(member(django_user_model.objects.create_user("sin_permiso", password="x")))
@@ -688,3 +785,55 @@ class TestEscaneoPlaca:
 def test_lecturas_de_la_ia(texto, lecturas):
     from parking.services.plate_scan import parse_readings
     assert parse_readings(texto) == lecturas
+
+
+@pytest.mark.django_db
+class TestAdminIA:
+    def test_api_key_se_guarda_oculta_y_se_conserva(self, admin_client):
+        from tenants.models import AiSettings
+
+        url = "/admin/tenants/aisettings/1/change/"
+        data = {"model": "claude-haiku-4-5-20251001", "price_input": "1", "price_output": "5"}
+
+        assert admin_client.get("/admin/tenants/aisettings/").url == url
+
+        admin_client.post(url, {**data, "api_key": "sk-ant-secreta-1234"})
+        assert AiSettings.load().api_key == "sk-ant-secreta-1234"
+
+        html = admin_client.get(url).content.decode()
+        assert "sk-ant-secreta-1234" not in html
+        assert "…1234" in html
+
+        admin_client.post(url, {**data, "api_key": ""})
+        assert AiSettings.load().api_key == "sk-ant-secreta-1234"
+
+        admin_client.post(url, {**data, "api_key": "", "clear_api_key": "on"})
+        assert AiSettings.load().api_key == ""
+
+    def test_rechaza_una_clave_con_formato_invalido(self, admin_client):
+        from tenants.models import AiSettings
+
+        admin_client.post("/admin/tenants/aisettings/1/change/", {
+            "model": "x", "price_input": "1", "price_output": "5", "api_key": "hola",
+        })
+        assert AiSettings.load().api_key == ""
+
+    def test_paquetes_muestran_costo_y_ganancia(self, admin_client):
+        from tenants.models import AiPackage
+
+        AiPackage.objects.create(name="Básico", scans=3000, price=Decimal("5"))
+        html = admin_client.get("/admin/tenants/aipackage/").content.decode()
+
+        assert "$0.90" in html  # 3,000 × $0.0003 de referencia
+        assert "$4.10 (82%)" in html
+
+    def test_lista_de_parqueos_muestra_uso_de_ia(self, admin_client, parking):
+        from parking.models import PlateScan
+        from tenants.models import AiPackage
+
+        parking.plate_scan_enabled = True
+        parking.ai_package = AiPackage.objects.create(name="Básico", scans=3000, price=Decimal("5"))
+        parking.save()
+        PlateScan.objects.create(parking=parking, model="x")
+
+        assert "1 / 3,000" in admin_client.get("/admin/tenants/parking/").content.decode()

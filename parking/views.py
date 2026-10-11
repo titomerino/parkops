@@ -295,7 +295,7 @@ def search_plate(request):
 
     return render(request, "parking/search_plate.html", {
         'form': form,
-        'plate_scan_available': plate_scan.is_available(request.parking),
+        'plate_scan': plate_scan_button(request.parking),
     })
 
 @perm_required('parking.view_entry')
@@ -713,6 +713,13 @@ def _plate_result_json(result):
     return result
 
 
+def plate_scan_button(parking):
+    """None si el parqueo no tiene el escaneo; si lo tiene, si su paquete se agotó."""
+    if not plate_scan.is_enabled(parking):
+        return None
+    return {"exhausted": plate_scan.quota(parking)["exhausted"]}
+
+
 # Escaneos por usuario y minuto: evita gasto por errores o abuso
 SCAN_RATE_PER_MINUTE = 10
 
@@ -726,13 +733,13 @@ def scan_plate_photo(request):
     """
     parking = request.parking
 
-    if not plate_scan.is_available(parking):
+    if not plate_scan.is_enabled(parking):
         return JsonResponse({"ok": False, "error": "El escaneo de placas no está activo para este parqueo."}, status=403)
 
-    if plate_scan.remaining_this_month(parking) == 0:
+    if plate_scan.quota(parking)["exhausted"]:
         return JsonResponse({
             "ok": False,
-            "error": "Se alcanzó el límite de escaneos de este mes. Digita o dicta la placa.",
+            "error": "Se terminó el paquete de IA de este mes. Digita o dicta la placa.",
         }, status=429)
 
     rate_key = f"plate_scan_rate:{request.user.pk}"

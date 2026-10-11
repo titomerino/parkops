@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import IntegrityError, models, transaction
-from django.utils.timezone import now
+from django.utils.timezone import localdate, now
 from math import ceil
 from django.db.models import Sum
 from django.db.models import Q
@@ -420,7 +420,7 @@ class PlatePolicy(models.Model):
 
 class PlateScanQuerySet(ParkingQuerySet):
     def this_month(self):
-        today = now()
+        today = localdate()
         return self.filter(created_at__year=today.year, created_at__month=today.month)
 
 

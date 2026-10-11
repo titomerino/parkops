@@ -10,10 +10,12 @@ import io
 import re
 from decimal import Decimal
 
-from django.conf import settings
+from django.db.models import Sum
+from django.utils.timezone import localdate
 from PIL import Image, UnidentifiedImageError
 
 from parking.models import PlateScan
+from tenants.models import AiSettings, AiTopUp
 
 # Lado mayor máximo que se envía: el recorte de la placa no necesita más
 MAX_SIDE = 800
@@ -33,16 +35,39 @@ class PlateScanError(Exception):
     """Error mostrable al usuario."""
 
 
-def is_available(parking):
-    return bool(settings.ANTHROPIC_API_KEY and parking and parking.plate_scan_enabled)
+# Con este porcentaje usado se avisa al administrador que el paquete se acaba
+LOW_QUOTA_RATIO = 0.8
 
 
-def remaining_this_month(parking):
-    """Escaneos que quedan en el mes, o None si el parqueo no tiene límite."""
-    limit = parking.plate_scan_monthly_limit
-    if limit is None:
-        return None
-    return max(0, limit - PlateScan.objects.for_parking(parking).this_month().count())
+def is_enabled(parking):
+    """El parqueo tiene contratado el escaneo y hay una API key configurada."""
+    return bool(parking and parking.plate_scan_enabled and AiSettings.load().effective_api_key)
+
+
+def quota(parking):
+    """
+    Uso del mes: paquete mensual + paquetes extra del mes.
+    `limit` None = parqueo sin paquete asignado (sin límite).
+    """
+    used = PlateScan.objects.for_parking(parking).this_month().count()
+
+    if parking.ai_package_id is None:
+        return {"limit": None, "used": used, "remaining": None, "exhausted": False, "low": False}
+
+    extra = (
+        AiTopUp.objects.filter(parking=parking, month=localdate().replace(day=1))
+        .aggregate(total=Sum("scans"))["total"] or 0
+    )
+    limit = parking.ai_package.scans + extra
+    remaining = max(0, limit - used)
+
+    return {
+        "limit": limit,
+        "used": used,
+        "remaining": remaining,
+        "exhausted": remaining == 0,
+        "low": 0 < remaining and used >= limit * LOW_QUOTA_RATIO,
+    }
 
 
 def prepare_image(data):
@@ -74,16 +99,15 @@ def parse_readings(text):
     return readings[:3]
 
 
-def _client():
+def _client(api_key):
     import anthropic
 
-    return anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY, timeout=20, max_retries=1)
+    return anthropic.Anthropic(api_key=api_key, timeout=20, max_retries=1)
 
 
-def _cost(input_tokens, output_tokens):
-    price_in, price_out = settings.PLATE_SCAN_PRICE_PER_MTOK
-    usd = (input_tokens * price_in + output_tokens * price_out) / 1_000_000
-    return Decimal(str(round(usd, 6)))
+def _cost(config, input_tokens, output_tokens):
+    usd = (input_tokens * config.price_input + output_tokens * config.price_output) / Decimal(1_000_000)
+    return usd.quantize(Decimal("0.000001"))
 
 
 def read_plate(parking, user, image_data):
@@ -92,10 +116,11 @@ def read_plate(parking, user, image_data):
     posibles (la más probable primero).
     """
     jpeg = prepare_image(image_data)
+    config = AiSettings.load()
 
     try:
-        message = _client().messages.create(
-            model=settings.PLATE_SCAN_MODEL,
+        message = _client(config.effective_api_key).messages.create(
+            model=config.model,
             max_tokens=40,
             messages=[{
                 "role": "user",
@@ -122,10 +147,10 @@ def read_plate(parking, user, image_data):
         parking=parking,
         user=user if user and user.is_authenticated else None,
         plate=text.strip()[:50],
-        model=settings.PLATE_SCAN_MODEL,
+        model=config.model,
         input_tokens=usage.input_tokens,
         output_tokens=usage.output_tokens,
-        cost=_cost(usage.input_tokens, usage.output_tokens),
+        cost=_cost(config, usage.input_tokens, usage.output_tokens),
     )
 
     return parse_readings(text)

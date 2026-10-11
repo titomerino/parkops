@@ -1,0 +1,138 @@
+<!-- ESCANEAR TICKET (QR): al leerlo abre la salida de esa entrada -->
+<div class="modal fade" id="qrTicketModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-light border border-secondary rounded-4">
+
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title d-flex align-items-center gap-2">
+          <i class="bi bi-qr-code-scan"></i>
+          Escanear ticket
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body text-center">
+
+        <div id="qr-reader" class="qr-ticket-reader mx-auto rounded-4 overflow-hidden border border-secondary"></div>
+
+        <div id="qrScannerStatus" class="small text-muted mt-2">Abriendo cámara…</div>
+
+        <div id="qrScannerError" class="alert alert-warning small mt-3 mb-0 d-none"></div>
+
+      </div>
+
+      <div class="modal-footer border-secondary">
+        <button type="button" class="btn btn-outline-secondary rounded-pill flex-fill" data-bs-dismiss="modal">
+          <i class="bi bi-x-lg me-1"></i>
+          Cancelar
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<style>
+  .qr-ticket-reader {
+    width: 100%;
+    max-width: 480px;
+    background: #000;
+  }
+  /* La librería agrega su propio marco y textos: solo dejamos el video */
+  .qr-ticket-reader video { width: 100% !important; display: block; }
+</style>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<script>
+const QrScanner = (function () {
+
+    let scanner = null;
+    let active = false;
+    let handled = false;
+    let modal = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    function open() {
+        if (!modal) {
+            modal = new bootstrap.Modal($("qrTicketModal"));
+            // La cámara se enciende cuando la modal ya tiene tamaño y se apaga al cerrarla
+            $("qrTicketModal").addEventListener("shown.bs.modal", start);
+            $("qrTicketModal").addEventListener("hidden.bs.modal", stop);
+        }
+        handled = false;
+        $("qrScannerError").classList.add("d-none");
+        setStatus("Abriendo cámara…");
+        modal.show();
+    }
+
+    function start() {
+        if (active) return;
+        if (!scanner) scanner = new Html5Qrcode("qr-reader");
+
+        scanner.start(
+            { facingMode: "environment" },
+            {
+                fps: 10,
+                // Recuadro de lectura: 70 % del lado menor del video
+                qrbox: (width, height) => {
+                    const side = Math.floor(Math.min(width, height) * 0.7);
+                    return { width: side, height: side };
+                },
+            },
+            onScanSuccess
+        ).then(() => {
+            active = true;
+            // Se cerró la modal mientras se abría la cámara
+            if (!$("qrTicketModal").classList.contains("show")) {
+                stop();
+                return;
+            }
+            setStatus("Apunta al código QR del ticket");
+        }).catch(() => {
+            showError("No se pudo abrir la cámara. Permite el uso de la cámara para este sitio.");
+            setStatus("");
+        });
+    }
+
+    function onScanSuccess(decodedText) {
+        if (handled) return;
+
+        let entryId = null;
+        if (decodedText.includes("entry_id=")) {
+            entryId = decodedText.split("entry_id=")[1];
+        }
+
+        if (!entryId) {
+            // Sigue leyendo: puede ser otro QR que se cruzó
+            showError("Ese código no es un ticket de ParkOps. Apunta al QR del ticket.");
+            return;
+        }
+
+        handled = true;
+        setStatus("Ticket detectado ✔");
+        stop();
+        window.location.href = `/parking/salida/${entryId}`;
+    }
+
+    function stop() {
+        if (scanner && active) {
+            active = false;
+            scanner.stop().catch(() => {});
+        }
+    }
+
+    function setStatus(text) {
+        $("qrScannerStatus").innerText = text;
+    }
+
+    function showError(text) {
+        $("qrScannerError").innerText = text;
+        $("qrScannerError").classList.remove("d-none");
+    }
+
+    return { open, stop };
+
+})();
+</script>

@@ -8,7 +8,8 @@
                 {% endif %}
             </td>
             <td style="text-align: right;">
-                <strong>ParkOps</strong><br>
+                <strong>{{ parking.name|default:"ParkOps" }}</strong><br>
+                {% if parking.address %}{{ parking.address }}<br>{% endif %}
                 {{ today|date:"j \\d\\e F \\d\\e Y - h:i A" }}
             </td>
         </tr>

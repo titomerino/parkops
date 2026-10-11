@@ -10,6 +10,11 @@ a propósito casos que pueden existir en producción:
 - Suscripción mensual sin monto y suscripción por hora.
 - Tarifa cuyo primer rango no inicia en el minuto 0.
 
+Multi-parqueo: los datos completos van a «Parqueo principal» y se crea un
+segundo parqueo, «Parqueo Norte» (7 días, sin baños), para probar el
+aislamiento. Usuarios: operador y dueno (principal), dueno_norte (Norte);
+todos con contraseña «default».
+
 Uso:
     python manage.py seed_demo --reset
 """
@@ -18,13 +23,14 @@ from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Permission
 from django.core.management.base import BaseCommand, CommandError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from bathrooms.models import BathroomEntry, BathroomFee
 from parking.models import Entry, Fee, PlatePolicy, Range
+from tenants.models import Parking, ParkingMember
+from tenants.services import OPERATOR_GROUP, OWNER_GROUP, create_default_fee, ensure_role_groups
 
 DAYS = 60
 LEGACY_DAYS = 50  # entradas con más antigüedad quedan sin montos congelados
@@ -64,29 +70,33 @@ class Command(BaseCommand):
             if options["reset"]:
                 self._reset()
 
+            self.parking = Parking.objects.create(name="Parqueo principal", address="Av. Principal #100", phone="2222-0000", capacity=80)
             fees = self._create_fees()
             self._create_policies()
             self._create_parking_entries(fees)
             self._create_legacy_entries()
             self._create_duplicate_active()
             self._create_bathroom_data()
-            self._create_operator()
+            self._create_users()
+            self._create_second_parking()
 
         self._print_summary()
 
     # ------------------------------------------------------------------ #
 
     def _reset(self):
+        ParkingMember.objects.all().delete()
         BathroomEntry.objects.all().delete()
         BathroomFee.objects.all().delete()
         Entry.objects.all().delete()
         Range.objects.all().delete()
         Fee.objects.all().delete()
         PlatePolicy.objects.all().delete()
+        Parking.objects.all().delete()
 
     def _create_fees(self):
         def fee(name, ranges, **kwargs):
-            obj = Fee.objects.create(name=name, **kwargs)
+            obj = Fee.objects.create(parking=self.parking, name=name, **kwargs)
             Range.objects.bulk_create(
                 Range(fee=obj, start_minute=m, amount=Decimal(a)) for m, a in ranges
             )
@@ -115,14 +125,14 @@ class Command(BaseCommand):
 
     def _create_policies(self):
         PlatePolicy.objects.bulk_create([
-            PlatePolicy(plate="P100001", billing_type="MONTHLY", amount=Decimal("40.00"), owner_name="Ana López"),
-            PlatePolicy(plate="P100002", billing_type="MONTHLY", amount=Decimal("40.00"), owner_name="Carlos Pérez"),
+            PlatePolicy(parking=self.parking, plate="P100001", billing_type="MONTHLY", amount=Decimal("40.00"), owner_name="Ana López"),
+            PlatePolicy(parking=self.parking, plate="P100002", billing_type="MONTHLY", amount=Decimal("40.00"), owner_name="Carlos Pérez"),
             # Mensual sin monto: el formulario lo permite
-            PlatePolicy(plate="P100003", billing_type="MONTHLY", amount=None, owner_name="Clínica Central"),
-            PlatePolicy(plate="P200001", billing_type="DAILY", amount=Decimal("3.00"), owner_name="María Gómez"),
-            PlatePolicy(plate="P200002", billing_type="DAILY", amount=Decimal("2.50"), owner_name="José Martínez"),
-            PlatePolicy(plate=HOURLY_PLATE, billing_type="HOURLY", amount=Decimal("1.00"), owner_name="Luis Ramírez"),
-            PlatePolicy(plate=INACTIVE_PLATE, billing_type="MONTHLY", amount=Decimal("35.00"), owner_name="Ex cliente", active=False),
+            PlatePolicy(parking=self.parking, plate="P100003", billing_type="MONTHLY", amount=None, owner_name="Clínica Central"),
+            PlatePolicy(parking=self.parking, plate="P200001", billing_type="DAILY", amount=Decimal("3.00"), owner_name="María Gómez"),
+            PlatePolicy(parking=self.parking, plate="P200002", billing_type="DAILY", amount=Decimal("2.50"), owner_name="José Martínez"),
+            PlatePolicy(parking=self.parking, plate=HOURLY_PLATE, billing_type="HOURLY", amount=Decimal("1.00"), owner_name="Luis Ramírez"),
+            PlatePolicy(parking=self.parking, plate=INACTIVE_PLATE, billing_type="MONTHLY", amount=Decimal("35.00"), owner_name="Ex cliente", active=False),
         ])
 
     def _regular_plates(self):
@@ -190,6 +200,7 @@ class Command(BaseCommand):
 
                 # save() calcula final_minutes / final_amount como en producción
                 Entry(
+                    parking=self.parking,
                     plate=plate,
                     entry_date_hour=start,
                     departure_date_hour=departure,
@@ -209,19 +220,19 @@ class Command(BaseCommand):
         try:
             with transaction.atomic():
                 Entry.objects.bulk_create([
-                    Entry(plate=DUPLICATE_PLATE, entry_date_hour=start, fee=Fee.objects.get(default=True)),
-                    Entry(plate=DUPLICATE_PLATE, entry_date_hour=start + timedelta(seconds=2), fee=Fee.objects.get(default=True)),
+                    Entry(parking=self.parking, plate=DUPLICATE_PLATE, entry_date_hour=start, fee=Fee.objects.get(parking=self.parking, default=True)),
+                    Entry(parking=self.parking, plate=DUPLICATE_PLATE, entry_date_hour=start + timedelta(seconds=2), fee=Fee.objects.get(parking=self.parking, default=True)),
                 ])
             self.stats["duplicate"] = True
         except IntegrityError:
             # La restricción de la base impide el duplicado: se carga una sola
-            Entry.objects.create(plate=DUPLICATE_PLATE, entry_date_hour=start, fee=Fee.objects.get(default=True))
+            Entry.objects.create(parking=self.parking, plate=DUPLICATE_PLATE, entry_date_hour=start, fee=Fee.objects.get(parking=self.parking, default=True))
             self.stats["duplicate"] = False
 
     def _create_bathroom_data(self):
-        sanitario = BathroomFee.objects.create(name="Sanitario", amount=Decimal("0.25"), color="primary")
-        ducha = BathroomFee.objects.create(name="Ducha", amount=Decimal("1.00"), color="info")
-        ninos = BathroomFee.objects.create(name="Sanitario niños", amount=Decimal("0.10"), color="warning", state=False)
+        sanitario = BathroomFee.objects.create(parking=self.parking, name="Sanitario", amount=Decimal("0.25"), color="primary")
+        ducha = BathroomFee.objects.create(parking=self.parking, name="Ducha", amount=Decimal("1.00"), color="info")
+        ninos = BathroomFee.objects.create(parking=self.parking, name="Sanitario niños", amount=Decimal("0.10"), color="warning", state=False)
 
         times = []
         fees = []
@@ -239,38 +250,60 @@ class Command(BaseCommand):
                 times.append(moment)
                 fees.append(self.rng.choices(options, weights=weights)[0])
 
-        entries = BathroomEntry.objects.bulk_create(BathroomEntry(fee=f) for f in fees)
+        entries = BathroomEntry.objects.bulk_create(BathroomEntry(parking=self.parking, fee=f) for f in fees)
         # auto_now_add ignora el valor asignado: se corrige la fecha después
         for entry, moment in zip(entries, times, strict=True):
             entry.entry_date_hour = moment
         BathroomEntry.objects.bulk_update(entries, ["entry_date_hour"], batch_size=500)
 
-    def _create_operator(self):
+    def _user(self, username, parking, group):
         User = get_user_model()
-        user, _ = User.objects.get_or_create(username="operador")
+        user, _ = User.objects.get_or_create(username=username)
         user.set_password("default")
         user.is_staff = False
         user.is_superuser = False
         user.save()
-        user.user_permissions.set(Permission.objects.filter(
-            content_type__app_label__in=["parking", "bathrooms"],
-            codename__in=[
-                "add_entry", "view_entry",
-                "view_platepolicy",
-                "add_bathroomentry", "view_bathroomentry",
-            ],
-        ))
+        user.user_permissions.clear()
+        user.groups.set([group])
+        ParkingMember.objects.update_or_create(user=user, defaults={"parking": parking})
+        return user
+
+    def _create_users(self):
+        groups = ensure_role_groups()
+        self._user("operador", self.parking, groups[OPERATOR_GROUP])
+        self._user("dueno", self.parking, groups[OWNER_GROUP])
+
+    def _create_second_parking(self):
+        """Parqueo pequeño para probar el aislamiento: 7 días, sin baños."""
+        norte = Parking.objects.create(name="Parqueo Norte", address="Calle Norte #5", phone="2222-5555", bathrooms_enabled=False)
+        fee = create_default_fee(norte)
+        self._user("dueno_norte", norte, ensure_role_groups()[OWNER_GROUP])
+
+        for days_ago in range(7, -1, -1):
+            day = (self.now - timedelta(days=days_ago)).date()
+            for plate in self.rng.sample([f"N{n}" for n in range(10000, 10060)], self.rng.randint(4, 8)):
+                start = datetime.combine(day, time(7, 0), tzinfo=self.tz) + timedelta(minutes=self.rng.randint(0, 600))
+                if start >= self.now:
+                    continue
+                departure = start + timedelta(minutes=self.rng.randint(20, 300))
+                Entry(
+                    parking=norte, plate=plate, fee=fee, entry_date_hour=start,
+                    departure_date_hour=departure if departure <= self.now else None,
+                ).save()
+
+        self.stats["norte"] = Entry.objects.filter(parking=norte).count()
 
     def _print_summary(self):
         self.stdout.write(self.style.SUCCESS("Datos de demostración cargados"))
         self.stdout.write(f"  Entradas cerradas:        {self.stats['closed']}")
-        self.stdout.write(f"  Entradas activas:         {Entry.objects.filter(state=True).count()}")
+        self.stdout.write(f"  Entradas activas:         {Entry.objects.filter(parking=self.parking, state=True).count()}")
         self.stdout.write(f"  Entradas legacy (sin $):  {self.stats['legacy']}")
         self.stdout.write(
             f"  Placa duplicada activa:   {DUPLICATE_PLATE}"
             if self.stats["duplicate"]
             else "  Placa duplicada activa:   bloqueada por la base de datos"
         )
-        self.stdout.write(f"  Suscripciones:            {PlatePolicy.objects.count()}")
+        self.stdout.write(f"  Suscripciones:            {PlatePolicy.objects.filter(parking=self.parking).count()}")
         self.stdout.write(f"  Usos de baño:             {BathroomEntry.objects.count()}")
-        self.stdout.write("  Usuario operador:         operador / default")
+        self.stdout.write(f"  Parqueo Norte (sin baños): {self.stats['norte']} entradas")
+        self.stdout.write("  Usuarios (clave default): operador, dueno → principal | dueno_norte → Norte")

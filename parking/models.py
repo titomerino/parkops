@@ -5,9 +5,22 @@ from django.db.models import Sum
 from django.db.models import Q
 from parking.utils import format_plate
 
-# Create your models here.
+
+class ParkingQuerySet(models.QuerySet):
+    """Base para los modelos que pertenecen a un parqueo."""
+
+    def for_parking(self, parking):
+        return self.filter(parking=parking)
+
+
 class Fee(models.Model):
     """Tarifas"""
+    parking = models.ForeignKey(
+        "tenants.Parking",
+        on_delete=models.PROTECT,
+        related_name="fees",
+        verbose_name="Parqueo",
+    )
     name = models.CharField(
         "Nombre",
         max_length=50,
@@ -21,9 +34,19 @@ class Fee(models.Model):
     default = models.BooleanField("Activa por defecto", default=False)
     is_active = models.BooleanField("Activa", default=True)
 
+    objects = ParkingQuerySet.as_manager()
+
     class Meta:
         verbose_name = "Tarifa"
         verbose_name_plural = "Tarifas"
+        constraints = [
+            # Una sola tarifa por defecto en cada parqueo
+            models.UniqueConstraint(
+                fields=["parking"],
+                condition=Q(default=True),
+                name="unique_default_fee_per_parking",
+            ),
+        ]
 
     def __str__(self):
         return self.name
@@ -59,7 +82,7 @@ class Range(models.Model):
         return f"{self.fee.name} - {self.start_minute} min: ${self.amount}"
     
 
-class EntryQuerySet(models.QuerySet):   
+class EntryQuerySet(ParkingQuerySet):
     def entries_today(self, date):
         return self.filter(entry_date_hour__date=date)
     
@@ -107,49 +130,42 @@ class EntryQuerySet(models.QuerySet):
         if n_plate:
             queryset = queryset.filter(plate=n_plate)
 
-        # Los reportes muestran la tarifa y pueden recalcular montos
-        return queryset.select_related("fee").prefetch_related("fee__ranges")
+        # Los reportes muestran la tarifa y pueden recalcular montos.
+        # Orden explícito: sin él Postgres devuelve las filas en cualquier orden.
+        return (
+            queryset
+            .select_related("fee")
+            .prefetch_related("fee__ranges")
+            .order_by("entry_date_hour", "pk")
+        )
 
+    # Totales del dashboard: llamar sobre .for_parking(parking)
+    def entries_today_count(self, date):
+        return self.entries_today(date).count()
 
-class EntryManager(models.Manager):
-    def get_queryset(self):
-        return EntryQuerySet(self.model, using=self._db)
-    
-    def entries_today(self, date): #Se usa en dashboard
-        return self.get_queryset().entries_today(date)
-    
-    def entries_today_count(self, date): #Se usa en dashboard
-        return self.get_queryset().entries_today(date).count()
-
-    def entries_today_and_active(self, date): #se usa
-        return self.get_queryset().entries_today_and_active(date)
-
-    def departure_today(self, date):
-        return self.get_queryset().departure_today(date)
-
-    def departure_month(self, year, month):
-        return self.get_queryset().departure_month(year, month)
-
-    def today_income(self, date): #Se usa en dashboard
+    def today_income(self, date):
         return (
             self.departure_today(date)
             .aggregate(total=Sum("final_amount"))
             ["total"] or 0
         )
 
-    def month_income(self, year, month): #Se usa en dashboard
+    def month_income(self, year, month):
         return (
             self.departure_month(year, month)
             .aggregate(total=Sum("final_amount"))
             ["total"] or 0
         )
 
-    def custom_report(self, start_date=None, end_date=None, month_date=None, n_plate=None):
-        return self.get_queryset().custom_report(start_date, end_date, month_date, n_plate)
 
-
-class Entry(models.Model): 
+class Entry(models.Model):
     """ Modelo de entradas al parqueo """
+    parking = models.ForeignKey(
+        "tenants.Parking",
+        on_delete=models.PROTECT,
+        related_name="entries",
+        verbose_name="Parqueo",
+    )
     plate = models.CharField("Placa", max_length=10)
     entry_date_hour = models.DateTimeField("Fecha y hora de entrada", default=now)
     departure_date_hour = models.DateTimeField("Fecha y hora de salida", null=True, blank=True)
@@ -177,7 +193,7 @@ class Entry(models.Model):
         help_text="Monto calculado al momento de registrar la salida"
     )
 
-    objects = EntryManager()
+    objects = EntryQuerySet.as_manager()
 
     class Meta:
         verbose_name = "Entrada"
@@ -186,11 +202,17 @@ class Entry(models.Model):
             ("view_statistics_entry", "Puede ver estadísticas de entradas"),
         ]
         constraints = [
+            # Una entrada activa por placa dentro de cada parqueo
             models.UniqueConstraint(
-                fields=["plate"],
+                fields=["parking", "plate"],
                 condition=Q(state=True),
                 name="unique_active_entry_per_plate",
             ),
+        ]
+        indexes = [
+            models.Index(fields=["parking", "entry_date_hour"], name="entry_parking_entry_idx"),
+            models.Index(fields=["parking", "departure_date_hour"], name="entry_parking_departure_idx"),
+            models.Index(fields=["parking", "state"], name="entry_parking_state_idx"),
         ]
 
     def __str__(self):
@@ -205,6 +227,7 @@ class Entry(models.Model):
         if (
             self.state
             and Entry.objects.filter(
+                parking_id=self.parking_id,
                 plate=self.plate,
                 state=True
             ).exclude(pk=self.pk).exists()
@@ -297,45 +320,27 @@ class Entry(models.Model):
         """
         Retorna la política de placa activa asociada a esta entrada, si existe
         """
-        return PlatePolicy.objects.active().filter(plate=self.plate).first()
+        return (
+            PlatePolicy.objects.active()
+            .filter(parking_id=self.parking_id, plate=self.plate)
+            .first()
+        )
 
 
-class Configuration(models.Model):
-    """ Modelo de configuración """
-    name = models.CharField("Nombre", max_length=200)
-    ability = models.PositiveIntegerField("Espacios disponibles")
-    # logo
-
-    class Meta:
-        verbose_name = "Configuración"
-        verbose_name_plural = "Configuraciones"
-
-    def __str__(self):
-        return self.name
-    
-
-class PlatePolicyQuerySet(models.QuerySet):
+class PlatePolicyQuerySet(ParkingQuerySet):
     def active(self):
         return self.filter(active=True)
-    
+
     def monthly(self):
         return self.active().filter(billing_type="MONTHLY")
-    
 
-class PlatePolicyManager(models.Manager):
-    def get_queryset(self):
-        return PlatePolicyQuerySet(self.model, using=self._db)
-    
-    def active(self):
-        return self.get_queryset().active()
-
+    # Totales del dashboard: llamar sobre .for_parking(parking)
     def total_active_monthly_subscriptions(self):
-        return self.get_queryset().monthly().count()
-    
+        return self.monthly().count()
+
     def month_income(self):
         return (
-            self.get_queryset()
-            .monthly()
+            self.monthly()
             .aggregate(total=Sum("amount"))
             ["total"] or 0
         )
@@ -349,10 +354,16 @@ class PlatePolicy(models.Model):
         ("MONTHLY", "Mensual"),
     )
 
+    parking = models.ForeignKey(
+        "tenants.Parking",
+        on_delete=models.PROTECT,
+        related_name="plate_policies",
+        verbose_name="Parqueo",
+    )
+
     plate = models.CharField(
         "Placa",
         max_length=10,
-        unique=True
     )
 
     billing_type = models.CharField(
@@ -380,13 +391,20 @@ class PlatePolicy(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
-    objects = PlatePolicyManager()
+    objects = PlatePolicyQuerySet.as_manager()
 
     class Meta:
         verbose_name = "Política de placa"
         verbose_name_plural = "Políticas de placas"
         permissions = [
             ("view_statistics_placepolicy", "Puede ver estadísticas de suscripciones"),
+        ]
+        constraints = [
+            # La misma placa puede tener suscripción en distintos parqueos
+            models.UniqueConstraint(
+                fields=["parking", "plate"],
+                name="unique_plate_policy_per_parking",
+            ),
         ]
 
     def __str__(self):

@@ -5,15 +5,15 @@ from django.utils.timezone import localdate
 from payment.models import Payment
 
 
-def generate_current_month_payments():
-    subscriptions = Subscription.objects.filter(active=True)
+def generate_current_month_payments(parking):
+    subscriptions = Subscription.objects.filter(parking=parking, active=True)
 
     for subscription in subscriptions:
         subscription.ensure_current_month_payment()
 
-def get_pending_payments():
+def get_pending_payments(parking):
     """
-    Devuelve todos los pagos pendientes que ya deben notificarse.
+    Devuelve los pagos pendientes del parqueo que ya deben notificarse.
     """
 
     today = localdate()
@@ -21,7 +21,7 @@ def get_pending_payments():
     payments = (
         Payment.objects
         .select_related("subscription")
-        .filter(paid=False)
+        .filter(subscription__parking=parking, paid=False)
         .order_by("subscription__name", "billing_date")
     )
 
@@ -48,7 +48,7 @@ def notify_pending_payments(request):
     (get_or_create: no duplica aunque se llame en cada visita).
     """
 
-    generate_current_month_payments()
+    generate_current_month_payments(request.parking)
 
-    for payment in get_pending_payments():
+    for payment in get_pending_payments(request.parking):
         messages.error(request, str(payment))

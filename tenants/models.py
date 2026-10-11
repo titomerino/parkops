@@ -17,20 +17,6 @@ class Parking(models.Model):
         default=True,
         help_text="Si se desactiva, el parqueo no ve el menú, el dashboard ni las pantallas de baños",
     )
-    plate_scan_enabled = models.BooleanField(
-        "Escaneo de placas con IA",
-        default=False,
-        help_text="Permite leer la placa con la cámara. Cada lectura tiene costo (API de Anthropic)",
-    )
-    ai_package = models.ForeignKey(
-        "tenants.AiPackage",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="parkings",
-        verbose_name="Paquete mensual de IA",
-        help_text="Escaneos incluidos cada mes. Vacío = sin límite",
-    )
     active = models.BooleanField(
         "Activo",
         default=True,
@@ -111,8 +97,8 @@ class AiSettings(models.Model):
 
     @classmethod
     def load(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
-        return obj
+        # Solo lectura: si nunca se guardó, valores por defecto sin escribir en la base
+        return cls.objects.filter(pk=1).first() or cls(pk=1)
 
     @property
     def effective_api_key(self):
@@ -120,14 +106,17 @@ class AiSettings(models.Model):
 
 
 class AiPackage(models.Model):
-    """Paquete de escaneos con IA que se vende a los parqueos."""
+    """
+    Paquete de escaneos con IA. Se incluye en un plan (Admin → Planes)
+    o se vende como recarga del mes (paquete extra en el parqueo).
+    """
 
     name = models.CharField("Nombre", max_length=80)
     scans = models.PositiveIntegerField("Escaneos incluidos")
     price = models.DecimalField(
         "Precio al cliente (USD)",
         max_digits=8, decimal_places=2,
-        help_text="Lo que le cobras al parqueo por el paquete",
+        help_text="Lo que cobras si se vende solo o como recarga",
     )
     active = models.BooleanField("Disponible", default=True)
 
@@ -161,6 +150,7 @@ class AiTopUp(models.Model):
     month = models.DateField("Mes", default=first_day_of_month, help_text="Solo cuenta para este mes")
     scans = models.PositiveIntegerField("Escaneos", blank=True)
     price = models.DecimalField("Precio cobrado (USD)", max_digits=8, decimal_places=2, blank=True)
+    paid = models.BooleanField("Pagado", default=False)
     created_at = models.DateTimeField("Agregado", auto_now_add=True)
 
     class Meta:

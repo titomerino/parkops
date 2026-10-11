@@ -508,9 +508,14 @@ class TestEscaneoPlaca:
         from django.core.cache import cache
         from parking.services import plate_scan
 
+        from payment.models import Plan, Subscription
+        from tenants.models import AiPackage
+
         settings.ANTHROPIC_API_KEY = "test-key"
-        parking.plate_scan_enabled = True
-        parking.save()
+        # El parqueo tiene un plan con IA incluida
+        self.package = AiPackage.objects.create(name="Pro", scans=1000, price=Decimal("12"))
+        self.plan = Plan.objects.create(name="Pro", price=Decimal("45"), ai_package=self.package)
+        self.subscription = Subscription.objects.create(parking=parking, plan=self.plan, active=True)
         cache.clear()
 
         self.calls = []
@@ -616,23 +621,47 @@ class TestEscaneoPlaca:
         assert not PlateScan.objects.exists()
 
     def test_parqueo_sin_el_servicio(self, admin_client, parking):
-        parking.plate_scan_enabled = False
-        parking.save()
+        self.subscription.active = False
+        self.subscription.save()
 
         assert self.post(admin_client).status_code == 403
         assert self.calls == []
+
+    def test_plan_sin_ia(self, admin_client, parking):
+        self.plan.ai_package = None
+        self.plan.save()
+
+        assert self.post(admin_client).status_code == 403
+
+    def test_plan_sin_ia_con_recarga_del_mes(self, admin_client, parking, fee):
+        from tenants.models import AiTopUp
+
+        self.plan.ai_package = None
+        self.plan.save()
+        AiTopUp.objects.create(parking=parking, package=self.package)
+
+        assert self.post(admin_client).status_code == 200
+
+    def test_ia_de_todos_los_planes_activos_se_suma(self, admin_client, parking, fee):
+        from payment.models import Plan, Subscription
+        from tenants.models import AiPackage
+        from parking.services import plate_scan
+
+        addon = AiPackage.objects.create(name="Complemento", scans=500, price=Decimal("6"))
+        Subscription.objects.create(
+            parking=parking, plan=Plan.objects.create(name="IA extra", price=Decimal("6"), ai_package=addon),
+            active=True,
+        )
+        assert plate_scan.quota(parking)["limit"] == 1500
 
     def test_sin_api_key(self, admin_client, settings):
         settings.ANTHROPIC_API_KEY = ""
         assert self.post(admin_client).status_code == 403
 
-    @staticmethod
-    def give_package(parking, scans):
-        from tenants.models import AiPackage
-
-        parking.ai_package = AiPackage.objects.create(name="Básico", scans=scans, price=Decimal("5"))
-        parking.save()
-        return parking.ai_package
+    def give_package(self, parking, scans):
+        self.package.scans = scans
+        self.package.save()
+        return self.package
 
     def test_paquete_agotado_bloquea_el_escaneo(self, admin_client, parking, fee):
         self.give_package(parking, 2)
@@ -653,7 +682,7 @@ class TestEscaneoPlaca:
         assert self.post(admin_client).status_code == 429
 
         top_up = AiTopUp.objects.create(parking=parking, package=package)
-        assert (top_up.scans, top_up.price) == (1, Decimal("5"))
+        assert (top_up.scans, top_up.price) == (1, Decimal("12"))
         assert self.post(admin_client).status_code == 200
         assert self.post(admin_client).status_code == 429
 
@@ -754,13 +783,13 @@ class TestEscaneoPlaca:
         html = admin_client.get("/parking/busqueda/").content.decode()
         assert "Escanear placa" in html and 'id="plateCameraModal"' in html
 
-        parking.plate_scan_enabled = False
-        parking.save()
+        self.subscription.active = False
+        self.subscription.save()
         html = admin_client.get("/parking/busqueda/").content.decode()
         assert "plateCameraModal" not in html
 
-        parking.plate_scan_enabled = True
-        parking.save()
+        self.subscription.active = True
+        self.subscription.save()
         settings.ANTHROPIC_API_KEY = ""
         assert "plateCameraModal" not in admin_client.get("/parking/busqueda/").content.decode()
 
@@ -827,13 +856,16 @@ class TestAdminIA:
         assert "$0.90" in html  # 3,000 × $0.0003 de referencia
         assert "$4.10 (82%)" in html
 
-    def test_lista_de_parqueos_muestra_uso_de_ia(self, admin_client, parking):
+    def test_lista_de_parqueos_muestra_plan_y_uso_de_ia(self, admin_client, parking):
         from parking.models import PlateScan
+        from payment.models import Plan, Subscription
         from tenants.models import AiPackage
 
-        parking.plate_scan_enabled = True
-        parking.ai_package = AiPackage.objects.create(name="Básico", scans=3000, price=Decimal("5"))
-        parking.save()
+        package = AiPackage.objects.create(name="IA 3,000", scans=3000, price=Decimal("12"))
+        plan = Plan.objects.create(name="Pro", price=Decimal("45"), ai_package=package)
+        Subscription.objects.create(parking=parking, plan=plan, active=True)
         PlateScan.objects.create(parking=parking, model="x")
 
-        assert "1 / 3,000" in admin_client.get("/admin/tenants/parking/").content.decode()
+        html = admin_client.get("/admin/tenants/parking/").content.decode()
+        assert "1 / 3,000" in html
+        assert ">Pro<" in html

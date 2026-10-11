@@ -34,7 +34,7 @@ class ParkingAccountForm(forms.ModelForm):
         model = Parking
         fields = [
             "name", "address", "phone", "capacity", "bathrooms_enabled",
-            "plate_scan_enabled", "ai_package", "active",
+            "active",
         ]
 
     def clean_owner_username(self):
@@ -54,10 +54,10 @@ class AiTopUpInline(admin.TabularInline):
 
     model = AiTopUp
     extra = 0
-    fields = ("package", "month", "scans", "price", "created_at")
+    fields = ("package", "month", "scans", "price", "paid", "created_at")
     readonly_fields = ("scans", "price", "created_at")
     verbose_name = "Paquete extra de IA"
-    verbose_name_plural = "Paquetes extra de IA (cuentan solo en su mes)"
+    verbose_name_plural = "Recargas de IA (cuentan solo en su mes y se suman a su factura)"
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == "package":
@@ -76,25 +76,53 @@ class ParkingMemberInline(admin.TabularInline):
 @admin.register(Parking)
 class ParkingAdmin(admin.ModelAdmin):
     list_display = (
-        "name", "phone", "bathrooms_enabled", "plate_scan_enabled", "ai_usage", "active", "members_count",
-        "created_at",
+        "name", "phone", "current_plan", "ai_usage", "bathrooms_enabled", "active", "members_count", "created_at",
     )
-    list_filter = ("active", "bathrooms_enabled", "plate_scan_enabled", "ai_package")
-    list_select_related = ("ai_package",)
+    list_filter = ("active", "bathrooms_enabled")
     search_fields = ("name", "address", "phone")
     inlines = [ParkingMemberInline, AiTopUpInline]
+    actions = ["invoice_current_month", "invoice_previous_month"]
+
+    @admin.display(description="Plan")
+    def current_plan(self, obj):
+        names = [s.name for s in obj.subscriptions.all() if s.active]
+        return ", ".join(names) or "—"
 
     @admin.display(description="IA este mes")
     def ai_usage(self, obj):
         from parking.services import plate_scan
 
-        if not obj.plate_scan_enabled:
-            return "—"
         quota = plate_scan.quota(obj)
-        if quota["limit"] is None:
-            return f"{quota['used']:,} (sin límite)"
+        if not quota["limit"] and not quota["used"]:
+            return "—"
         status = " · AGOTADO" if quota["exhausted"] else ""
         return f"{quota['used']:,} / {quota['limit']:,}{status}"
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related("subscriptions")
+
+    def _invoice(self, request, queryset, period):
+        from payment.services.invoice_service import generate_invoice, month_label
+
+        invoices = [generate_invoice(parking, period) for parking in queryset]
+        self.message_user(
+            request,
+            f"{len(invoices)} factura(s) de {month_label(period)} generada(s). "
+            "Están en Pagos → Facturas, con su PDF.",
+            messages.SUCCESS,
+        )
+
+    @admin.action(description="Generar factura del mes actual")
+    def invoice_current_month(self, request, queryset):
+        from django.utils.timezone import localdate
+
+        self._invoice(request, queryset, localdate().replace(day=1))
+
+    @admin.action(description="Generar factura del mes anterior")
+    def invoice_previous_month(self, request, queryset):
+        from payment.services.invoice_service import previous_month
+
+        self._invoice(request, queryset, previous_month())
 
     @admin.display(description="Usuarios")
     def members_count(self, obj):
@@ -215,7 +243,7 @@ class AiSettingsAdmin(admin.ModelAdmin):
 
     def changelist_view(self, request, extra_context=None):
         # Una sola configuración: se abre directo
-        AiSettings.load()
+        AiSettings.objects.get_or_create(pk=1)
         return redirect(reverse("admin:tenants_aisettings_change", args=[1]))
 
 

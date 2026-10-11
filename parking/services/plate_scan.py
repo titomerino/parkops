@@ -39,26 +39,38 @@ class PlateScanError(Exception):
 LOW_QUOTA_RATIO = 0.8
 
 
+def included_scans(parking):
+    """Escaneos que incluyen los planes activos del parqueo (Suscripción → Plan → IA)."""
+    from payment.models import Subscription
+
+    return (
+        Subscription.objects.filter(parking=parking, active=True, plan__ai_package__isnull=False)
+        .aggregate(total=Sum("plan__ai_package__scans"))["total"] or 0
+    )
+
+
+def top_up_scans(parking, month=None):
+    month = month or localdate().replace(day=1)
+    return (
+        AiTopUp.objects.filter(parking=parking, month=month)
+        .aggregate(total=Sum("scans"))["total"] or 0
+    )
+
+
 def is_enabled(parking):
-    """El parqueo tiene contratado el escaneo y hay una API key configurada."""
-    return bool(parking and parking.plate_scan_enabled and AiSettings.load().effective_api_key)
+    """
+    El parqueo tiene IA (en su plan o con una recarga del mes) y hay una
+    API key configurada.
+    """
+    if not parking or not AiSettings.load().effective_api_key:
+        return False
+    return included_scans(parking) > 0 or top_up_scans(parking) > 0
 
 
 def quota(parking):
-    """
-    Uso del mes: paquete mensual + paquetes extra del mes.
-    `limit` None = parqueo sin paquete asignado (sin límite).
-    """
+    """Uso del mes: IA incluida en el plan + recargas del mes."""
     used = PlateScan.objects.for_parking(parking).this_month().count()
-
-    if parking.ai_package_id is None:
-        return {"limit": None, "used": used, "remaining": None, "exhausted": False, "low": False}
-
-    extra = (
-        AiTopUp.objects.filter(parking=parking, month=localdate().replace(day=1))
-        .aggregate(total=Sum("scans"))["total"] or 0
-    )
-    limit = parking.ai_package.scans + extra
+    limit = included_scans(parking) + top_up_scans(parking)
     remaining = max(0, limit - used)
 
     return {

@@ -145,8 +145,8 @@
                 </div>
             </form>
 
-            {% if request.user.is_superuser %}
-            <!-- Eliminar entrada: solo superusuario -->
+            {% if perms.parking.delete_entry %}
+            <!-- Eliminar entrada: requiere el permiso parking.delete_entry -->
             <div class="card-body pt-0">
                 <button type="button"
                     class="btn btn-outline-danger rounded-pill px-4 w-100"
@@ -164,7 +164,7 @@
 </div>
 
 
-{% if request.user.is_superuser %}
+{% if perms.parking.delete_entry %}
 <div class="modal fade" id="deleteEntryModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content bg-dark text-light border border-danger rounded-4">

@@ -147,6 +147,20 @@ def test_superusuario_no_elimina_entrada_de_otro_parqueo_que_el_actual(admin_cli
     assert Entry.objects.filter(pk=world["b"]["active"].pk).exists()
 
 
+@pytest.mark.django_db
+def test_dueno_con_permiso_de_eliminar_no_borra_entradas_de_otro_parqueo(client, world):
+    from django.contrib.auth.models import Permission
+
+    world["owner_a"].user_permissions.add(Permission.objects.get(codename="delete_entry"))
+    client.force_login(world["owner_a"])
+
+    assert client.post(f"/parking/eliminar/{world['b']['active'].pk}/").status_code == 404
+    assert Entry.objects.filter(pk=world["b"]["active"].pk).exists()
+
+    assert client.post(f"/parking/eliminar/{world['a']['active'].pk}/").status_code == 302
+    assert not Entry.objects.filter(pk=world["a"]["active"].pk).exists()
+
+
 # ---------------------------------------------------------------- Búsqueda, formularios, voz
 
 @pytest.mark.django_db

@@ -45,6 +45,12 @@ HUNDREDS = {
     "setecientos": 700, "ochocientos": 800, "novecientos": 900,
 }
 
+# Letras dichas con dos palabras
+LETTER_PAIRS = {
+    ("i", "griega"): "Y",
+    ("doble", "ve"): "W", ("doble", "u"): "W", ("doble", "uve"): "W",
+}
+
 # Palabras que no forman parte de la placa
 FILLER = {
     "placa", "la", "el", "es", "numero", "num", "del", "vehiculo", "carro",
@@ -120,6 +126,21 @@ def parse_plate(text):
             i += 1
             continue
 
+        pair = LETTER_PAIRS.get(tuple(tokens[i:i + 2]))
+        if pair:
+            parts.append(pair)
+            i += 2
+            continue
+
+        # «letra e», «letra de»: la palabra siguiente es una letra. Decir
+        # «letra» ayuda a que el dictado no omita una vocal suelta al final.
+        if word == "letra" and i + 1 < len(tokens):
+            nxt_word = tokens[i + 1]
+            if nxt_word in LETTERS or re.fullmatch(r"[a-z]", nxt_word):
+                parts.append(LETTERS.get(nxt_word, nxt_word.upper()))
+                i += 2
+                continue
+
         digits, nxt = _read_number(tokens, i)
         if digits is not None:
             parts.append(digits)
@@ -172,15 +193,31 @@ def find_candidates(parking, plate, limit=3):
     ]
 
 
-def interpret(parking, alternatives):
+def _complete(prefix, plate):
+    """
+    Si ya hay una placa y lo nuevo dictado son solo letras (la letra final
+    que faltó), las agrega al final: «P11017» + «E» → «P11017E».
+    """
+    if prefix and re.fullmatch(r"[A-Z]{1,3}", plate) and is_valid_plate(prefix + plate):
+        return prefix + plate
+    return plate
+
+
+def interpret(parking, alternatives, prefix=""):
     """
     Recibe las alternativas del reconocimiento de voz (la primera es la más
     probable) y devuelve la placa elegida con sugerencias.
 
     Se prefiere la primera alternativa que coincida con una placa conocida;
     si ninguna coincide, la primera que tenga formato válido.
+
+    `prefix` es la placa ya mostrada: permite dictar solo la letra que faltó.
     """
-    parsed = [(text, parse_plate(text)) for text in alternatives if text and text.strip()]
+    prefix = prefix if is_valid_plate(prefix or "") else ""
+    parsed = [
+        (text, _complete(prefix, parse_plate(text)))
+        for text in alternatives if text and text.strip()
+    ]
     valid = [(text, plate) for text, plate in parsed if is_valid_plate(plate)]
 
     if not valid:
@@ -197,11 +234,20 @@ def interpret(parking, alternatives):
 
     active_entry = entries.filter(plate=plate, state=True).only("entry_date_hour").first()
 
+    # Otras lecturas del dictado (p. ej. con la letra final que la primera
+    # omitió) se ofrecen junto a las placas conocidas parecidas
+    candidates = find_candidates(parking, plate)
+    offered = {plate} | {c["plate"] for c in candidates}
+    for _, other in valid:
+        if other not in offered and len(candidates) < 5:
+            offered.add(other)
+            candidates.append({"plate": other, "active": other in known, "subscribed": False})
+
     return {
         "ok": True,
         "heard": heard,
         "plate": plate,
         "action": "salida" if active_entry else "entrada",
         "entry_date_hour": active_entry.entry_date_hour if active_entry else None,
-        "candidates": find_candidates(parking, plate),
+        "candidates": candidates,
     }

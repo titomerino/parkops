@@ -11,7 +11,7 @@ from tenants.models import Parking, ParkingMember
 OWNER_GROUP = "Dueño de parqueo"
 OPERATOR_GROUP = "Operador"
 
-# (app, codename) por rol. El borrado de entradas es solo del superusuario.
+# (app, codename) por rol. Eliminar entradas (delete_entry) se asigna aparte.
 ROLE_PERMISSIONS = {
     OPERATOR_GROUP: [
         ("parking", "add_entry"),

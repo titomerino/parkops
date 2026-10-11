@@ -3,7 +3,7 @@ from django.utils.timezone import now, localtime
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.models import DELETION, LogEntry
-from shell.decorators import perm_required, superuser_required
+from shell.decorators import perm_required
 from shell.utils import safe_redirect_url
 from django.db import transaction
 from django.http import Http404, JsonResponse
@@ -227,9 +227,9 @@ def entry_edit_view(request, pk):
     })
 
 @require_POST
-@superuser_required
+@perm_required("parking.delete_entry")
 def entry_delete_view(request, pk):
-    """ Elimina una entrada (solo superusuario) y deja registro en el historial del admin """
+    """ Elimina una entrada (permiso «Can delete Entrada») y deja registro en el historial del admin """
 
     entry = get_object_or_404(Entry, pk=pk, parking=request.parking)
 

@@ -395,11 +395,37 @@ class TestEliminarEntrada:
         assert "P171737" in log.change_message
         assert "$2.00" in log.change_message
 
-    def test_staff_con_todos_los_permisos_no_puede(self, client, django_user_model, make_entry, member):
+    def test_usuario_con_permiso_elimina(self, client, django_user_model, make_entry, member):
         from django.contrib.auth.models import Permission
 
-        user = member(django_user_model.objects.create_user("jefe", password="x", is_staff=True))
-        user.user_permissions.set(Permission.objects.filter(content_type__app_label="parking"))
+        user = member(django_user_model.objects.create_user("jefe", password="x"))
+        user.user_permissions.add(Permission.objects.get(codename="delete_entry"))
+        client.force_login(user)
+        entry = make_entry()
+
+        assert client.post(self.url(entry)).status_code == 302
+        assert not Entry.objects.filter(pk=entry.pk).exists()
+
+    def test_permiso_por_grupo_tambien_sirve(self, client, django_user_model, make_entry, member):
+        from django.contrib.auth.models import Group, Permission
+
+        group = Group.objects.create(name="Administrador")
+        group.permissions.add(Permission.objects.get(codename="delete_entry"))
+        user = member(django_user_model.objects.create_user("jefe", password="x"))
+        user.groups.add(group)
+        client.force_login(user)
+        entry = make_entry()
+
+        assert client.post(self.url(entry)).status_code == 302
+        assert not Entry.objects.filter(pk=entry.pk).exists()
+
+    def test_sin_permiso_no_puede(self, client, django_user_model, make_entry, member):
+        from django.contrib.auth.models import Permission
+
+        user = member(django_user_model.objects.create_user("editor", password="x", is_staff=True))
+        user.user_permissions.set(
+            Permission.objects.filter(content_type__app_label="parking").exclude(codename="delete_entry")
+        )
         client.force_login(user)
         entry = make_entry()
 
@@ -420,7 +446,7 @@ class TestEliminarEntrada:
     def test_entrada_inexistente(self, admin_client):
         assert admin_client.post("/parking/eliminar/999999/").status_code == 404
 
-    def test_boton_solo_visible_para_superusuario(self, admin_client, client, django_user_model, make_entry, member):
+    def test_boton_solo_visible_con_permiso(self, admin_client, client, django_user_model, make_entry, member):
         from django.contrib.auth.models import Permission
 
         entry = make_entry()
@@ -432,3 +458,8 @@ class TestEliminarEntrada:
         html = client.get(f"/parking/editar/{entry.pk}/").content.decode()
         assert "Eliminar entrada" not in html
         assert "deleteEntryModal" not in html
+
+        user.user_permissions.add(Permission.objects.get(codename="delete_entry"))
+        user = django_user_model.objects.get(pk=user.pk)  # limpia la caché de permisos
+        client.force_login(user)
+        assert "deleteEntryModal" in client.get(f"/parking/editar/{entry.pk}/").content.decode()

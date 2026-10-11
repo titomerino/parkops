@@ -39,7 +39,8 @@
           Toca el micrófono y di la placa
         </div>
         <div id="voicePlateHint" class="small text-secondary">
-          Ej.: «pe ciento setenta y uno, setecientos treinta y siete»
+          Ej.: «pe ciento setenta y uno, setecientos treinta y siete».
+          Si una letra no se capta, di «letra» antes de ella (ej.: «letra e»).
         </div>
 
         <!-- Resultado -->
@@ -56,6 +57,10 @@
           ></div>
 
           <span id="voicePlateAction" class="badge rounded-pill fs-6"></span>
+
+          <div id="voicePlateAppendHint" class="small text-secondary mt-2 d-none">
+            ¿Faltó la letra final? Toca el micrófono y di solo «letra e» (o la letra que falte).
+          </div>
 
           <!-- Placas conocidas parecidas -->
           <div id="voicePlateCandidates" class="mt-3 d-none">
@@ -117,6 +122,11 @@ const VoicePlate = (function () {
     let listening = false;
     let languageIndex = 0;
     let selected = null;
+    // Placa mostrada al volver a tocar el micrófono: si solo se dicta una
+    // letra, el servidor la agrega al final («P11017» + «E»)
+    let appendTo = "";
+    // Segmentos finales del dictado; se interpretan juntos al terminar
+    let segments = [];
     let modal = null;
     let audio = null;
 
@@ -204,13 +214,14 @@ const VoicePlate = (function () {
         $("voicePlateRecordBtn").disabled = !Recognition;
 
         // Al cerrar la modal se detiene el micrófono
-        $("voicePlateModal").addEventListener("hidden.bs.modal", stop, { once: true });
+        $("voicePlateModal").addEventListener("hidden.bs.modal", cancel, { once: true });
 
         modal.show();
     }
 
     function reset() {
         selected = null;
+        $("voicePlateAppendHint").classList.add("d-none");
         $("voicePlateResult").classList.add("d-none");
         $("voicePlateCandidates").classList.add("d-none");
         $("voicePlateError").classList.add("d-none");
@@ -241,6 +252,12 @@ const VoicePlate = (function () {
     function onListenTimeout() {
         if (!listening) return;
 
+        // Ya hay texto: se procesa lo escuchado
+        if (segments.length) {
+            stop();
+            return;
+        }
+
         stop();
         showError("No se captó la placa. Toca el micrófono e intenta de nuevo, cerca del teléfono.");
         setStatus("Toca el micrófono y di la placa");
@@ -255,9 +272,36 @@ const VoicePlate = (function () {
         listening ? stop() : start();
     }
 
+    // Segmentos finales sin repetir: en Android cada segmento puede traer
+    // otra vez el texto anterior («P 11017», «P 11017 e»)
+    function mergeFinals(results) {
+        const text = (r) => r[0].transcript.trim().toLowerCase();
+        const merged = [];
+
+        results.filter((r) => r.isFinal).forEach((r) => {
+            const prev = merged[merged.length - 1];
+            if (prev && text(r).startsWith(text(prev))) {
+                merged[merged.length - 1] = r;
+            } else if (!prev || !text(prev).startsWith(text(r))) {
+                merged.push(r);
+            }
+        });
+        return merged;
+    }
+
+    // Arma hasta 5 lecturas completas combinando las alternativas de cada segmento
+    function joinSegments(finals) {
+        const count = Math.max(...finals.map((r) => r.length));
+        return Array.from({ length: count }, (_, k) =>
+            finals.map((r) => (r[k] || r[0]).transcript).join(" ").trim()
+        );
+    }
+
     async function start() {
         if (!Recognition) return;
 
+        appendTo = selected || "";
+        segments = [];
         reset();
         closeMicrophone();
 
@@ -270,15 +314,11 @@ const VoicePlate = (function () {
         recognition.onspeechstart = () => setStatus("Te escucho…");
 
         recognition.onresult = (event) => {
-            const result = event.results[event.results.length - 1];
-
-            if (!result.isFinal) {
-                setStatus(`«${result[0].transcript}»`);
-                return;
-            }
-
-            const alternatives = Array.from(result, (alt) => alt.transcript);
-            interpret(alternatives);
+            // El dictado puede llegar en varios segmentos («P 11017» y «E»):
+            // se juntan todos en vez de usar solo el último
+            const results = Array.from(event.results);
+            segments = mergeFinals(results);
+            setStatus(`«${results.map((r) => r[0].transcript).join(" ").trim()}»`);
         };
 
         recognition.onerror = (event) => {
@@ -307,6 +347,13 @@ const VoicePlate = (function () {
         recognition.onend = () => {
             closeMicrophone();
 
+            if (segments.length) {
+                const alternatives = joinSegments(segments);
+                segments = [];
+                interpret(alternatives);
+                return;
+            }
+
             if (listening) {
                 setListening(false);
                 if (!selected) setStatus("Toca el micrófono y di la placa");
@@ -332,8 +379,17 @@ const VoicePlate = (function () {
         }
     }
 
+    // Detiene y procesa lo escuchado hasta ahora
     function stop() {
         if (recognition && listening) recognition.stop();
+        setListening(false);
+        closeMicrophone();
+    }
+
+    // Detiene sin procesar: descartar, confirmar o cerrar la modal
+    function cancel() {
+        segments = [];
+        if (recognition && listening) recognition.abort();
         setListening(false);
         closeMicrophone();
     }
@@ -349,7 +405,7 @@ const VoicePlate = (function () {
                     "Content-Type": "application/json",
                     "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value,
                 },
-                body: JSON.stringify({ alternatives }),
+                body: JSON.stringify({ alternatives, prefix: appendTo }),
             });
             const data = await response.json();
 
@@ -367,6 +423,7 @@ const VoicePlate = (function () {
             select(data.plate, data.formatted, data.action, data.entry_time);
             renderCandidates(data.candidates || []);
             setStatus("Confirma la placa o descártala");
+            $("voicePlateAppendHint").classList.remove("d-none");
 
         } catch (error) {
             showError("No se pudo interpretar la placa. Revisa la conexión.");
@@ -419,12 +476,13 @@ const VoicePlate = (function () {
         // Usa el formulario de búsqueda existente: mismo flujo que al digitar
         const input = document.getElementById("plateInput");
         input.value = selected;
-        stop();
+        cancel();
         input.form.requestSubmit ? input.form.requestSubmit() : input.form.submit();
     }
 
     function discard() {
-        stop();
+        cancel();
+        appendTo = "";
         reset();
     }
 

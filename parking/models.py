@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import IntegrityError, models, transaction
 from django.utils.timezone import now
 from math import ceil
@@ -415,3 +416,47 @@ class PlatePolicy(models.Model):
         retorna el formato de placa con espacios
         """
         return format_plate(self.plate)
+
+
+class PlateScanQuerySet(ParkingQuerySet):
+    def this_month(self):
+        today = now()
+        return self.filter(created_at__year=today.year, created_at__month=today.month)
+
+
+class PlateScan(models.Model):
+    """
+    Cada lectura de placa con IA: sirve para el límite mensual del parqueo
+    y para calcular el costo (tokens que informa la API).
+    """
+    parking = models.ForeignKey(
+        "tenants.Parking",
+        on_delete=models.PROTECT,
+        related_name="plate_scans",
+        verbose_name="Parqueo",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Usuario",
+    )
+    created_at = models.DateTimeField("Fecha", default=now)
+    plate = models.CharField("Lectura", max_length=50, blank=True)
+    model = models.CharField("Modelo", max_length=60)
+    input_tokens = models.PositiveIntegerField("Tokens de entrada", default=0)
+    output_tokens = models.PositiveIntegerField("Tokens de salida", default=0)
+    cost = models.DecimalField("Costo (USD)", max_digits=10, decimal_places=6, default=0)
+
+    objects = PlateScanQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "Escaneo de placa"
+        verbose_name_plural = "Escaneos de placas"
+        indexes = [
+            models.Index(fields=["parking", "created_at"], name="platescan_parking_created_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.plate or '—'} ({self.created_at:%d/%m/%Y %H:%M})"

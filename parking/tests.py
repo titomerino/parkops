@@ -496,3 +496,195 @@ class TestEliminarEntrada:
         user = django_user_model.objects.get(pk=user.pk)  # limpia la caché de permisos
         client.force_login(user)
         assert "deleteEntryModal" in client.get(f"/parking/editar/{entry.pk}/").content.decode()
+
+
+@pytest.mark.django_db
+class TestEscaneoPlaca:
+    url = "/parking/busqueda/foto/"
+
+    @pytest.fixture(autouse=True)
+    def setup(self, settings, parking, monkeypatch):
+        from types import SimpleNamespace
+        from django.core.cache import cache
+        from parking.services import plate_scan
+
+        settings.ANTHROPIC_API_KEY = "test-key"
+        parking.plate_scan_enabled = True
+        parking.save()
+        cache.clear()
+
+        self.calls = []
+        self.reply = "P11017E"
+
+        def create(**kwargs):
+            self.calls.append(kwargs)
+            if isinstance(self.reply, Exception):
+                raise self.reply
+            return SimpleNamespace(
+                content=[SimpleNamespace(type="text", text=self.reply)],
+                usage=SimpleNamespace(input_tokens=400, output_tokens=8),
+            )
+
+        monkeypatch.setattr(plate_scan, "_client", lambda: SimpleNamespace(messages=SimpleNamespace(create=create)))
+
+    @staticmethod
+    def image(width=600, height=300):
+        import io
+        from PIL import Image
+
+        out = io.BytesIO()
+        Image.new("RGB", (width, height), "white").save(out, format="JPEG")
+        out.seek(0)
+        out.name = "placa.jpg"
+        return out
+
+    def post(self, client, image=None):
+        return client.post(self.url, {"image": image or self.image()})
+
+    def test_lee_la_placa_y_registra_el_costo(self, admin_client, parking, fee):
+        from parking.models import PlateScan
+
+        data = self.post(admin_client).json()
+
+        assert data["ok"] is True
+        assert data["plate"] == "P11017E"
+        assert data["action"] == "entrada"
+
+        scan = PlateScan.objects.get()
+        assert scan.parking == parking
+        assert scan.user.username == "admin"
+        assert (scan.input_tokens, scan.output_tokens) == (400, 8)
+        assert scan.cost == Decimal("0.000440")  # 400 × $1/M + 8 × $5/M
+
+    def test_placa_adentro_registrara_salida(self, admin_client, make_entry):
+        make_entry(plate="P11017E")
+        assert self.post(admin_client).json()["action"] == "salida"
+
+    def test_lectura_dudosa_prefiere_la_placa_conocida(self, admin_client, make_entry):
+        make_entry(plate="P11017E")
+        self.reply = "P11O17E, P11017E"
+
+        data = self.post(admin_client).json()
+
+        assert data["plate"] == "P11017E"
+        assert data["action"] == "salida"
+
+    def test_sin_placa_legible(self, admin_client, fee):
+        from parking.models import PlateScan
+
+        self.reply = "NINGUNA"
+        data = self.post(admin_client).json()
+
+        assert data["ok"] is False
+        assert PlateScan.objects.count() == 1  # la lectura igual tuvo costo
+
+    def test_imagen_grande_se_reduce_antes_de_enviar(self, admin_client, fee):
+        import base64
+        import io
+        from PIL import Image
+
+        self.post(admin_client, self.image(3000, 1500))
+
+        sent = self.calls[0]["messages"][0]["content"][0]["source"]["data"]
+        assert max(Image.open(io.BytesIO(base64.b64decode(sent))).size) <= 800
+
+    def test_archivo_que_no_es_imagen(self, admin_client):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        response = admin_client.post(self.url, {"image": SimpleUploadedFile("x.jpg", b"no es imagen")})
+
+        assert response.status_code == 400
+        assert self.calls == []
+
+    def test_sin_imagen(self, admin_client):
+        assert admin_client.post(self.url).status_code == 400
+
+    def test_error_de_la_api(self, admin_client):
+        from parking.models import PlateScan
+
+        self.reply = RuntimeError("timeout")
+        response = self.post(admin_client)
+
+        assert response.status_code == 400
+        assert "Intenta de nuevo" in response.json()["error"]
+        assert not PlateScan.objects.exists()
+
+    def test_parqueo_sin_el_servicio(self, admin_client, parking):
+        parking.plate_scan_enabled = False
+        parking.save()
+
+        assert self.post(admin_client).status_code == 403
+        assert self.calls == []
+
+    def test_sin_api_key(self, admin_client, settings):
+        settings.ANTHROPIC_API_KEY = ""
+        assert self.post(admin_client).status_code == 403
+
+    def test_limite_mensual(self, admin_client, parking, fee):
+        parking.plate_scan_monthly_limit = 2
+        parking.save()
+
+        assert self.post(admin_client).status_code == 200
+        assert self.post(admin_client).status_code == 200
+        response = self.post(admin_client)
+
+        assert response.status_code == 429
+        assert "límite" in response.json()["error"]
+        assert len(self.calls) == 2
+
+    def test_limite_por_minuto(self, admin_client, fee):
+        from parking.views import SCAN_RATE_PER_MINUTE
+
+        for _ in range(SCAN_RATE_PER_MINUTE):
+            assert self.post(admin_client).status_code == 200
+
+        assert self.post(admin_client).status_code == 429
+
+    def test_el_limite_cuenta_solo_el_parqueo_propio(self, admin_client, parking, other_parking, fee):
+        from parking.models import PlateScan
+
+        PlateScan.objects.create(parking=other_parking, model="x")
+        parking.plate_scan_monthly_limit = 1
+        parking.save()
+
+        assert self.post(admin_client).status_code == 200
+
+    def test_requiere_permiso(self, client, django_user_model, member):
+        client.force_login(member(django_user_model.objects.create_user("sin_permiso", password="x")))
+        assert self.post(client).status_code == 403
+
+    def test_boton_visible_solo_con_el_servicio(self, admin_client, parking, settings):
+        html = admin_client.get("/parking/busqueda/").content.decode()
+        assert "Escanear placa" in html and 'id="plateCameraModal"' in html
+
+        parking.plate_scan_enabled = False
+        parking.save()
+        html = admin_client.get("/parking/busqueda/").content.decode()
+        assert "plateCameraModal" not in html
+
+        parking.plate_scan_enabled = True
+        parking.save()
+        settings.ANTHROPIC_API_KEY = ""
+        assert "plateCameraModal" not in admin_client.get("/parking/busqueda/").content.decode()
+
+    def test_admin_muestra_totales(self, admin_client, parking):
+        from parking.models import PlateScan
+
+        PlateScan.objects.create(parking=parking, model="x", cost=Decimal("0.0005"))
+        PlateScan.objects.create(parking=parking, model="x", cost=Decimal("0.0007"))
+
+        html = admin_client.get("/admin/parking/platescan/").content.decode()
+        assert "<strong>2</strong> escaneos" in html
+        assert "$0.0012" in html
+
+
+@pytest.mark.parametrize("texto,lecturas", [
+    ("P11017E", ["P11017E"]),
+    ("P 110-17E", ["P11017E"]),
+    ("P11O17E, P11017E", ["P11O17E", "P11017E"]),
+    ("NINGUNA", []),
+    ("", []),
+])
+def test_lecturas_de_la_ia(texto, lecturas):
+    from parking.services.plate_scan import parse_readings
+    assert parse_readings(texto) == lecturas

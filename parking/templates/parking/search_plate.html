@@ -82,6 +82,11 @@
 <!-- modal de dictado de placa -->
 {% include 'parking/partials/_parking_voice_plate_modal.html' %}
 
+<!-- modal de escaneo de placa con cámara -->
+{% if plate_scan_available %}
+  {% include 'parking/partials/_parking_plate_camera_modal.html' %}
+{% endif %}
+
 {% endblock %}
 
 {% block menu_bottom %}

@@ -14,6 +14,17 @@ class Parking(models.Model):
         default=True,
         help_text="Si se desactiva, el parqueo no ve el menú, el dashboard ni las pantallas de baños",
     )
+    plate_scan_enabled = models.BooleanField(
+        "Escaneo de placas con IA",
+        default=False,
+        help_text="Permite leer la placa con la cámara. Cada lectura tiene costo (API de Anthropic)",
+    )
+    plate_scan_monthly_limit = models.PositiveIntegerField(
+        "Límite mensual de escaneos",
+        null=True,
+        blank=True,
+        help_text="Vacío = sin límite. Al llegar al límite el escaneo se bloquea hasta el próximo mes",
+    )
     active = models.BooleanField(
         "Activo",
         default=True,

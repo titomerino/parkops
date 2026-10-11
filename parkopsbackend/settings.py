@@ -180,3 +180,12 @@ LOGGING = {
 }
 
 X_FRAME_OPTIONS = 'SAMEORIGIN'
+
+# ESCANEO DE PLACAS CON IA (Anthropic). Sin API key el botón no aparece.
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+PLATE_SCAN_MODEL = os.getenv("PLATE_SCAN_MODEL", "claude-haiku-4-5-20251001")
+# USD por millón de tokens (entrada, salida) para registrar el costo de cada lectura
+PLATE_SCAN_PRICE_PER_MTOK = (
+    float(os.getenv("PLATE_SCAN_PRICE_INPUT", "1")),
+    float(os.getenv("PLATE_SCAN_PRICE_OUTPUT", "5")),
+)

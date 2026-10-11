@@ -26,7 +26,10 @@ class ParkingAccountForm(forms.ModelForm):
 
     class Meta:
         model = Parking
-        fields = ["name", "address", "phone", "capacity", "bathrooms_enabled", "active"]
+        fields = [
+            "name", "address", "phone", "capacity", "bathrooms_enabled",
+            "plate_scan_enabled", "plate_scan_monthly_limit", "active",
+        ]
 
     def clean_owner_username(self):
         username = self.cleaned_data["owner_username"]
@@ -50,8 +53,10 @@ class ParkingMemberInline(admin.TabularInline):
 
 @admin.register(Parking)
 class ParkingAdmin(admin.ModelAdmin):
-    list_display = ("name", "phone", "bathrooms_enabled", "active", "members_count", "created_at")
-    list_filter = ("active", "bathrooms_enabled")
+    list_display = (
+        "name", "phone", "bathrooms_enabled", "plate_scan_enabled", "active", "members_count", "created_at",
+    )
+    list_filter = ("active", "bathrooms_enabled", "plate_scan_enabled")
     search_fields = ("name", "address", "phone")
     inlines = [ParkingMemberInline]
 

@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.admin.models import DELETION, LogEntry
 from shell.decorators import perm_required
 from shell.utils import safe_redirect_url
+from django.core.cache import cache
 from django.db import transaction
 from django.http import Http404, JsonResponse
 from django.views.decorators.http import require_POST
@@ -31,6 +32,7 @@ from parking.utils import (
     minutes_to_hours_and_minutes, format_plate,
     render_pdf_response, export_report_excel
 )
+from parking.services import plate_scan
 from parking.services.voice_plate import interpret
 from parking.services.report_service import (
     generate_day_report, generate_month_report,
@@ -292,7 +294,8 @@ def search_plate(request):
                 messages.error(request, "Formulario inválido")
 
     return render(request, "parking/search_plate.html", {
-        'form': form
+        'form': form,
+        'plate_scan_available': plate_scan.is_available(request.parking),
     })
 
 @perm_required('parking.view_entry')
@@ -694,6 +697,11 @@ def interpret_voice_plate(request):
     alternatives = [str(a)[:200] for a in alternatives[:10]]
     result = interpret(request.parking, alternatives, prefix=prefix)
 
+    return JsonResponse(_plate_result_json(result))
+
+
+def _plate_result_json(result):
+    """Formato común del dictado y del escaneo: placa, entrada/salida y sugerencias."""
     if result["ok"]:
         result["formatted"] = format_plate(result["plate"])
         entry_date = result.pop("entry_date_hour")
@@ -702,4 +710,46 @@ def interpret_voice_plate(request):
         for candidate in result["candidates"]:
             candidate["formatted"] = format_plate(candidate["plate"])
 
-    return JsonResponse(result)
+    return result
+
+
+# Escaneos por usuario y minuto: evita gasto por errores o abuso
+SCAN_RATE_PER_MINUTE = 10
+
+
+@require_POST
+@perm_required('parking.add_entry')
+def scan_plate_photo(request):
+    """
+    Recibe el recorte de la placa tomado con la cámara, lo lee con IA y
+    devuelve lo mismo que el dictado por voz.
+    """
+    parking = request.parking
+
+    if not plate_scan.is_available(parking):
+        return JsonResponse({"ok": False, "error": "El escaneo de placas no está activo para este parqueo."}, status=403)
+
+    if plate_scan.remaining_this_month(parking) == 0:
+        return JsonResponse({
+            "ok": False,
+            "error": "Se alcanzó el límite de escaneos de este mes. Digita o dicta la placa.",
+        }, status=429)
+
+    rate_key = f"plate_scan_rate:{request.user.pk}"
+    cache.add(rate_key, 0, timeout=60)
+    if cache.incr(rate_key) > SCAN_RATE_PER_MINUTE:
+        return JsonResponse({"ok": False, "error": "Demasiados escaneos seguidos. Espera un momento."}, status=429)
+
+    upload = request.FILES.get("image")
+    if not upload:
+        return JsonResponse({"ok": False, "error": "Solicitud inválida"}, status=400)
+
+    try:
+        readings = plate_scan.read_plate(parking, request.user, upload.read(plate_scan.MAX_UPLOAD_BYTES + 1))
+    except plate_scan.PlateScanError as error:
+        return JsonResponse({"ok": False, "error": str(error)}, status=400)
+
+    result = interpret(parking, readings)
+    result["heard"] = ", ".join(readings) or "sin placa legible"
+
+    return JsonResponse(_plate_result_json(result))

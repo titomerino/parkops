@@ -293,6 +293,14 @@ class TestDictadoPlaca:
         ("la placa es pe cuatro cero ocho cero siete", "P40807"),
         ("Placa número PE 40 807", "P40807"),
         ("pe cuatro mil ochocientos siete", "P4807"),
+        # Letra al final
+        ("P11017E", "P11017E"),
+        ("P 11017 e", "P11017E"),
+        ("pe once mil diecisiete e", "P11017E"),
+        ("pe once cero diecisiete letra e", "P11017E"),
+        ("P 11017 letra de", "P11017D"),
+        ("P 11017 i griega", "P11017Y"),
+        ("P 11017 doble ve", "P11017W"),
     ])
     def test_interpreta_lo_dicho(self, dicho, placa):
         from parking.services.voice_plate import parse_plate
@@ -308,9 +316,12 @@ class TestDictadoPlaca:
 class TestDictadoEndpoint:
     url = "/parking/busqueda/voz/"
 
-    def post(self, client, alternatives):
+    def post(self, client, alternatives, prefix=None):
         import json
-        return client.post(self.url, json.dumps({"alternatives": alternatives}), content_type="application/json")
+        payload = {"alternatives": alternatives}
+        if prefix is not None:
+            payload["prefix"] = prefix
+        return client.post(self.url, json.dumps(payload), content_type="application/json")
 
     def test_placa_nueva_registrara_entrada(self, admin_client, fee):
         data = self.post(admin_client, ["pe ciento setenta y uno setecientos treinta y siete"]).json()
@@ -344,6 +355,28 @@ class TestDictadoEndpoint:
 
     def test_texto_sin_placa(self, admin_client):
         data = self.post(admin_client, ["buenos días"]).json()
+        assert data["ok"] is False
+
+    def test_ofrece_la_lectura_con_letra_final(self, admin_client, fee):
+        # La primera lectura omitió la «e»; otra alternativa sí la trae
+        data = self.post(admin_client, ["P 11017", "P 11017 e"]).json()
+
+        assert data["plate"] == "P11017"
+        assert "P11017E" in [c["plate"] for c in data["candidates"]]
+
+    @pytest.mark.parametrize("dicho", ["e", "letra e", "E"])
+    def test_segundo_dictado_agrega_la_letra_que_falto(self, admin_client, fee, dicho):
+        data = self.post(admin_client, [dicho], prefix="P11017").json()
+
+        assert data["ok"] is True
+        assert data["plate"] == "P11017E"
+
+    def test_segundo_dictado_con_placa_completa_la_reemplaza(self, admin_client, fee):
+        data = self.post(admin_client, ["P 40 807"], prefix="P11017").json()
+        assert data["plate"] == "P40807"
+
+    def test_prefijo_invalido_se_ignora(self, admin_client, fee):
+        data = self.post(admin_client, ["e"], prefix="hola").json()
         assert data["ok"] is False
 
     @pytest.mark.parametrize("body", ["no es json", '{"alternatives": "texto"}'])

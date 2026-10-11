@@ -682,7 +682,9 @@ def interpret_voice_plate(request):
     interpretada, si entrará o saldrá, y placas conocidas parecidas.
     """
     try:
-        alternatives = json.loads(request.body).get("alternatives", [])
+        payload = json.loads(request.body)
+        alternatives = payload.get("alternatives", [])
+        prefix = str(payload.get("prefix") or "")[:10].upper()
     except (ValueError, AttributeError):
         return JsonResponse({"ok": False, "error": "Solicitud inválida"}, status=400)
 
@@ -690,7 +692,7 @@ def interpret_voice_plate(request):
         return JsonResponse({"ok": False, "error": "Solicitud inválida"}, status=400)
 
     alternatives = [str(a)[:200] for a in alternatives[:10]]
-    result = interpret(request.parking, alternatives)
+    result = interpret(request.parking, alternatives, prefix=prefix)
 
     if result["ok"]:
         result["formatted"] = format_plate(result["plate"])

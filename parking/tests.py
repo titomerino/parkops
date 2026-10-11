@@ -496,3 +496,376 @@ class TestEliminarEntrada:
         user = django_user_model.objects.get(pk=user.pk)  # limpia la caché de permisos
         client.force_login(user)
         assert "deleteEntryModal" in client.get(f"/parking/editar/{entry.pk}/").content.decode()
+
+
+@pytest.mark.django_db
+class TestEscaneoPlaca:
+    url = "/parking/busqueda/foto/"
+
+    @pytest.fixture(autouse=True)
+    def setup(self, settings, parking, monkeypatch):
+        from types import SimpleNamespace
+        from django.core.cache import cache
+        from parking.services import plate_scan
+
+        from payment.models import Plan, Subscription
+        from tenants.models import AiPackage
+
+        settings.ANTHROPIC_API_KEY = "test-key"
+        # El parqueo tiene un plan con IA incluida
+        self.package = AiPackage.objects.create(name="Pro", scans=1000, price=Decimal("12"))
+        self.plan = Plan.objects.create(name="Pro", price=Decimal("45"), ai_package=self.package)
+        self.subscription = Subscription.objects.create(parking=parking, plan=self.plan, active=True)
+        cache.clear()
+
+        self.calls = []
+        self.reply = "P11017E"
+
+        def create(**kwargs):
+            self.calls.append(kwargs)
+            if isinstance(self.reply, Exception):
+                raise self.reply
+            return SimpleNamespace(
+                content=[SimpleNamespace(type="text", text=self.reply)],
+                usage=SimpleNamespace(input_tokens=400, output_tokens=8),
+            )
+
+        self.keys = []
+
+        def client(api_key):
+            self.keys.append(api_key)
+            return SimpleNamespace(messages=SimpleNamespace(create=create))
+
+        monkeypatch.setattr(plate_scan, "_client", client)
+
+    @staticmethod
+    def image(width=600, height=300):
+        import io
+        from PIL import Image
+
+        out = io.BytesIO()
+        Image.new("RGB", (width, height), "white").save(out, format="JPEG")
+        out.seek(0)
+        out.name = "placa.jpg"
+        return out
+
+    def post(self, client, image=None):
+        return client.post(self.url, {"image": image or self.image()})
+
+    def test_lee_la_placa_y_registra_el_costo(self, admin_client, parking, fee):
+        from parking.models import PlateScan
+
+        data = self.post(admin_client).json()
+
+        assert data["ok"] is True
+        assert data["plate"] == "P11017E"
+        assert data["action"] == "entrada"
+
+        scan = PlateScan.objects.get()
+        assert scan.parking == parking
+        assert scan.user.username == "admin"
+        assert (scan.input_tokens, scan.output_tokens) == (400, 8)
+        assert scan.cost == Decimal("0.000440")  # 400 × $1/M + 8 × $5/M
+
+    def test_placa_adentro_registrara_salida(self, admin_client, make_entry):
+        make_entry(plate="P11017E")
+        assert self.post(admin_client).json()["action"] == "salida"
+
+    def test_lectura_dudosa_prefiere_la_placa_conocida(self, admin_client, make_entry):
+        make_entry(plate="P11017E")
+        self.reply = "P11O17E, P11017E"
+
+        data = self.post(admin_client).json()
+
+        assert data["plate"] == "P11017E"
+        assert data["action"] == "salida"
+
+    def test_sin_placa_legible(self, admin_client, fee):
+        from parking.models import PlateScan
+
+        self.reply = "NINGUNA"
+        data = self.post(admin_client).json()
+
+        assert data["ok"] is False
+        assert PlateScan.objects.count() == 1  # la lectura igual tuvo costo
+
+    def test_imagen_grande_se_reduce_antes_de_enviar(self, admin_client, fee):
+        import base64
+        import io
+        from PIL import Image
+
+        self.post(admin_client, self.image(3000, 1500))
+
+        sent = self.calls[0]["messages"][0]["content"][0]["source"]["data"]
+        assert max(Image.open(io.BytesIO(base64.b64decode(sent))).size) <= 800
+
+    def test_archivo_que_no_es_imagen(self, admin_client):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        response = admin_client.post(self.url, {"image": SimpleUploadedFile("x.jpg", b"no es imagen")})
+
+        assert response.status_code == 400
+        assert self.calls == []
+
+    def test_sin_imagen(self, admin_client):
+        assert admin_client.post(self.url).status_code == 400
+
+    def test_error_de_la_api(self, admin_client):
+        from parking.models import PlateScan
+
+        self.reply = RuntimeError("timeout")
+        response = self.post(admin_client)
+
+        assert response.status_code == 400
+        assert "Intenta de nuevo" in response.json()["error"]
+        assert not PlateScan.objects.exists()
+
+    def test_parqueo_sin_el_servicio(self, admin_client, parking):
+        self.subscription.active = False
+        self.subscription.save()
+
+        assert self.post(admin_client).status_code == 403
+        assert self.calls == []
+
+    def test_plan_sin_ia(self, admin_client, parking):
+        self.plan.ai_package = None
+        self.plan.save()
+
+        assert self.post(admin_client).status_code == 403
+
+    def test_plan_sin_ia_con_recarga_del_mes(self, admin_client, parking, fee):
+        from tenants.models import AiTopUp
+
+        self.plan.ai_package = None
+        self.plan.save()
+        AiTopUp.objects.create(parking=parking, package=self.package)
+
+        assert self.post(admin_client).status_code == 200
+
+    def test_ia_de_todos_los_planes_activos_se_suma(self, admin_client, parking, fee):
+        from payment.models import Plan, Subscription
+        from tenants.models import AiPackage
+        from parking.services import plate_scan
+
+        addon = AiPackage.objects.create(name="Complemento", scans=500, price=Decimal("6"))
+        Subscription.objects.create(
+            parking=parking, plan=Plan.objects.create(name="IA extra", price=Decimal("6"), ai_package=addon),
+            active=True,
+        )
+        assert plate_scan.quota(parking)["limit"] == 1500
+
+    def test_sin_api_key(self, admin_client, settings):
+        settings.ANTHROPIC_API_KEY = ""
+        assert self.post(admin_client).status_code == 403
+
+    def give_package(self, parking, scans):
+        self.package.scans = scans
+        self.package.save()
+        return self.package
+
+    def test_paquete_agotado_bloquea_el_escaneo(self, admin_client, parking, fee):
+        self.give_package(parking, 2)
+
+        assert self.post(admin_client).status_code == 200
+        assert self.post(admin_client).status_code == 200
+        response = self.post(admin_client)
+
+        assert response.status_code == 429
+        assert "paquete de IA" in response.json()["error"]
+        assert len(self.calls) == 2
+
+    def test_paquete_extra_del_mes_amplia_el_limite(self, admin_client, parking, fee):
+        from tenants.models import AiTopUp
+
+        package = self.give_package(parking, 1)
+        assert self.post(admin_client).status_code == 200
+        assert self.post(admin_client).status_code == 429
+
+        top_up = AiTopUp.objects.create(parking=parking, package=package)
+        assert (top_up.scans, top_up.price) == (1, Decimal("12"))
+        assert self.post(admin_client).status_code == 200
+        assert self.post(admin_client).status_code == 429
+
+    def test_paquete_extra_de_otro_mes_no_cuenta(self, admin_client, parking, fee):
+        from datetime import date
+        from tenants.models import AiTopUp
+
+        package = self.give_package(parking, 1)
+        AiTopUp.objects.create(parking=parking, package=package, month=date(2020, 1, 1))
+        assert self.post(admin_client).status_code == 200
+        assert self.post(admin_client).status_code == 429
+
+    def test_escaneos_del_mes_pasado_no_cuentan(self, admin_client, parking, fee):
+        from datetime import timedelta
+        from django.utils.timezone import now
+        from parking.models import PlateScan
+
+        self.give_package(parking, 1)
+        PlateScan.objects.create(parking=parking, model="x", created_at=now() - timedelta(days=40))
+        assert self.post(admin_client).status_code == 200
+
+    def test_limite_por_minuto(self, admin_client, fee):
+        from parking.views import SCAN_RATE_PER_MINUTE
+
+        for _ in range(SCAN_RATE_PER_MINUTE):
+            assert self.post(admin_client).status_code == 200
+
+        assert self.post(admin_client).status_code == 429
+
+    def test_el_limite_cuenta_solo_el_parqueo_propio(self, admin_client, parking, other_parking, fee):
+        from parking.models import PlateScan
+
+        PlateScan.objects.create(parking=other_parking, model="x")
+        self.give_package(parking, 1)
+
+        assert self.post(admin_client).status_code == 200
+
+    def test_usa_la_api_key_y_el_modelo_del_admin(self, admin_client, fee):
+        from parking.models import PlateScan
+        from tenants.models import AiSettings
+
+        config = AiSettings.load()
+        config.api_key = "sk-ant-admin"
+        config.model = "claude-sonnet-5"
+        config.price_input = Decimal("3")
+        config.price_output = Decimal("15")
+        config.save()
+
+        self.post(admin_client)
+
+        assert self.keys == ["sk-ant-admin"]
+        assert self.calls[0]["model"] == "claude-sonnet-5"
+        assert PlateScan.objects.get().cost == Decimal("0.001320")  # 400 × $3/M + 8 × $15/M
+
+    def test_boton_desactivado_y_alerta_cuando_se_agota(self, admin_client, parking, fee):
+        from parking.models import PlateScan
+
+        self.give_package(parking, 1)
+        PlateScan.objects.create(parking=parking, model="x")
+
+        html = admin_client.get("/parking/busqueda/").content.decode()
+        assert "Paquete de IA agotado" in html
+        assert "plateCameraModal" not in html
+        assert "Tu paquete de IA para escanear placas se terminó" in html
+
+        # El resto sigue funcionando
+        assert admin_client.get("/").status_code == 200
+
+    def test_alerta_cuando_queda_poco(self, admin_client, parking, fee):
+        from parking.models import PlateScan
+
+        self.give_package(parking, 10)
+        PlateScan.objects.bulk_create(PlateScan(parking=parking, model="x") for _ in range(8))
+
+        html = admin_client.get("/parking/busqueda/").content.decode()
+        assert "Te quedan 2 de 10 escaneos" in html
+        assert "Escanear placa" in html
+
+    def test_operador_no_ve_la_alerta_pero_si_el_boton_desactivado(self, client, django_user_model, member, parking, fee):
+        from django.contrib.auth.models import Permission
+        from parking.models import PlateScan
+
+        self.give_package(parking, 1)
+        PlateScan.objects.create(parking=parking, model="x")
+        user = member(django_user_model.objects.create_user("op", password="x"))
+        user.user_permissions.add(Permission.objects.get(codename="add_entry"))
+        client.force_login(user)
+
+        html = client.get("/parking/busqueda/").content.decode()
+        assert "Paquete de IA agotado" in html
+        assert "aiScanAlert" not in html
+
+    def test_requiere_permiso(self, client, django_user_model, member):
+        client.force_login(member(django_user_model.objects.create_user("sin_permiso", password="x")))
+        assert self.post(client).status_code == 403
+
+    def test_boton_visible_solo_con_el_servicio(self, admin_client, parking, settings):
+        html = admin_client.get("/parking/busqueda/").content.decode()
+        assert "Escanear placa" in html and 'id="plateCameraModal"' in html
+
+        self.subscription.active = False
+        self.subscription.save()
+        html = admin_client.get("/parking/busqueda/").content.decode()
+        assert "plateCameraModal" not in html
+
+        self.subscription.active = True
+        self.subscription.save()
+        settings.ANTHROPIC_API_KEY = ""
+        assert "plateCameraModal" not in admin_client.get("/parking/busqueda/").content.decode()
+
+    def test_admin_muestra_totales(self, admin_client, parking):
+        from parking.models import PlateScan
+
+        PlateScan.objects.create(parking=parking, model="x", cost=Decimal("0.0005"))
+        PlateScan.objects.create(parking=parking, model="x", cost=Decimal("0.0007"))
+
+        html = admin_client.get("/admin/parking/platescan/").content.decode()
+        assert "<strong>2</strong> escaneos" in html
+        assert "$0.0012" in html
+
+
+@pytest.mark.parametrize("texto,lecturas", [
+    ("P11017E", ["P11017E"]),
+    ("P 110-17E", ["P11017E"]),
+    ("P11O17E, P11017E", ["P11O17E", "P11017E"]),
+    ("NINGUNA", []),
+    ("", []),
+])
+def test_lecturas_de_la_ia(texto, lecturas):
+    from parking.services.plate_scan import parse_readings
+    assert parse_readings(texto) == lecturas
+
+
+@pytest.mark.django_db
+class TestAdminIA:
+    def test_api_key_se_guarda_oculta_y_se_conserva(self, admin_client):
+        from tenants.models import AiSettings
+
+        url = "/admin/tenants/aisettings/1/change/"
+        data = {"model": "claude-haiku-4-5-20251001", "price_input": "1", "price_output": "5"}
+
+        assert admin_client.get("/admin/tenants/aisettings/").url == url
+
+        admin_client.post(url, {**data, "api_key": "sk-ant-secreta-1234"})
+        assert AiSettings.load().api_key == "sk-ant-secreta-1234"
+
+        html = admin_client.get(url).content.decode()
+        assert "sk-ant-secreta-1234" not in html
+        assert "…1234" in html
+
+        admin_client.post(url, {**data, "api_key": ""})
+        assert AiSettings.load().api_key == "sk-ant-secreta-1234"
+
+        admin_client.post(url, {**data, "api_key": "", "clear_api_key": "on"})
+        assert AiSettings.load().api_key == ""
+
+    def test_rechaza_una_clave_con_formato_invalido(self, admin_client):
+        from tenants.models import AiSettings
+
+        admin_client.post("/admin/tenants/aisettings/1/change/", {
+            "model": "x", "price_input": "1", "price_output": "5", "api_key": "hola",
+        })
+        assert AiSettings.load().api_key == ""
+
+    def test_paquetes_muestran_costo_y_ganancia(self, admin_client):
+        from tenants.models import AiPackage
+
+        AiPackage.objects.create(name="Básico", scans=3000, price=Decimal("5"))
+        html = admin_client.get("/admin/tenants/aipackage/").content.decode()
+
+        assert "$0.90" in html  # 3,000 × $0.0003 de referencia
+        assert "$4.10 (82%)" in html
+
+    def test_lista_de_parqueos_muestra_plan_y_uso_de_ia(self, admin_client, parking):
+        from parking.models import PlateScan
+        from payment.models import Plan, Subscription
+        from tenants.models import AiPackage
+
+        package = AiPackage.objects.create(name="IA 3,000", scans=3000, price=Decimal("12"))
+        plan = Plan.objects.create(name="Pro", price=Decimal("45"), ai_package=package)
+        Subscription.objects.create(parking=parking, plan=plan, active=True)
+        PlateScan.objects.create(parking=parking, model="x")
+
+        html = admin_client.get("/admin/tenants/parking/").content.decode()
+        assert "1 / 3,000" in html
+        assert ">Pro<" in html

@@ -1,0 +1,364 @@
+<!-- ESCANEO DE PLACA CON CÁMARA: solo se envía el recorte del recuadro -->
+<div class="modal fade" id="plateCameraModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+    <div class="modal-content bg-dark text-light border border-secondary rounded-4">
+
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title d-flex align-items-center gap-2">
+          <i class="bi bi-camera-fill"></i>
+          Escanear placa
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body text-center">
+
+        <!-- Cámara en vivo con el recuadro de la placa -->
+        <div id="plateCameraStage" class="plate-camera-stage mx-auto">
+          <video id="plateCameraVideo" class="plate-camera-video" playsinline muted autoplay></video>
+          <div id="plateCameraFrame" class="plate-camera-frame"></div>
+          <div class="plate-camera-tip small">Centra la placa dentro del recuadro</div>
+        </div>
+
+        <button
+          type="button"
+          id="plateCameraShotBtn"
+          class="btn btn-info rounded-circle d-inline-flex align-items-center justify-content-center mt-3"
+          style="width: 72px; height: 72px; font-size: 2rem;"
+          onclick="PlateCamera.shoot()"
+          disabled
+        >
+          <i class="bi bi-camera"></i>
+        </button>
+
+        <div id="plateCameraStatus" class="small text-muted mt-2">Abriendo cámara…</div>
+
+        <!-- Resultado -->
+        <div id="plateCameraResult" class="d-none">
+
+          <img id="plateCameraPreview" class="img-fluid rounded border border-secondary" alt="Recorte enviado">
+
+          <div class="small text-muted mt-2">
+            Leí: «<span id="plateCameraHeard"></span>»
+          </div>
+
+          <div
+            id="plateCameraValue"
+            class="display-5 fw-bold my-2"
+            style="letter-spacing: .08em;"
+          ></div>
+
+          <span id="plateCameraAction" class="badge rounded-pill fs-6 d-none"></span>
+
+          <!-- Lecturas dudosas y placas conocidas parecidas -->
+          <div id="plateCameraCandidates" class="mt-3 d-none">
+            <div class="small text-muted mb-1">¿O es alguna de estas?</div>
+            <div id="plateCameraCandidateList" class="d-flex flex-wrap justify-content-center gap-2"></div>
+          </div>
+
+        </div>
+
+        <!-- Error -->
+        <div id="plateCameraError" class="alert alert-warning small mt-3 mb-0 d-none"></div>
+
+      </div>
+
+      <div class="modal-footer border-secondary">
+        <button
+          type="button"
+          id="plateCameraRetakeBtn"
+          class="btn btn-outline-secondary rounded-pill flex-fill"
+          onclick="PlateCamera.retake()"
+          disabled
+        >
+          <i class="bi bi-arrow-counterclockwise me-1"></i>
+          Repetir foto
+        </button>
+        <button
+          type="button"
+          id="plateCameraConfirmBtn"
+          class="btn btn-success rounded-pill flex-fill"
+          onclick="PlateCamera.confirm()"
+          disabled
+        >
+          <i class="bi bi-check-lg me-1"></i>
+          Confirmar
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<style>
+  .plate-camera-stage {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    aspect-ratio: 3 / 4;
+    overflow: hidden;
+    border-radius: 1rem;
+    background: #000;
+  }
+  .plate-camera-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  /* Placa de El Salvador ≈ 30 × 15 cm (2:1). Lo de afuera se oscurece. */
+  .plate-camera-frame {
+    position: absolute;
+    left: 10%;
+    width: 80%;
+    top: 50%;
+    aspect-ratio: 2 / 1;
+    transform: translateY(-50%);
+    border: 3px solid #0dcaf0;
+    border-radius: .5rem;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, .55);
+  }
+  .plate-camera-tip {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 12%;
+    color: #fff;
+    text-shadow: 0 1px 3px #000;
+  }
+</style>
+
+<script>
+const PlateCamera = (function () {
+
+    const SCAN_URL = "{% url 'scan_plate_photo' %}";
+    // Ancho máximo del recorte: el costo de la IA depende de los píxeles
+    const OUTPUT_WIDTH = 600;
+
+    let stream = null;
+    let modal = null;
+    let selected = null;
+    let busy = false;
+
+    const $ = (id) => document.getElementById(id);
+
+    async function open() {
+        if (!modal) modal = new bootstrap.Modal($("plateCameraModal"));
+
+        // El lector de tickets también usa la cámara
+        if (window.QrScanner) QrScanner.stop();
+
+        $("plateCameraModal").addEventListener("hidden.bs.modal", close, { once: true });
+        modal.show();
+
+        reset();
+        await startCamera();
+    }
+
+    async function startCamera() {
+        if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+            showError("Este navegador no permite usar la cámara.");
+            setStatus("");
+            return;
+        }
+
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: {
+                    facingMode: { ideal: "environment" },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
+                },
+            });
+            const video = $("plateCameraVideo");
+            video.srcObject = stream;
+            await video.play();
+
+            $("plateCameraShotBtn").disabled = false;
+            setStatus("Toca el botón para tomar la foto");
+        } catch (error) {
+            showError(error.name === "NotAllowedError"
+                ? "Permite el uso de la cámara para este sitio."
+                : "No se pudo abrir la cámara.");
+            setStatus("");
+        }
+    }
+
+    function stopCamera() {
+        if (stream) stream.getTracks().forEach((track) => track.stop());
+        stream = null;
+        $("plateCameraVideo").srcObject = null;
+    }
+
+    // Recorta del video exactamente lo que se ve dentro del recuadro
+    function cropFrame() {
+        const video = $("plateCameraVideo");
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        if (!vw || !vh) return null;
+
+        const view = video.getBoundingClientRect();
+        const frame = $("plateCameraFrame").getBoundingClientRect();
+
+        // El video se muestra con object-fit: cover (escalado y centrado)
+        const scale = Math.max(view.width / vw, view.height / vh);
+        const offsetX = (view.width - vw * scale) / 2;
+        const offsetY = (view.height - vh * scale) / 2;
+
+        let sx = (frame.left - view.left - offsetX) / scale;
+        let sy = (frame.top - view.top - offsetY) / scale;
+        let sw = frame.width / scale;
+        let sh = frame.height / scale;
+
+        sx = Math.max(0, sx);
+        sy = Math.max(0, sy);
+        sw = Math.min(sw, vw - sx);
+        sh = Math.min(sh, vh - sy);
+
+        const width = Math.round(Math.min(OUTPUT_WIDTH, sw));
+        const height = Math.round(width * sh / sw);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(video, sx, sy, sw, sh, 0, 0, width, height);
+        return canvas;
+    }
+
+    async function shoot() {
+        if (busy) return;
+
+        const canvas = cropFrame();
+        if (!canvas) return;
+
+        busy = true;
+        $("plateCameraShotBtn").disabled = true;
+        $("plateCameraError").classList.add("d-none");
+
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+        $("plateCameraPreview").src = canvas.toDataURL("image/jpeg", 0.85);
+        showStage(false);
+        setStatus("Leyendo la placa…");
+
+        const form = new FormData();
+        form.append("image", blob, "placa.jpg");
+
+        try {
+            const response = await fetch(SCAN_URL, {
+                method: "POST",
+                headers: { "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value },
+                body: form,
+            });
+            const data = await response.json();
+
+            $("plateCameraResult").classList.remove("d-none");
+            $("plateCameraHeard").innerText = data.heard || "—";
+
+            if (!data.ok) {
+                $("plateCameraValue").innerText = "—";
+                $("plateCameraAction").classList.add("d-none");
+                showError(data.error || "No se reconoció una placa. Acércate, centra la placa y repite la foto.");
+                setStatus("");
+                return;
+            }
+
+            select(data.plate, data.formatted, data.action, data.entry_time);
+            renderCandidates(data.candidates || []);
+            setStatus("Confirma la placa o repite la foto");
+
+        } catch (error) {
+            showError("No se pudo enviar la foto. Revisa la conexión.");
+            setStatus("");
+        } finally {
+            busy = false;
+            $("plateCameraRetakeBtn").disabled = false;
+        }
+    }
+
+    function select(plate, formatted, action, entryTime) {
+        selected = plate;
+        $("plateCameraValue").innerText = formatted;
+
+        const badge = $("plateCameraAction");
+        if (action === "salida") {
+            badge.className = "badge rounded-pill fs-6 text-bg-warning";
+            badge.innerText = entryTime ? `Registrará SALIDA · entró ${entryTime}` : "Registrará SALIDA";
+        } else {
+            badge.className = "badge rounded-pill fs-6 text-bg-success";
+            badge.innerText = "Registrará ENTRADA";
+        }
+
+        $("plateCameraConfirmBtn").disabled = false;
+    }
+
+    function renderCandidates(candidates) {
+        const list = $("plateCameraCandidateList");
+        list.innerHTML = "";
+
+        candidates.forEach((c) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn btn-sm btn-outline-info rounded-pill";
+            btn.innerText = c.formatted + (c.active ? " · adentro" : c.subscribed ? " · suscripción" : "");
+            btn.onclick = () => {
+                select(c.plate, c.formatted, c.active ? "salida" : "entrada", null);
+                $("plateCameraCandidates").classList.add("d-none");
+            };
+            list.appendChild(btn);
+        });
+
+        $("plateCameraCandidates").classList.toggle("d-none", candidates.length === 0);
+    }
+
+    function showStage(visible) {
+        $("plateCameraStage").classList.toggle("d-none", !visible);
+        $("plateCameraShotBtn").classList.toggle("d-none", !visible);
+    }
+
+    function reset() {
+        selected = null;
+        showStage(true);
+        $("plateCameraResult").classList.add("d-none");
+        $("plateCameraCandidates").classList.add("d-none");
+        $("plateCameraError").classList.add("d-none");
+        $("plateCameraConfirmBtn").disabled = true;
+        $("plateCameraRetakeBtn").disabled = true;
+        $("plateCameraShotBtn").disabled = !stream;
+        setStatus(stream ? "Toca el botón para tomar la foto" : "Abriendo cámara…");
+    }
+
+    function retake() {
+        if (busy) return;
+        reset();
+        if (!stream) startCamera();
+    }
+
+    function confirm() {
+        if (!selected) return;
+
+        // Usa el formulario de búsqueda existente: mismo flujo que al digitar
+        const input = document.getElementById("plateInput");
+        input.value = selected;
+        close();
+        input.form.requestSubmit ? input.form.requestSubmit() : input.form.submit();
+    }
+
+    function close() {
+        stopCamera();
+    }
+
+    function setStatus(text) {
+        $("plateCameraStatus").innerText = text;
+    }
+
+    function showError(text) {
+        $("plateCameraError").innerText = text;
+        $("plateCameraError").classList.remove("d-none");
+    }
+
+    return { open, shoot, retake, confirm };
+
+})();
+</script>

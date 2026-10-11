@@ -77,6 +77,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'tenants.context_processors.current_parking',
+                'tenants.context_processors.ai_scan_alert',
             ],
         },
     },
@@ -180,3 +181,7 @@ LOGGING = {
 }
 
 X_FRAME_OPTIONS = 'SAMEORIGIN'
+
+# ESCANEO DE PLACAS CON IA (Anthropic). La API key, el modelo y los precios
+# se configuran en Admin → Configuración de IA; esta variable es el respaldo.
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")

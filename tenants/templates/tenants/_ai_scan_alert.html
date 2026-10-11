@@ -1,0 +1,20 @@
+{% if ai_scan_alert %}
+  {% if ai_scan_alert.exhausted %}
+  <div class="alert alert-danger d-flex align-items-start gap-2 rounded-4" role="alert" id="aiScanAlert">
+    <i class="bi bi-camera-fill fs-5"></i>
+    <div>
+      <strong>Tu paquete de IA para escanear placas se terminó.</strong>
+      Usaste los {{ ai_scan_alert.limit }} escaneos de este mes. El resto del sistema sigue
+      funcionando: puedes digitar o dictar las placas. Para seguir escaneando, solicita un paquete adicional.
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-warning d-flex align-items-start gap-2 rounded-4" role="alert" id="aiScanAlert">
+    <i class="bi bi-camera-fill fs-5"></i>
+    <div>
+      <strong>Tu paquete de IA se está acabando.</strong>
+      Te quedan {{ ai_scan_alert.remaining }} de {{ ai_scan_alert.limit }} escaneos este mes.
+    </div>
+  </div>
+  {% endif %}
+{% endif %}

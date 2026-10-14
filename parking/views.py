@@ -25,7 +25,6 @@ from .forms import (
     PlatePolicyForm, 
     ReportFilterByDayForm,
     ReportFilterByMonthForm,
-    ReportFilterByPeriodForm,
     ReportFilterByPlateForm
 )
 from parking.utils import (
@@ -36,7 +35,6 @@ from parking.services import plate_scan
 from parking.services.voice_plate import interpret
 from parking.services.report_service import (
     generate_day_report, generate_month_report,
-    generate_period_report,
     generate_plate_report
 )
 
@@ -514,7 +512,6 @@ def parking_generate_reports_form(request):
     context = {
         "formDay": ReportFilterByDayForm(),
         "formMonth": ReportFilterByMonthForm(),
-        "formPeriod": ReportFilterByPeriodForm(),
         "formPlate": ReportFilterByPlateForm(),
     }
 
@@ -588,43 +585,6 @@ def report_month(request):
                 context,
                 month,
                 type="monthly"
-            )
-        
-        case _:
-            messages.error(request, "Formato no soportado para el reporte")
-            return redirect("parking_reports")
-
-@perm_required('parking.view_statistics_entry')
-def report_period(request):
-    
-    form = ReportFilterByPeriodForm(request.GET)
-
-    if not form.is_valid():
-        messages.error(request, "Formulario inválido para el reporte")
-        return redirect("parking_reports")
-    
-    start_date = form.cleaned_data["period_start_date"]
-    end_date = form.cleaned_data["period_end_date"]
-
-    context = generate_period_report(request.parking, start_date, end_date)
-
-    match request.GET.get("format"):
-        case "pdf":
-
-            return render_pdf_response(
-                request,
-                "parking/reports/parking_period_report_pdf.html",
-                context,
-                f"reporte-periodo-{start_date}-{end_date}.pdf"
-            )
-        
-        case "xlsx":
-
-            return export_report_excel(
-                context,
-                start_date,
-                end_date,
-                "period"
             )
         
         case _:

@@ -326,34 +326,6 @@ class ReportFilterByMonthForm(forms.Form):
         })
     )
 
-class ReportFilterByPeriodForm(forms.Form):
-    period_start_date = forms.DateField(
-        label="Desde",
-        required=True,
-        initial=localdate,
-        error_messages={
-            'required': 'La fecha inicial es obligatoria',
-            'invalid': 'Ingresa una fecha válida'
-        },
-        widget=forms.DateInput(attrs={
-            'class': 'form-control',
-            'type': 'date'
-        })
-    )
-    period_end_date = forms.DateField(
-        label="Hasta",
-        required=True,
-        initial=localdate,
-        error_messages={
-            'required': 'La fecha final es obligatoria',
-            'invalid': 'Ingresa una fecha válida'
-        },
-        widget=forms.DateInput(attrs={
-            'class': 'form-control',
-            'type': 'date'
-        })
-    )
-
 class ReportFilterByPlateForm(forms.Form):
     plate = forms.CharField(
         max_length=10,

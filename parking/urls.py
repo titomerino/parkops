@@ -14,7 +14,6 @@ from .views import (
     parking_generate_reports_form,
     report_day,
     report_month,
-    report_period,
     report_plate,
     interpret_voice_plate,
     scan_plate_photo,
@@ -39,6 +38,5 @@ urlpatterns = [
     path('reportes/', parking_generate_reports_form, name='parking_reports'),
     path("reporte/hoy/", report_day, name="report_day"),
     path("reporte/mes/", report_month, name="report_month"),
-    path("reporte/periodo/", report_period, name="report_period"),
     path("reporte/placa/", report_plate, name="report_plate"),
 ]

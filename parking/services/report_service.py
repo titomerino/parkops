@@ -149,18 +149,6 @@ def generate_month_report(parking, date):
         date=date.strftime('%m/%Y'),
     )
 
-def generate_period_report(parking, start_date, end_date):
-
-    entries = Entry.objects.for_parking(parking).custom_report(start_date, end_date)
-
-    return _report_context(
-        entries,
-        _summarize(parking, entries),
-        parking=parking,
-        start_date=start_date.strftime('%d/%m/%Y'),
-        end_date=end_date.strftime('%d/%m/%Y'),
-    )
-
 def generate_plate_report(parking, n_plate, start_date, end_date):
 
     total_income = 0

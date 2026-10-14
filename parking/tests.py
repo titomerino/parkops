@@ -99,14 +99,13 @@ class TestReports:
         assert self.summary(report, "Suscripción mensual")["income"] == 0
 
     def test_entrada_legacy_se_calcula_al_vuelo_sin_guardarse(self, make_entry):
-        from parking.services.report_service import generate_day_report, generate_period_report
+        from parking.services.report_service import generate_day_report
 
         entry = make_entry(minutes_ago=200, duration=90)
         Entry.objects.filter(pk=entry.pk).update(final_minutes=None, final_amount=None)
         day = localtime(entry.departure_date_hour).date()
 
         assert generate_day_report(entry.parking, day)["total_income"] == Decimal("2.00")
-        assert generate_period_report(entry.parking, day, day)["total_income"] == Decimal("2.00")
 
         entry.refresh_from_db()
         assert entry.final_amount is None
@@ -235,7 +234,6 @@ class TestConsultasConstantes:
     @pytest.mark.parametrize("url", [
         "/parking/historial/",
         "/parking/reporte/hoy/?date={d}&format=xlsx",
-        "/parking/reporte/periodo/?period_start_date={d}&period_end_date={d}&format=xlsx",
     ])
     def test_parqueo(self, admin_client, make_entry, url):
         url = url.format(d=now_local())
@@ -869,3 +867,13 @@ class TestAdminIA:
         html = admin_client.get("/admin/tenants/parking/").content.decode()
         assert "1 / 3,000" in html
         assert ">Pro<" in html
+
+
+@pytest.mark.django_db
+def test_reporte_por_periodo_ya_no_existe(admin_client):
+    # Se quitó: un PDF de muchos meses agotaba la memoria del servidor
+    html = admin_client.get("/parking/reportes/").content.decode()
+
+    assert "tab-period" not in html
+    assert "Mensual" in html and "Por placa" in html
+    assert admin_client.get("/parking/reporte/periodo/").status_code == 404

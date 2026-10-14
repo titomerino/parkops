@@ -47,14 +47,6 @@
 
                     <li class="nav-item">
                         <a class="nav-link text-white"
-                           data-target="tab-period"
-                           href="#">
-                            Periodo
-                        </a>
-                    </li>
-
-                    <li class="nav-item">
-                        <a class="nav-link text-white"
                            data-target="tab-plate"
                            href="#">
                             Por placa
@@ -147,83 +139,6 @@
                         </div>
 
                         <div class="d-flex gap-2 mt-3">
-
-                            <button
-                                type="submit"
-                                name="format"
-                                value="pdf"
-                                class="btn btn-danger flex-fill">
-                                
-                                <i class="bi bi-file-earmark-pdf me-1"></i>
-                                Generar PDF
-
-                            </button>
-
-                            <button
-                                type="submit"
-                                name="format"
-                                value="xlsx"
-                                class="btn btn-success flex-fill">
-
-                                <i class="bi bi-file-earmark-excel me-1"></i>
-                                Descargar Excel
-
-                            </button>
-
-                        </div>
-
-                    </form>
-
-                </div>
-
-                <!-- ===================================== -->
-                <!-- TAB: PERIODO -->
-                <!-- ===================================== -->
-
-                <div id="tab-period"
-                     class="tab-content-custom d-none">
-
-                    <form method="GET"
-                          action="{% url 'report_period' %}"
-                          novalidate>
-
-                        <div class="row">
-
-                            <div class="col-6 mb-3">
-
-                                <label class="form-label text-muted">
-                                    Desde
-                                </label>
-
-                                {{ formPeriod.period_start_date }}
-
-                                {% if formPeriod.period_start_date.errors %}
-                                    <div class="alert alert-danger mt-2 py-1 px-2 small">
-                                        {{ formPeriod.period_start_date.errors.0 }}
-                                    </div>
-                                {% endif %}
-
-                            </div>
-
-                            <div class="col-6 mb-3">
-
-                                <label class="form-label text-muted">
-                                    Hasta
-                                </label>
-
-                                {{ formPeriod.period_end_date }}
-
-                                {% if formPeriod.period_end_date.errors %}
-                                    <div class="alert alert-danger mt-2 py-1 px-2 small">
-                                        {{ formPeriod.period_end_date.errors.0 }}
-                                    </div>
-                                {% endif %}
-
-                            </div>
-
-                        </div>
-
-                        <div class="d-flex gap-2">
 
                             <button
                                 type="submit"

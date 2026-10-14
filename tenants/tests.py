@@ -227,7 +227,6 @@ def excel_plates(response):
 @pytest.mark.parametrize("url", [
     "/parking/reporte/hoy/?date={d}&format=xlsx",
     "/parking/reporte/mes/?month_date={m}&format=xlsx",
-    "/parking/reporte/periodo/?period_start_date={d}&period_end_date={d}&format=xlsx",
 ])
 def test_reportes_solo_incluyen_el_parqueo(client_a, world, url):
     d = localdate()

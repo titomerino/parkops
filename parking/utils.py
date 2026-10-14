@@ -313,8 +313,6 @@ def export_report_excel(context, report_date, report_end_date=None, type=None, p
             report_title = report_title + "diario-" + report_date.strftime("%d-%m-%Y") + ".xlsx"
         case "monthly":
             report_title = report_title + "mensual-" + report_date.strftime("%m-%Y") + ".xlsx"
-        case "period":
-            report_title = report_title + "periodo-" + report_date.strftime("%d-%m-%Y") + "-al-" + report_end_date.strftime("%d-%m-%Y") + ".xlsx"
         case "plate":
             report_title = report_title + "placa-" + plate + "-" + report_date.strftime("%d-%m-%Y") + "-al-" + report_end_date.strftime("%d-%m-%Y") + ".xlsx"
         case _:

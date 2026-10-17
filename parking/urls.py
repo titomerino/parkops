@@ -17,6 +17,9 @@ from .views import (
     report_plate,
     interpret_voice_plate,
     scan_plate_photo,
+    keys_list,
+    key_save,
+    key_photo_view,
 )
 from django.urls import path
 
@@ -24,6 +27,9 @@ urlpatterns = [
     path("busqueda/", search_plate, name="search_plate"),
     path("busqueda/voz/", interpret_voice_plate, name="interpret_voice_plate"),
     path("busqueda/foto/", scan_plate_photo, name="scan_plate_photo"),
+    path("llaves/", keys_list, name="keys_list"),
+    path("llaves/<int:entry_id>/", key_save, name="key_save"),
+    path("llaves/<int:entry_id>/foto/", key_photo_view, name="key_photo"),
     path("registro/<str:plate>", register, name="register"),
     path("salida/<int:pk>", departure, name="departure"),
     path("historial/", record, name="record"),

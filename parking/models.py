@@ -285,6 +285,10 @@ class Entry(models.Model):
                 ) from e
             raise
 
+        # La llave en custodia (y su foto) solo existe mientras el carro está adentro
+        if not self.state:
+            KeyDeposit.objects.filter(entry_id=self.pk).delete()
+
     def calculate_amount(self, policy=None):
         """
         Calcula horas y monto a pagar según tiempo transcurrido,
@@ -460,3 +464,49 @@ class PlateScan(models.Model):
 
     def __str__(self):
         return f"{self.plate or '—'} ({self.created_at:%d/%m/%Y %H:%M})"
+
+
+class KeyDeposit(models.Model):
+    """
+    Llave que el cliente dejó en custodia. La foto vive en la base de datos
+    (pocos KB) y se elimina al registrar la salida del carro.
+    """
+    parking = models.ForeignKey(
+        "tenants.Parking",
+        on_delete=models.PROTECT,
+        related_name="key_deposits",
+        verbose_name="Parqueo",
+    )
+    entry = models.OneToOneField(
+        Entry,
+        on_delete=models.CASCADE,
+        related_name="key_deposit",
+        verbose_name="Entrada",
+    )
+    hook = models.CharField("Gancho", max_length=10, blank=True)
+    photo = models.BinaryField("Foto")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Recibida por",
+    )
+    created_at = models.DateTimeField("Recibida", auto_now_add=True)
+    updated_at = models.DateTimeField("Actualizada", auto_now=True)
+
+    objects = ParkingQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "Llave en custodia"
+        verbose_name_plural = "Llaves en custodia"
+
+    def __str__(self):
+        return f"{self.entry.plate} · gancho {self.hook or '—'}"
+
+    @property
+    def hook_sort_key(self):
+        # Ganchos numéricos en orden (2 antes que 10), luego con letras y al final sin gancho
+        if self.hook.isdigit():
+            return (0, int(self.hook), "")
+        return (1, 0, self.hook) if self.hook else (2, 0, "")

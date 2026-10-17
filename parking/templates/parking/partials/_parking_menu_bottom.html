@@ -38,6 +38,32 @@
             <!-- Separador -->
             <div class="vr text-secondary opacity-50" style="height:32px;"></div>
 
+            {% if current_parking.keys_enabled and perms.parking.view_entry %}
+            <!-- Llaves en custodia -->
+            <a href="{% url 'keys_list' %}" class="text-decoration-none">
+                <div class="d-flex flex-column align-items-center px-3 position-relative">
+                    <i class="bi bi-key fs-4
+                        {% if request.resolver_match.url_name == 'keys_list' %}
+                            text-success
+                        {% else %}
+                            text-light
+                        {% endif %}">
+                    </i>
+                    <small class="text-light">Llaves</small>
+                    {% with total=keys_in_custody %}
+                    {% if total %}
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark">
+                        {{ total }}
+                    </span>
+                    {% endif %}
+                    {% endwith %}
+                </div>
+            </a>
+
+            <!-- Separador -->
+            <div class="vr text-secondary opacity-50" style="height:32px;"></div>
+            {% endif %}
+
             <!-- Historial -->
             <a href="{% url 'record' %}" class="text-decoration-none">
                 <div class="d-flex flex-column align-items-center px-3">

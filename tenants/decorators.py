@@ -16,3 +16,18 @@ def bathrooms_enabled_required(view_func):
         return view_func(request, *args, **kwargs)
 
     return wrapper
+
+
+def keys_enabled_required(view_func):
+    """El módulo de llaves solo existe para parqueos que lo tienen activado."""
+
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        parking = getattr(request, "parking", None)
+
+        if parking is None or not parking.keys_enabled:
+            raise Http404("Módulo de llaves no disponible")
+
+        return view_func(request, *args, **kwargs)
+
+    return wrapper

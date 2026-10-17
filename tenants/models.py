@@ -17,6 +17,11 @@ class Parking(models.Model):
         default=True,
         help_text="Si se desactiva, el parqueo no ve el menú, el dashboard ni las pantallas de baños",
     )
+    keys_enabled = models.BooleanField(
+        "Módulo de llaves",
+        default=False,
+        help_text="Permite tomar foto de las llaves que dejan los clientes y verlas en «Llaves»",
+    )
     active = models.BooleanField(
         "Activo",
         default=True,

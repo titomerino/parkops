@@ -34,7 +34,7 @@ class ParkingAccountForm(forms.ModelForm):
         model = Parking
         fields = [
             "name", "address", "phone", "capacity", "bathrooms_enabled",
-            "active",
+            "keys_enabled", "active",
         ]
 
     def clean_owner_username(self):
@@ -78,7 +78,7 @@ class ParkingAdmin(admin.ModelAdmin):
     list_display = (
         "name", "phone", "current_plan", "ai_usage", "bathrooms_enabled", "active", "members_count", "created_at",
     )
-    list_filter = ("active", "bathrooms_enabled")
+    list_filter = ("active", "bathrooms_enabled", "keys_enabled")
     search_fields = ("name", "address", "phone")
     inlines = [ParkingMemberInline, AiTopUpInline]
     actions = ["invoice_current_month", "invoice_previous_month"]

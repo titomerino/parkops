@@ -1,0 +1,293 @@
+<!-- LLAVES EN CUSTODIA: tomar foto (con gancho opcional) y verla -->
+<div class="modal fade" id="keyCaptureModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-light border border-secondary rounded-4">
+
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title d-flex align-items-center gap-2">
+          <i class="bi bi-key-fill text-warning"></i>
+          Llave de <span id="keyCapturePlate"></span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        {% csrf_token %}
+
+        <div class="key-camera-stage mx-auto mb-2">
+          <video id="keyCaptureVideo" playsinline muted autoplay></video>
+          <img id="keyCapturePreview" class="d-none" alt="Foto de la llave">
+        </div>
+
+        <div class="d-flex justify-content-center mb-2" id="keyCaptureShootRow">
+          <button type="button" id="keyCaptureShootBtn"
+            class="btn btn-warning rounded-circle d-inline-flex align-items-center justify-content-center"
+            style="width: 64px; height: 64px; font-size: 1.7rem;"
+            onclick="KeyDeposit.shoot()" disabled>
+            <i class="bi bi-camera"></i>
+          </button>
+        </div>
+
+        <div id="keyCaptureStatus" class="text-center small text-muted mb-2">Abriendo cámara…</div>
+
+        <div class="d-flex gap-2 justify-content-center flex-wrap mb-3">
+          <label class="btn btn-sm btn-outline-light rounded-pill mb-0">
+            <i class="bi bi-image me-1"></i>Elegir foto
+            <input type="file" accept="image/*" class="d-none" onchange="KeyDeposit.fromFile(this)">
+          </label>
+          <button type="button" id="keyCaptureRetake" class="btn btn-sm btn-outline-secondary rounded-pill d-none"
+            onclick="KeyDeposit.retake()">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Repetir
+          </button>
+        </div>
+
+        <div class="d-flex align-items-center gap-3 justify-content-center">
+          <label class="form-label small text-muted mb-0" for="keyCaptureHook">
+            Gancho <span class="opacity-75">(opcional)</span>
+          </label>
+          <input id="keyCaptureHook" maxlength="10" inputmode="numeric" placeholder="#"
+            class="form-control form-control-lg bg-dark text-warning border-warning text-center fw-bold"
+            style="max-width: 110px;">
+        </div>
+
+        <div id="keyCaptureError" class="alert alert-warning small mt-3 mb-0 d-none"></div>
+      </div>
+
+      <div class="modal-footer border-secondary">
+        <button type="button" class="btn btn-outline-secondary rounded-pill flex-fill" data-bs-dismiss="modal">
+          <i class="bi bi-x-lg me-1"></i>Cancelar
+        </button>
+        <button type="button" id="keyCaptureSaveBtn" class="btn btn-success rounded-pill flex-fill"
+          onclick="KeyDeposit.save()" disabled>
+          <i class="bi bi-check-lg me-1"></i>Guardar
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="keyViewModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-light border border-secondary rounded-4">
+      <div class="modal-header border-secondary py-2">
+        <div>
+          <div class="small text-muted">Llave de</div>
+          <div class="fw-bold fs-5" id="keyViewPlate"></div>
+        </div>
+        <div class="ms-auto text-end me-3">
+          <div class="small text-muted">Gancho</div>
+          <div class="key-hook-big" id="keyViewHook"></div>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-2">
+        <img id="keyViewImg" class="w-100 rounded-3" alt="Foto de la llave">
+      </div>
+      <div class="modal-footer border-secondary">
+        <button type="button" class="btn btn-outline-light rounded-pill flex-fill" id="keyViewChange">
+          <i class="bi bi-camera me-1"></i>Cambiar foto
+        </button>
+        <a class="btn btn-outline-warning rounded-pill flex-fill" id="keyViewDeparture">
+          <i class="bi bi-box-arrow-right me-1"></i>Ir a su salida
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .key-btn { border-radius: 999px; font-weight: 700; white-space: nowrap; }
+  .key-btn-set { background: #ffc107; color: #000; border-color: #ffc107; }
+  .key-btn-set:hover { background: #ffcd39; color: #000; }
+  .key-hook-big { font-size: 2.4rem; font-weight: 800; color: #ffc107; line-height: 1; }
+  .key-camera-stage {
+    position: relative; width: 100%; max-width: 480px; aspect-ratio: 4 / 3;
+    overflow: hidden; border-radius: 1rem; background: #000;
+  }
+  .key-camera-stage video, .key-camera-stage img {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  }
+</style>
+
+<script>
+const KeyDeposit = (function () {
+
+    const SAVE_URL = "{% url 'key_save' 0 %}";
+    const PHOTO_URL = "{% url 'key_photo' 0 %}";
+    // La foto se reduce en el celular antes de enviarla (~40–100 KB)
+    const MAX_SIDE = 1024;
+    const QUALITY = 0.7;
+
+    let stream = null;
+    let blob = null;
+    let button = null;
+    let busy = false;
+    let captureModal = null;
+    let viewModal = null;
+
+    const $ = (id) => document.getElementById(id);
+    const urlFor = (template, entryId) => template.replace("/0/", `/${entryId}/`);
+
+    // Sin llave → cámara; con llave → ver la foto
+    function action(btn) {
+        btn.dataset.keySet ? view(btn) : capture(btn);
+    }
+
+    function view(btn) {
+        if (!viewModal) viewModal = new bootstrap.Modal($("keyViewModal"));
+        const entryId = btn.dataset.keyEntry;
+
+        $("keyViewImg").src = `${urlFor(PHOTO_URL, entryId)}?v=${btn.dataset.keyVersion}`;
+        $("keyViewPlate").innerText = btn.dataset.keyPlate;
+        $("keyViewHook").innerText = btn.dataset.keyHook ? `#${btn.dataset.keyHook}` : "—";
+        $("keyViewDeparture").href = btn.dataset.keyDeparture;
+        // En la propia salida no hace falta el enlace
+        $("keyViewDeparture").classList.toggle("d-none", window.location.pathname.startsWith("/parking/salida/"));
+        $("keyViewChange").onclick = () => {
+            viewModal.hide();
+            setTimeout(() => capture(btn), 300);
+        };
+        viewModal.show();
+    }
+
+    async function capture(btn) {
+        button = btn;
+        if (!captureModal) {
+            captureModal = new bootstrap.Modal($("keyCaptureModal"));
+            $("keyCaptureModal").addEventListener("hidden.bs.modal", stopCamera);
+        }
+
+        $("keyCapturePlate").innerText = btn.dataset.keyPlate;
+        $("keyCaptureHook").value = btn.dataset.keyHook || "";
+        $("keyCaptureError").classList.add("d-none");
+        setPhoto(null);
+        captureModal.show();
+        await startCamera();
+    }
+
+    async function startCamera() {
+        $("keyCaptureShootBtn").disabled = true;
+        if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+            status("Este navegador no abre la cámara: usa «Elegir foto».");
+            return;
+        }
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+            });
+            $("keyCaptureVideo").srcObject = stream;
+            await $("keyCaptureVideo").play();
+            $("keyCaptureShootBtn").disabled = false;
+            status("Toma la foto de la llave");
+        } catch (error) {
+            status(error.name === "NotAllowedError"
+                ? "Permite el uso de la cámara, o usa «Elegir foto»."
+                : "No se pudo abrir la cámara: usa «Elegir foto».");
+        }
+    }
+
+    function stopCamera() {
+        if (stream) stream.getTracks().forEach((track) => track.stop());
+        stream = null;
+        $("keyCaptureVideo").srcObject = null;
+    }
+
+    function optimize(source, width, height) {
+        const scale = Math.min(1, MAX_SIDE / Math.max(width, height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+        canvas.getContext("2d").drawImage(source, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob((result) => {
+            setPhoto(result);
+            stopCamera();
+        }, "image/jpeg", QUALITY);
+    }
+
+    function shoot() {
+        const video = $("keyCaptureVideo");
+        if (video.videoWidth) optimize(video, video.videoWidth, video.videoHeight);
+    }
+
+    function fromFile(input) {
+        const file = input.files[0];
+        input.value = "";
+        if (!file) return;
+
+        const img = new Image();
+        img.onload = () => {
+            optimize(img, img.naturalWidth, img.naturalHeight);
+            URL.revokeObjectURL(img.src);
+        };
+        img.src = URL.createObjectURL(file);
+    }
+
+    function retake() {
+        setPhoto(null);
+        startCamera();
+    }
+
+    function setPhoto(result) {
+        blob = result;
+        $("keyCapturePreview").classList.toggle("d-none", !blob);
+        $("keyCaptureVideo").classList.toggle("d-none", !!blob);
+        $("keyCaptureShootRow").classList.toggle("d-none", !!blob);
+        $("keyCaptureRetake").classList.toggle("d-none", !blob);
+
+        // Con llave ya guardada se puede cambiar solo el gancho
+        const hasSaved = button && button.dataset.keySet;
+        $("keyCaptureSaveBtn").disabled = !(blob || hasSaved);
+
+        if (blob) {
+            $("keyCapturePreview").src = URL.createObjectURL(blob);
+            status(`Foto lista (${Math.round(blob.size / 1024)} KB). Anota el gancho si usas llaveros numerados.`);
+        }
+    }
+
+    async function save() {
+        if (busy || !button) return;
+        busy = true;
+        $("keyCaptureSaveBtn").disabled = true;
+
+        const form = new FormData();
+        form.append("hook", $("keyCaptureHook").value.trim());
+        if (blob) form.append("photo", blob, "llave.jpg");
+
+        try {
+            const response = await fetch(urlFor(SAVE_URL, button.dataset.keyEntry), {
+                method: "POST",
+                headers: { "X-CSRFToken": $("keyCaptureModal").querySelector("[name=csrfmiddlewaretoken]").value },
+                body: form,
+            });
+            const data = await response.json();
+
+            if (!data.ok) {
+                showError(data.error || "No se pudo guardar la llave.");
+                return;
+            }
+            // Recarga para ver el botón, la lista y el contador actualizados
+            window.location.reload();
+        } catch (error) {
+            showError("No se pudo guardar la llave. Revisa la conexión.");
+        } finally {
+            busy = false;
+            $("keyCaptureSaveBtn").disabled = !(blob || (button && button.dataset.keySet));
+        }
+    }
+
+    function status(text) {
+        $("keyCaptureStatus").innerText = text;
+    }
+
+    function showError(text) {
+        $("keyCaptureError").innerText = text;
+        $("keyCaptureError").classList.remove("d-none");
+    }
+
+    return { action, shoot, fromFile, retake, save };
+
+})();
+</script>

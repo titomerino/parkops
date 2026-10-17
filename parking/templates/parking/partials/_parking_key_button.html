@@ -1,0 +1,25 @@
+{% comment %}
+Botón de llave de una entrada: sin llave abre la cámara; con llave muestra la foto.
+Recibe: entry_id, plate, has_key, hook, version (para no usar una foto vieja en caché),
+compact (en listas muestra solo el ícono cuando no hay llave).
+{% endcomment %}
+<button
+  type="button"
+  class="btn btn-sm key-btn {% if has_key %}key-btn-set{% else %}btn-outline-warning{% endif %}"
+  data-key-entry="{{ entry_id }}"
+  data-key-plate="{{ plate }}"
+  data-key-hook="{{ hook|default:'' }}"
+  data-key-set="{% if has_key %}1{% endif %}"
+  data-key-version="{{ version|date:'U' }}"
+  data-key-departure="{% url 'go_to_departure' entry_id %}"
+  onclick="event.stopPropagation(); KeyDeposit.action(this)"
+  title="{% if has_key %}Ver la llave{% else %}Agregar llave{% endif %}"
+>
+  {% if has_key %}
+    <i class="bi bi-key-fill"></i> {% if hook %}#{{ hook }}{% else %}Llave{% endif %}
+  {% elif compact %}
+    <i class="bi bi-key"></i><i class="bi bi-plus"></i>
+  {% else %}
+    <i class="bi bi-key"></i> Agregar llave
+  {% endif %}
+</button>

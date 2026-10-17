@@ -877,3 +877,165 @@ def test_reporte_por_periodo_ya_no_existe(admin_client):
     assert "tab-period" not in html
     assert "Mensual" in html and "Por placa" in html
     assert admin_client.get("/parking/reporte/periodo/").status_code == 404
+
+
+# ---------------------------------------------------------------- Llaves en custodia
+
+@pytest.mark.django_db
+class TestLlaves:
+
+    @pytest.fixture(autouse=True)
+    def keys_on(self, parking):
+        parking.keys_enabled = True
+        parking.save()
+
+    @staticmethod
+    def photo(width=3000, height=2000):
+        import io
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        out = io.BytesIO()
+        Image.new("RGB", (width, height), "orange").save(out, format="JPEG", quality=95)
+        return SimpleUploadedFile("llave.jpg", out.getvalue(), content_type="image/jpeg")
+
+    def save(self, client, entry, hook="", photo=True):
+        data = {"hook": hook}
+        if photo:
+            data["photo"] = self.photo()
+        return client.post(f"/parking/llaves/{entry.pk}/", data)
+
+    def test_guarda_foto_optimizada_y_gancho(self, admin_client, make_entry):
+        import io
+        from PIL import Image
+        from parking.models import KeyDeposit
+
+        entry = make_entry(plate="P11017E")
+        response = self.save(admin_client, entry, hook="7")
+
+        assert response.json() == {"ok": True, "hook": "7"}
+        deposit = KeyDeposit.objects.get(entry=entry)
+        image = Image.open(io.BytesIO(bytes(deposit.photo)))
+        assert max(image.size) <= 1024 and image.format == "JPEG"
+        assert deposit.created_by.username == "admin"
+        assert deposit.parking == entry.parking
+
+    def test_cambiar_solo_el_gancho_conserva_la_foto(self, admin_client, make_entry):
+        from parking.models import KeyDeposit
+
+        entry = make_entry()
+        self.save(admin_client, entry, hook="7")
+        before = bytes(KeyDeposit.objects.get(entry=entry).photo)
+
+        assert self.save(admin_client, entry, hook="12", photo=False).json()["hook"] == "12"
+        deposit = KeyDeposit.objects.get(entry=entry)
+        assert bytes(deposit.photo) == before
+
+    def test_la_primera_vez_exige_foto(self, admin_client, make_entry):
+        response = self.save(admin_client, make_entry(), hook="3", photo=False)
+        assert response.status_code == 400
+
+    def test_archivo_que_no_es_imagen(self, admin_client, make_entry):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        response = admin_client.post(f"/parking/llaves/{make_entry().pk}/", {
+            "photo": SimpleUploadedFile("x.jpg", b"no es imagen"),
+        })
+        assert response.status_code == 400
+
+    def test_no_se_asigna_a_un_carro_que_ya_salio(self, admin_client, make_entry):
+        entry = make_entry(minutes_ago=120, duration=60)
+        assert self.save(admin_client, entry).status_code == 404
+
+    def test_foto_solo_mientras_el_carro_esta_adentro(self, admin_client, make_entry):
+        entry = make_entry()
+        self.save(admin_client, entry, hook="7")
+
+        response = admin_client.get(f"/parking/llaves/{entry.pk}/foto/")
+        assert response.status_code == 200
+        assert response["Content-Type"] == "image/jpeg"
+        assert "private" in response["Cache-Control"]
+
+    def test_al_cobrar_la_salida_se_borra_la_foto(self, admin_client, make_entry):
+        from parking.models import KeyDeposit
+
+        entry = make_entry()
+        self.save(admin_client, entry, hook="7")
+
+        admin_client.post(f"/parking/salida/{entry.pk}")
+
+        assert not KeyDeposit.objects.exists()
+        assert admin_client.get(f"/parking/llaves/{entry.pk}/foto/").status_code == 404
+
+    def test_al_cerrar_la_entrada_por_cualquier_via_se_borra(self, admin_client, make_entry):
+        from django.utils.timezone import now
+        from parking.models import KeyDeposit
+
+        entry = make_entry()
+        self.save(admin_client, entry)
+        entry.departure_date_hour = now()
+        entry.save()
+
+        assert not KeyDeposit.objects.exists()
+
+    def test_lista_ordenada_por_gancho_y_solo_carros_adentro(self, admin_client, make_entry):
+        for plate, hook in [("PA1", "10"), ("PA2", "2"), ("PA3", ""), ("PA4", "B")]:
+            self.save(admin_client, make_entry(plate=plate), hook=hook)
+
+        html = admin_client.get("/parking/llaves/").content.decode()
+        order = [html.index(p) for p in ["PA2", "PA1", "PA4", "PA3"]]
+        assert order == sorted(order)
+        assert "4 llaves" in html
+
+    def test_botones_en_salida_historial_menu_y_dashboard(self, admin_client, make_entry):
+        entry = make_entry(plate="P11017E")
+
+        departure = admin_client.get(f"/parking/salida/{entry.pk}").content.decode()
+        assert "Agregar llave" in departure and 'id="keyCaptureModal"' in departure
+
+        self.save(admin_client, entry, hook="9")
+        departure = admin_client.get(f"/parking/salida/{entry.pk}").content.decode()
+        assert "#9" in departure and "keyViewModal" in departure
+
+        record = admin_client.get("/parking/historial/").content.decode()
+        assert 'data-key-hook="9"' in record
+
+        dashboard = admin_client.get("/").content.decode()
+        assert "1 en custodia" in dashboard
+        assert "/parking/llaves/" in record  # menú inferior
+
+    def test_parqueo_sin_el_modulo(self, admin_client, parking, make_entry):
+        parking.keys_enabled = False
+        parking.save()
+        entry = make_entry()
+
+        assert admin_client.get("/parking/llaves/").status_code == 404
+        assert self.save(admin_client, entry).status_code == 404
+        assert "key-btn" not in admin_client.get(f"/parking/salida/{entry.pk}").content.decode()
+        assert "/parking/llaves/" not in admin_client.get("/parking/historial/").content.decode()
+
+    def test_requiere_permiso_para_guardar(self, client, django_user_model, member, make_entry):
+        from django.contrib.auth.models import Permission
+
+        user = member(django_user_model.objects.create_user("solo_ver", password="x"))
+        user.user_permissions.add(Permission.objects.get(codename="view_entry"))
+        client.force_login(user)
+        entry = make_entry()
+
+        assert client.get("/parking/llaves/").status_code == 200
+        assert self.save(client, entry).status_code == 403
+
+    def test_aislamiento_entre_parqueos(self, client, django_user_model, member, make_entry, other_parking):
+        from django.contrib.auth.models import Permission
+        from parking.models import Entry
+
+        other_parking.keys_enabled = True
+        other_parking.save()
+        foreign = Entry.objects.create(parking=other_parking, plate="OTRO1")
+
+        user = member(django_user_model.objects.create_user("op", password="x"))
+        user.user_permissions.add(*Permission.objects.filter(codename__in=["view_entry", "add_entry"]))
+        client.force_login(user)
+
+        assert self.save(client, foreign).status_code == 404
+        assert client.get(f"/parking/llaves/{foreign.pk}/foto/").status_code == 404

@@ -94,6 +94,12 @@
                                         background-color: {% if entry.state %}#22c55e{% else %}#6b7280{% endif %};">
                                     </span>
 
+                                    {% if entry.state and current_parking.keys_enabled %}
+                                    <span class="ms-2">
+                                        {% include 'parking/partials/_parking_key_button.html' with entry_id=entry.id plate=entry.formatted_plate has_key=entry.has_key hook=entry.key_hook version=entry.key_version compact=True %}
+                                    </span>
+                                    {% endif %}
+
                                 </div>
 
                                 <small class="text-muted">
@@ -202,6 +208,10 @@
         </div>
     </div>
 </div>
+
+{% if current_parking.keys_enabled %}
+    {% include 'parking/partials/_parking_key_modal.html' %}
+{% endif %}
 
 {% endblock %}
 

@@ -44,8 +44,13 @@
             <h2 class="text-warning">SALIDA</h2>
             <hr>
             <div class="text-muted small">Vehículo</div>
-            <div class="display-6 fw-bold tracking-wide">
-                {{ entry.plate }}
+            <div class="d-flex align-items-center justify-content-center gap-3 flex-wrap">
+                <div class="display-6 fw-bold tracking-wide">
+                    {{ entry.plate }}
+                </div>
+                {% if current_parking.keys_enabled %}
+                    {% include 'parking/partials/_parking_key_button.html' with entry_id=entry.pk plate=entry.formatted_plate has_key=key_deposit hook=key_deposit.hook version=key_deposit.updated_at %}
+                {% endif %}
             </div>
         </div>
 
@@ -109,6 +114,10 @@
 <div class="text-center small text-muted mt-3">
     Toque una vez para confirmar
 </div>
+
+{% if current_parking.keys_enabled %}
+    {% include 'parking/partials/_parking_key_modal.html' %}
+{% endif %}
 
 {% endblock %}
 

@@ -7,7 +7,16 @@ AI_ALERT_PERMISSION = "parking.view_statistics_entry"
 def current_parking(request):
     """Parqueo actual en las plantillas y, para el superusuario, la lista para cambiar."""
 
-    context = {"current_parking": getattr(request, "parking", None)}
+    parking = getattr(request, "parking", None)
+    context = {"current_parking": parking}
+
+    if parking is not None and parking.keys_enabled:
+        from parking.models import KeyDeposit
+
+        # Las plantillas llaman a la función: la consulta solo corre si se muestra
+        context["keys_in_custody"] = (
+            lambda: KeyDeposit.objects.for_parking(parking).filter(entry__state=True).count()
+        )
 
     user = getattr(request, "user", None)
     if user is not None and user.is_authenticated and user.is_superuser:

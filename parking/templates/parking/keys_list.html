@@ -1,0 +1,100 @@
+{% extends "shell/base.html" %}
+
+{% block title %}ParkOps / Llaves en custodia{% endblock %}
+{% block page_title %}Parking Llaves{% endblock %}
+
+{% block content %}
+
+{% include 'shell/partials/_messages_alert.html' with messages=messages %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h6 mb-0">Llaves en custodia</h2>
+    <span class="badge rounded-pill text-bg-warning">
+        {{ deposits|length }} llave{{ deposits|length|pluralize }}
+    </span>
+</div>
+
+<div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+    <div class="card-body">
+
+        {% if deposits %}
+        <div class="input-group mb-3">
+            <span class="input-group-text bg-dark border-secondary text-light">
+                <i class="bi bi-search opacity-75"></i>
+            </span>
+            <input id="keysSearch" class="form-control bg-dark text-light border-secondary"
+                   placeholder="Placa o gancho…" autocomplete="off">
+        </div>
+        {% endif %}
+
+        <div class="row g-2" id="keysGrid">
+            {% for deposit in deposits %}
+            <div class="col-6 col-md-4 col-lg-3 key-item"
+                 data-search="{{ deposit.entry.plate|lower }} {{ deposit.hook|lower }}">
+                <div class="key-card rounded-4 p-2 h-100" role="button"
+                     onclick="KeyDeposit.action(this.querySelector('.key-btn'))">
+                    <div class="position-relative">
+                        <img class="key-thumb" loading="lazy" alt="Llave de {{ deposit.entry.plate }}"
+                             src="{% url 'key_photo' deposit.entry_id %}?v={{ deposit.updated_at|date:'U' }}">
+                        {% if deposit.hook %}<span class="key-hook-badge">#{{ deposit.hook }}</span>{% endif %}
+                    </div>
+                    <div class="fw-bold mt-2">{{ deposit.entry.formatted_plate }}</div>
+                    <div class="small text-muted">
+                        <i class="bi bi-clock me-1"></i>{{ deposit.entry.entry_date_hour|date:"h:i A" }}
+                    </div>
+                    <div class="d-none">
+                        {% include 'parking/partials/_parking_key_button.html' with entry_id=deposit.entry_id plate=deposit.entry.formatted_plate has_key=True hook=deposit.hook version=deposit.updated_at %}
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12 text-center text-muted py-5">
+                <i class="bi bi-key fs-1 d-block mb-2"></i>
+                No hay llaves en custodia.
+                <div class="small mt-1">Agrégalas con el botón <i class="bi bi-key"></i> en Historial o en la salida del carro.</div>
+            </div>
+            {% endfor %}
+
+            <div class="col-12 text-center text-muted py-4 d-none" id="keysNoResults">
+                No hay llaves con esa placa o gancho
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<style>
+    .key-card { background-color: #1f2a44; }
+    .key-thumb { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: .75rem; background: #000; }
+    .key-hook-badge {
+        position: absolute; top: .5rem; left: .5rem; background: #ffc107; color: #000; font-weight: 800;
+        border-radius: .6rem; padding: .1rem .55rem; font-size: 1.1rem; box-shadow: 0 2px 6px rgba(0,0,0,.5);
+    }
+</style>
+
+<script>
+    // Búsqueda por placa o gancho (sin espacios ni mayúsculas)
+    (function () {
+        const input = document.getElementById("keysSearch");
+        if (!input) return;
+        const clean = (text) => text.toLowerCase().replace(/[^a-z0-9]/g, "");
+        input.addEventListener("input", () => {
+            const query = clean(input.value);
+            let visible = 0;
+            document.querySelectorAll(".key-item").forEach((item) => {
+                const match = !query || item.dataset.search.split(" ").some((word) => clean(word).includes(query));
+                item.classList.toggle("d-none", !match);
+                if (match) visible += 1;
+            });
+            document.getElementById("keysNoResults").classList.toggle("d-none", visible > 0);
+        });
+    })();
+</script>
+
+{% include 'parking/partials/_parking_key_modal.html' %}
+
+{% endblock %}
+
+{% block menu_bottom %}
+    {% include 'parking/partials/_parking_menu_bottom.html' %}
+{% endblock %}

@@ -7,7 +7,8 @@ from shell.decorators import perm_required
 from shell.utils import safe_redirect_url
 from django.core.cache import cache
 from django.db import transaction
-from django.http import Http404, JsonResponse
+from django.db.models import Exists, OuterRef, Subquery
+from django.http import Http404, HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
 from io import BytesIO
 import json
@@ -16,7 +17,7 @@ import qrcode, base64
 
 from payment.services.payment_service import notify_pending_payments
 
-from .models import  Entry, PlatePolicy, Range
+from .models import  Entry, KeyDeposit, PlatePolicy, Range
 from .forms import (
     EntryForm, 
     EntryEditForm, 
@@ -31,7 +32,8 @@ from parking.utils import (
     minutes_to_hours_and_minutes, format_plate,
     render_pdf_response, export_report_excel
 )
-from parking.services import plate_scan
+from parking.services import key_photo, plate_scan
+from tenants.decorators import keys_enabled_required
 from parking.services.voice_plate import interpret
 from parking.services.report_service import (
     generate_day_report, generate_month_report,
@@ -171,8 +173,13 @@ def departure(request, pk):
     if billing_type == "MONTHLY":
         form.fields.pop("total_amount", None)
 
+    key_deposit = None
+    if request.parking.keys_enabled:
+        key_deposit = KeyDeposit.objects.filter(entry=entry).defer("photo").first()
+
     return render(request, "parking/departure.html", {
         "entry": entry,
+        "key_deposit": key_deposit,
         "form": form,
         "hours": f"{hours}:{minutes}",
         "amount": amount,
@@ -304,7 +311,7 @@ def record(request):
 
     today = localtime(now()).date()
 
-    entries = list(
+    queryset = (
         Entry.objects.for_parking(request.parking)
         .entries_today_and_active(today)
         .select_related("fee")
@@ -320,6 +327,16 @@ def record(request):
         )
         .order_by("-state", "-entry_date_hour")
     )
+
+    if request.parking.keys_enabled:
+        keys = KeyDeposit.objects.filter(entry=OuterRef("pk"))
+        queryset = queryset.annotate(
+            has_key=Exists(keys),
+            key_hook=Subquery(keys.values("hook")[:1]),
+            key_version=Subquery(keys.values("updated_at")[:1]),
+        )
+
+    entries = list(queryset)
 
     # Contadores para los chips
     total_entries = len(entries)
@@ -720,3 +737,65 @@ def scan_plate_photo(request):
     result["heard"] = ", ".join(readings) or "sin placa legible"
 
     return JsonResponse(_plate_result_json(result))
+
+
+# ---------------------------------------------------------------- Llaves en custodia
+
+@perm_required('parking.view_entry')
+@keys_enabled_required
+def keys_list(request):
+    """Llaves de los carros que están adentro, ordenadas por gancho."""
+
+    deposits = sorted(
+        KeyDeposit.objects.for_parking(request.parking)
+        .filter(entry__state=True)
+        .select_related("entry")
+        .defer("photo"),
+        key=lambda deposit: (deposit.hook_sort_key, deposit.created_at),
+    )
+
+    return render(request, "parking/keys_list.html", {"deposits": deposits})
+
+
+@require_POST
+@perm_required('parking.add_entry')
+@keys_enabled_required
+def key_save(request, entry_id):
+    """Guarda la foto y el gancho de la llave de un carro que está adentro."""
+
+    entry = get_object_or_404(Entry.objects.for_parking(request.parking), pk=entry_id, state=True)
+    deposit = KeyDeposit.objects.filter(entry=entry).defer("photo").first()
+    upload = request.FILES.get("photo")
+
+    if upload is None and deposit is None:
+        return JsonResponse({"ok": False, "error": "Toma la foto de la llave."}, status=400)
+
+    if deposit is None:
+        deposit = KeyDeposit(parking=request.parking, entry=entry, created_by=request.user)
+
+    if upload is not None:
+        try:
+            deposit.photo = key_photo.optimize(upload.read(key_photo.MAX_UPLOAD_BYTES + 1))
+        except key_photo.KeyPhotoError as error:
+            return JsonResponse({"ok": False, "error": str(error)}, status=400)
+
+    deposit.hook = request.POST.get("hook", "").strip()[:10]
+    deposit.save()
+
+    return JsonResponse({"ok": True, "hook": deposit.hook})
+
+
+@perm_required('parking.view_entry')
+@keys_enabled_required
+def key_photo_view(request, entry_id):
+    """La foto se sirve solo a usuarios del parqueo y solo mientras el carro está adentro."""
+
+    deposit = get_object_or_404(
+        KeyDeposit.objects.for_parking(request.parking).only("photo"),
+        entry_id=entry_id,
+        entry__state=True,
+    )
+
+    response = HttpResponse(bytes(deposit.photo), content_type="image/jpeg")
+    response["Cache-Control"] = "private, max-age=300"
+    return response

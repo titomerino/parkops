@@ -53,6 +53,22 @@
     </div>
     {% endif %}
 
+    {% if perms.parking.view_entry and current_parking.keys_enabled %}
+    <!-- Llaves en custodia -->
+    <div class="col-12 col-md-6 col-lg-4">
+        <a href="{% url 'keys_list' %}"
+            class="card bg-warning bg-opacity-75 text-dark border-0 shadow-sm rounded-4 text-decoration-none h-100">
+            <div class="card-body d-flex align-items-center py-2 px-3">
+                <i class="bi bi-key-fill fs-4 me-3"></i>
+                <div>
+                    <div class="fw-semibold">Llaves</div>
+                    <small class="opacity-75">{{ keys_in_custody }} en custodia</small>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+
     {% if perms.bathrooms.view_bathroomentry and current_parking.bathrooms_enabled %}
     <!-- Baños -->
     <div class="col-12 col-md-6 col-lg-4">

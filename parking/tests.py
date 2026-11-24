@@ -1118,9 +1118,9 @@ class TestSugerenciasPlaca:
     def test_la_busqueda_trae_el_buscador_con_sugerencias(self, admin_client):
         html = admin_client.get("/parking/busqueda/").content.decode()
         assert 'data-suggest-url="/parking/busqueda/sugerencias/"' in html
-        # Orden: aviso, placa, botones de captura y registrar
-        assert html.index("Busca una placa") < html.index('id="plateInput"') \
-            < html.index('id="voicePlateOpenBtn"') < html.index("Ingresar / buscar")
+        # Orden: placa, botones de captura y registrar (sin el aviso de arriba)
+        assert "Busca una placa" not in html
+        assert html.index('id="plateInput"') < html.index('id="voicePlateOpenBtn"') < html.index("Ingresar / buscar")
 
 
 @pytest.mark.django_db

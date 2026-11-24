@@ -1,0 +1,276 @@
+/*
+ * Tema ParkOps: los mismos colores y tipografía de la página de venta.
+ * Se carga después de Bootstrap y solo redefine sus variables y colores,
+ * así las plantillas siguen usando las clases de siempre (bg-dark, btn-success...).
+ */
+
+:root {
+  --po-bg: #0b0e13;
+  --po-surface: #151a22;
+  --po-surface-2: #1b212b;
+  --po-inset: #05070a;
+  --po-line: #232b36;
+  --po-line-strong: #3a4452;
+  --po-text: #e9eef4;
+  --po-muted: #8b97a7;
+  --po-green: #22c55e;
+  --po-green-hover: #2fd56b;
+  --po-on-green: #04130a;
+  --po-cyan: #38bdf8;
+  --po-gold: #f5b942;
+  --po-red: #f87171;
+
+  --bs-body-font-family: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bs-body-bg: var(--po-bg);
+  --bs-body-color: var(--po-text);
+  --bs-border-color: var(--po-line);
+
+  /* Colores base: los usan text-*, bg-* y border-* */
+  --bs-dark-rgb: 21, 26, 34;
+  --bs-light-rgb: 233, 238, 244;
+  --bs-success: #22c55e;
+  --bs-success-rgb: 34, 197, 94;
+  --bs-info: #38bdf8;
+  --bs-info-rgb: 56, 189, 248;
+  --bs-warning: #f5b942;
+  --bs-warning-rgb: 245, 185, 66;
+  --bs-danger: #f87171;
+  --bs-danger-rgb: 248, 113, 113;
+  --bs-primary: #2563eb;
+  --bs-primary-rgb: 37, 99, 235;
+  --bs-secondary-rgb: 107, 114, 128;
+  --bs-link-color: #4ade80;
+  --bs-link-color-rgb: 74, 222, 128;
+  --bs-link-hover-color: #86efac;
+  --bs-link-hover-color-rgb: 134, 239, 172;
+}
+
+body {
+  color-scheme: dark;
+  background-color: var(--po-bg);
+  color: var(--po-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6, .display-5, .display-6 { letter-spacing: -.02em; font-weight: 700; }
+.display-5.fw-bold, .display-6.fw-bold { font-weight: 800 !important; }
+h2.text-warning { font-weight: 800; letter-spacing: .04em; }
+
+/* Superficies */
+.card { background-color: var(--po-surface); border-color: var(--po-line); }
+.bg-black-custom, .card.bg-black-custom { background-color: var(--po-inset) !important; }
+.border-secondary { border-color: var(--po-line-strong) !important; }
+.border-dark { border-color: var(--po-line) !important; }
+hr { border-color: var(--po-line); opacity: 1; }
+.vr { background-color: var(--po-line-strong); }
+.text-muted { color: var(--po-muted) !important; }
+
+/* Barra superior */
+.po-navbar { background-color: var(--po-bg); }
+.po-navbar > .container-fluid { flex-wrap: nowrap; gap: .5rem; }
+.po-navbar-title { font-weight: 700; font-size: 1rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.po-navbar .dropdown { flex: none; }
+.po-navbar-brand { display: flex; align-items: center; gap: .6rem; min-width: 0; }
+.po-logo-mark {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: inline-grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--po-green), #0e9f6e);
+  color: var(--po-on-green);
+  font-size: 1rem;
+}
+.po-navbar-parking { color: var(--po-muted); font-size: .8rem; font-weight: 500; }
+
+/* Botones */
+.btn { font-weight: 600; }
+.btn-success {
+  --bs-btn-color: var(--po-on-green);
+  --bs-btn-bg: var(--po-green);
+  --bs-btn-border-color: var(--po-green);
+  --bs-btn-hover-color: var(--po-on-green);
+  --bs-btn-hover-bg: var(--po-green-hover);
+  --bs-btn-hover-border-color: var(--po-green-hover);
+  --bs-btn-active-color: var(--po-on-green);
+  --bs-btn-active-bg: #16a34a;
+  --bs-btn-active-border-color: #16a34a;
+  --bs-btn-disabled-color: var(--po-on-green);
+  --bs-btn-disabled-bg: var(--po-green);
+  --bs-btn-disabled-border-color: var(--po-green);
+  --bs-btn-focus-shadow-rgb: 34, 197, 94;
+}
+.btn-primary {
+  --bs-btn-color: var(--po-on-green);
+  --bs-btn-bg: var(--po-green);
+  --bs-btn-border-color: var(--po-green);
+  --bs-btn-hover-color: var(--po-on-green);
+  --bs-btn-hover-bg: var(--po-green-hover);
+  --bs-btn-hover-border-color: var(--po-green-hover);
+  --bs-btn-active-color: var(--po-on-green);
+  --bs-btn-active-bg: #16a34a;
+  --bs-btn-active-border-color: #16a34a;
+  --bs-btn-focus-shadow-rgb: 34, 197, 94;
+}
+.btn-dark {
+  --bs-btn-color: var(--po-text);
+  --bs-btn-bg: var(--po-surface-2);
+  --bs-btn-border-color: var(--po-surface-2);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #232b36;
+  --bs-btn-hover-border-color: var(--po-line-strong);
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #232b36;
+  --bs-btn-active-border-color: var(--po-line-strong);
+}
+.btn-warning {
+  --bs-btn-color: #1a1200;
+  --bs-btn-bg: var(--po-gold);
+  --bs-btn-border-color: var(--po-gold);
+  --bs-btn-hover-color: #1a1200;
+  --bs-btn-hover-bg: #f8c867;
+  --bs-btn-hover-border-color: #f8c867;
+  --bs-btn-active-color: #1a1200;
+  --bs-btn-active-bg: #e0a52f;
+  --bs-btn-active-border-color: #e0a52f;
+}
+.btn-info {
+  --bs-btn-color: #031520;
+  --bs-btn-bg: var(--po-cyan);
+  --bs-btn-border-color: var(--po-cyan);
+  --bs-btn-hover-color: #031520;
+  --bs-btn-hover-bg: #67cdfa;
+  --bs-btn-hover-border-color: #67cdfa;
+}
+.btn-danger {
+  --bs-btn-bg: #ef4444;
+  --bs-btn-border-color: #ef4444;
+  --bs-btn-hover-bg: #dc2626;
+  --bs-btn-hover-border-color: #dc2626;
+}
+.btn-secondary {
+  --bs-btn-color: var(--po-text);
+  --bs-btn-bg: var(--po-surface-2);
+  --bs-btn-border-color: var(--po-line-strong);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #232b36;
+  --bs-btn-hover-border-color: var(--po-line-strong);
+}
+.btn-outline-light {
+  --bs-btn-color: var(--po-text);
+  --bs-btn-border-color: var(--po-line-strong);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--po-surface-2);
+  --bs-btn-hover-border-color: #4b5666;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: var(--po-surface-2);
+  --bs-btn-active-border-color: #4b5666;
+}
+.btn-outline-secondary {
+  --bs-btn-color: var(--po-muted);
+  --bs-btn-border-color: var(--po-line-strong);
+  --bs-btn-hover-color: var(--po-text);
+  --bs-btn-hover-bg: var(--po-surface-2);
+  --bs-btn-hover-border-color: #4b5666;
+  --bs-btn-disabled-color: var(--po-muted);
+  --bs-btn-disabled-border-color: var(--po-line-strong);
+}
+.btn-outline-info {
+  --bs-btn-color: var(--po-cyan);
+  --bs-btn-border-color: rgba(56, 189, 248, .5);
+  --bs-btn-hover-color: #031520;
+  --bs-btn-hover-bg: var(--po-cyan);
+  --bs-btn-hover-border-color: var(--po-cyan);
+}
+.btn-outline-warning {
+  --bs-btn-color: var(--po-gold);
+  --bs-btn-border-color: rgba(245, 185, 66, .5);
+  --bs-btn-hover-color: #1a1200;
+  --bs-btn-hover-bg: var(--po-gold);
+  --bs-btn-hover-border-color: var(--po-gold);
+}
+.btn-outline-danger {
+  --bs-btn-color: var(--po-red);
+  --bs-btn-border-color: rgba(248, 113, 113, .5);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #ef4444;
+  --bs-btn-hover-border-color: #ef4444;
+}
+.text-bg-success { color: var(--po-on-green) !important; }
+.text-bg-warning { color: #1a1200 !important; }
+
+/* Alertas en versión oscura */
+.alert { border: 0; border-radius: .7rem; --bs-alert-link-color: inherit; }
+.alert-success { --bs-alert-color: #86efac; --bs-alert-bg: rgba(34, 197, 94, .12); --bs-alert-border-color: rgba(34, 197, 94, .3); }
+.alert-info { --bs-alert-color: #7dd3fc; --bs-alert-bg: rgba(56, 189, 248, .12); --bs-alert-border-color: rgba(56, 189, 248, .3); }
+.alert-warning { --bs-alert-color: #fcd34d; --bs-alert-bg: rgba(245, 185, 66, .13); --bs-alert-border-color: rgba(245, 185, 66, .32); }
+.alert-danger { --bs-alert-color: #fca5a5; --bs-alert-bg: rgba(248, 113, 113, .13); --bs-alert-border-color: rgba(248, 113, 113, .32); }
+.alert-primary { --bs-alert-color: #93c5fd; --bs-alert-bg: rgba(37, 99, 235, .15); --bs-alert-border-color: rgba(37, 99, 235, .35); }
+.alert-secondary, .alert-light, .alert-dark { --bs-alert-color: var(--po-text); --bs-alert-bg: var(--po-surface-2); --bs-alert-border-color: var(--po-line); }
+.alert .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
+
+/* Tarjetas de acciones rápidas del panel */
+.po-tile {
+  background-color: var(--po-surface);
+  color: var(--po-text);
+  border: 0;
+  transition: transform .1s ease, filter .15s ease;
+}
+.po-tile:hover { filter: brightness(1.12); color: var(--po-text); }
+.po-tile:active { transform: scale(.98); }
+.po-tile-green { background-color: var(--po-green); color: var(--po-on-green); }
+.po-tile-green:hover { color: var(--po-on-green); }
+.po-tile-gold { background-color: var(--po-gold); color: #1a1200; }
+.po-tile-gold:hover { color: #1a1200; }
+
+/* Formularios */
+.form-control, .form-select, .input-group-text {
+  border-color: var(--po-line-strong);
+}
+.form-control.bg-dark, .form-select.bg-dark, .input-group-text.bg-dark,
+.card .form-control, .card .form-select, .modal .form-control, .modal .form-select {
+  background-color: var(--po-inset) !important;
+  color: var(--po-text);
+}
+.card .input-group-text, .modal .input-group-text {
+  background-color: var(--po-inset);
+  color: var(--po-muted);
+}
+.form-control::placeholder { color: #5d6876; }
+.form-control:focus, .form-select:focus {
+  border-color: var(--po-green) !important;
+  box-shadow: 0 0 0 .2rem rgba(34, 197, 94, .18) !important;
+  color: var(--po-text);
+}
+.form-check-input:checked { background-color: var(--po-green); border-color: var(--po-green); }
+
+/* Modales y menús */
+.modal-content { background-color: var(--po-surface); border-color: var(--po-line) !important; }
+.modal-header, .modal-footer { border-color: var(--po-line); }
+.dropdown-menu-dark {
+  --bs-dropdown-bg: var(--po-surface);
+  --bs-dropdown-border-color: var(--po-line);
+  --bs-dropdown-link-hover-bg: var(--po-surface-2);
+  --bs-dropdown-link-active-bg: var(--po-green);
+  --bs-dropdown-link-active-color: var(--po-on-green);
+  --bs-dropdown-divider-bg: var(--po-line);
+}
+
+/* Barra de navegación inferior */
+nav.fixed-bottom > .bg-dark,
+nav.position-fixed.bottom-0 > .bg-dark {
+  background-color: var(--po-surface) !important;
+  border-color: var(--po-line) !important;
+}
+nav.position-fixed.bottom-0 small { color: #cbd3dd !important; }
+
+/* Tablas */
+.table-dark {
+  --bs-table-bg: var(--po-surface);
+  --bs-table-border-color: var(--po-line);
+  --bs-table-striped-bg: var(--po-surface-2);
+  --bs-table-hover-bg: var(--po-surface-2);
+}
+
+.badge.bg-light.text-dark { background-color: var(--po-text) !important; color: #111 !important; }

@@ -1,0 +1,186 @@
+{% comment %}
+Tarjeta de edición de una entrada: la usan la página completa y la modal de
+entradas y salidas (EntryModal) desde el Historial.
+{% endcomment %}
+<div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+
+    <!-- Header -->
+    <div class="card-body border-bottom border-secondary pb-3 mb-3">
+        <div class="d-flex align-items-center">
+            <div>
+                <h5 class="mb-0">
+                    Editar Entrada de Parking
+                </h5>
+                <small class="text-muted">
+                    Editar una entrada existente del parking
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <form method="POST" action="{% url 'edit_entry' entry.pk %}" novalidate>
+        {% csrf_token %}
+
+        {% for error in form.non_field_errors %}
+            <div class="alert alert-danger mx-3 small">{{ error }}</div>
+        {% endfor %}
+
+        <div class="card-body pt-0">
+
+            <!-- Placa -->
+            <div class="mb-3">
+                <label class="form-label text-muted">
+                    Placa
+                </label>
+
+                {{ form.plate }}
+
+                {% if form.plate.errors %}
+                    <div class="alert alert-danger mt-2 py-1 px-2 small">
+                        {{ form.plate.errors.0 }}
+                    </div>
+                {% endif %}
+            </div>
+
+            {% if policy %}
+                <div class="mb-3">
+                    <label class="form-label text-muted">
+                        Tarifa aplicada: Suscripción {{ policy.get_billing_type_display }}
+                    </label>
+                    <div class="form-control bg-dark text-light border-1">
+                        {{ policy.get_billing_type_display }}
+                    </div>
+                </div>
+            {% else %}
+                <!-- Tarifa aplicada -->
+                <div class="mb-3">
+                    <label class="form-label text-muted">
+                        Tarifa aplicada
+                    </label>
+
+                    {{ form.fee }}
+
+                    {% if form.fee.errors %}
+                        <div class="alert alert-danger mt-2 py-1 px-2 small">
+                            {{ form.fee.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            <!-- Hora de entrada y salida -->
+            <div class="row mb-3">
+                
+                <div class="col-md-6">
+                    <label class="form-label text-muted">
+                        Hora de entrada
+                    </label>
+
+                    {{ form.entry_date_hour }}
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label text-muted">
+                        Hora de salida
+                    </label>
+
+                    {{ form.departure_date_hour }}
+                </div>
+
+                <!-- Errores en ancho completo -->
+                <div class="col-12">
+                    {% if form.entry_date_hour.errors %}
+                        <div class="alert alert-danger mt-2 py-1 px-2 small">
+                            {{ form.entry_date_hour.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="col-12">
+                    {% if form.departure_date_hour.errors %}
+                        <div class="alert alert-danger mt-2 py-1 px-2 small">
+                            {{ form.departure_date_hour.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+
+            </div>
+
+            <div class="row mb-3">
+                <small class="text-muted">
+                    Si se modifica la hora de entrada o salida, el monto a pagar se recalculará automáticamente después de guardar los cambios.
+                </small>
+            </div>
+
+            <!-- Monto a pagar -->
+             <div class="mb-3">
+                <label class="form-label text-muted">
+                    Monto a pagar
+                </label>
+                
+                <div class="input-group">
+                    <span class="input-group-text bg-dark text-light border-secondary">$</span>
+                    {{ form.final_amount }}
+                </div>
+
+                {% if form.final_amount.errors %}
+                    <div class="alert alert-danger mt-2 py-1 px-2 small">
+                        {{ form.final_amount.errors.0 }}
+                    </div>
+                {% endif %}
+            </div>
+
+
+            <!-- BOTÓN -->
+            <button type="submit"
+                class="btn btn-success rounded-pill px-4 w-100">
+                <i class="bi bi-check-circle me-1"></i>
+                    Guardar cambios
+            </button>
+        </div>
+    </form>
+
+    {% if perms.parking.delete_entry %}
+<!-- Eliminar entrada: requiere el permiso parking.delete_entry. La confirmación va dentro de la tarjeta -->
+<div class="card-body pt-0">
+    <button type="button"
+        class="btn btn-outline-danger rounded-pill px-4 w-100"
+        data-bs-toggle="collapse"
+        data-bs-target="#deleteEntryConfirm-{{ entry.pk }}">
+        <i class="bi bi-trash3 me-1"></i>
+        Eliminar entrada
+    </button>
+
+    <div class="collapse" id="deleteEntryConfirm-{{ entry.pk }}">
+        <div class="border border-danger rounded-4 p-3 mt-3">
+            <div class="text-danger fw-semibold mb-2">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                Esta acción no se puede deshacer
+            </div>
+
+            <ul class="list-unstyled small mb-2">
+                <li><span class="text-muted">Placa:</span> <strong>{{ entry.formatted_plate }}</strong></li>
+                <li><span class="text-muted">Entrada:</span> {{ entry.entry_date_hour|date:"d/m/Y h:i A" }}</li>
+                <li><span class="text-muted">Salida:</span> {% if entry.departure_date_hour %}{{ entry.departure_date_hour|date:"d/m/Y h:i A" }}{% else %}sin salida (vehículo adentro){% endif %}</li>
+                <li><span class="text-muted">Monto cobrado:</span> ${{ entry.final_amount|default:"0"|floatformat:2 }}</li>
+            </ul>
+
+            <div class="small text-muted mb-3">
+                El ingreso dejará de aparecer en reportes y en el panel. Quedará registrado
+                quién la eliminó en el historial del administrador.
+            </div>
+
+            <form method="POST" action="{% url 'delete_entry' entry.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger rounded-pill w-100">
+                    <i class="bi bi-trash3 me-1"></i>
+                    Sí, eliminar
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+</div>

@@ -17,39 +17,48 @@
       Busca una placa o regístrala rápidamente.
     </div>
 
-    {% include 'parking/partials/_parking_qr_scanner.html' %}
-    
     <!-- Input -->
-    <form method="POST" novalidate>
+    <form method="POST" novalidate id="plateSearchForm">
       {% csrf_token %}
 
-      <div class="mb-4">
-        <label class="form-label small text-muted">
+      <div class="mb-3">
+        <label class="form-label small text-muted" for="plateInput">
           Placa del vehículo
         </label>
 
-        <div class="input-group mb-2 shadow-sm rounded-3">
+        <div class="position-relative">
+          <div class="input-group shadow-sm rounded-3">
 
-          <!-- Icono -->
-          <span class="input-group-text bg-dark border border-secondary text-light rounded-start-3">
-            <i class="bi bi-search opacity-75"></i>
-          </span>
+            <!-- Icono -->
+            <span class="input-group-text bg-dark border border-secondary text-light rounded-start-3">
+              <i class="bi bi-search opacity-75"></i>
+            </span>
 
-          <!-- Campo -->
-          <input
-            type="text"
-            name="plate"
-            id="plateInput"
-            value="{{ form.plate.value|default_if_none:'' }}"
-            class="form-control bg-dark border border-secondary text-light rounded-end-3"
-            placeholder="P123ABC"
-            required
-            autofocus
-            style="box-shadow:none;"
-            maxlength="10"
-            pattern="[A-Z0-9]+"
-            oninput="this.value = this.value.replace(/\s/g, '').toUpperCase()"
-          >
+            <!-- Campo -->
+            <input
+              type="text"
+              name="plate"
+              id="plateInput"
+              value="{{ form.plate.value|default_if_none:'' }}"
+              class="form-control bg-dark border border-secondary text-light rounded-end-3"
+              placeholder="P123ABC"
+              required
+              autofocus
+              autocomplete="off"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded="false"
+              aria-controls="plateSuggestions"
+              style="box-shadow:none;"
+              maxlength="10"
+              pattern="[A-Z0-9]+"
+              oninput="this.value = this.value.replace(/\s/g, '').toUpperCase()"
+              {% if perms.parking.view_entry %}data-suggest-url="{% url 'plate_suggestions' %}"{% endif %}
+            >
+          </div>
+
+          <!-- Sugerencias mientras se digita -->
+          <div id="plateSuggestions" class="plate-suggestions d-none" role="listbox"></div>
         </div>
 
         {% if form.plate.help_text %}
@@ -58,6 +67,8 @@
         </div>
         {% endif %}
       </div>
+
+      {% include 'parking/partials/_parking_qr_scanner.html' %}
 
       <!-- Botón -->
       <button
@@ -90,11 +101,212 @@
   {% include 'parking/partials/_parking_plate_camera_modal.html' %}
 {% endif %}
 
+<!-- modal de entrada / salida: la búsqueda no sale de esta pantalla -->
+{% include 'parking/partials/_parking_entry_modal.html' %}
+
+{% if current_parking.keys_enabled %}
+  {% include 'parking/partials/_parking_key_modal.html' %}
+{% endif %}
+
 {% endblock %}
 
 {% block menu_bottom %}
     {% include 'parking/partials/_parking_menu_bottom.html' %}
 {% endblock %}
 
+{% block extra_css %}
+<style>
+  .plate-suggestions {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    max-height: 22rem;
+    overflow-y: auto;
+    padding: 6px;
+    border: 1px solid var(--po-line-strong);
+    border-radius: 14px;
+    background: var(--po-surface);
+    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, .8);
+  }
+  .plate-suggestion {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 10px;
+    color: var(--po-text);
+    text-decoration: none;
+  }
+  .plate-suggestion:hover, .plate-suggestion.active { background: var(--po-surface-2); color: var(--po-text); }
+  .plate-suggestion .ps-icon {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+  }
+  .plate-suggestion .ps-icon { background: rgba(34, 197, 94, .14); color: var(--po-green); }
+  .plate-suggestion .ps-plate { font-weight: 700; letter-spacing: .03em; }
+  .plate-suggestion .ps-plate mark { padding: 0; background: none; color: var(--po-green); }
+  .plate-suggestion .ps-detail { color: var(--po-muted); font-size: .75rem; }
+  .plate-suggestion .ps-go { margin-left: auto; flex: none; font-size: .75rem; font-weight: 600; }
+  .plate-suggestions-empty { padding: 10px; color: var(--po-muted); font-size: .8rem; text-align: center; }
+</style>
+{% endblock %}
+
 {% block extra_js %}
+<script>
+// Buscar abre la entrada o la salida en una modal y se queda en esta pantalla
+(function () {
+  const form = document.getElementById("plateSearchForm");
+  const input = document.getElementById("plateInput");
+
+  function ready() {
+    input.value = "";
+    input.dispatchEvent(new Event("input"));
+    input.focus();
+  }
+
+  EntryModal.configure({
+    onDone(data) {
+      EntryModal.toast(data.message, "success");
+      ready();
+      // «Registrar e imprimir»: el ticket se abre aquí mismo
+      if (data.print && window.abrirTicketModal) window.abrirTicketModal(data.entry_id);
+    },
+  });
+
+  let searching = false;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (searching) return;
+    searching = true;
+    try {
+      const result = await EntryModal.load(form.getAttribute("action") || window.location.pathname, {
+        method: "POST",
+        body: new FormData(form),
+      });
+      if (result.json && result.json.ok) EntryModal.open(result.json.url);
+      else EntryModal.toast((result.json && result.json.error) || "Revisa la placa.", "warning");
+    } catch (error) {
+      form.submit();   // respaldo: el flujo de siempre, con cambio de página
+    } finally {
+      searching = false;
+    }
+  });
+})();
+</script>
+<script>
+// Sugerencias de placas: vehículos adentro que coinciden con lo digitado; al elegir uno, su salida
+(function () {
+  const input = document.getElementById("plateInput");
+  const box = document.getElementById("plateSuggestions");
+  const url = input && input.dataset.suggestUrl;
+  if (!url) return;
+
+  let items = [], current = -1, timer = null, controller = null, lastQuery = "";
+
+  const escape = text => text.replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+
+  // Resalta lo digitado dentro de la placa con espacios (P 110 17E)
+  function highlight(label, query) {
+    let out = "", open = false;
+    const plain = label.replace(/ /g, "");
+    const start = plain.indexOf(query);
+    let pos = 0;
+    for (const ch of label) {
+      if (ch === " ") { out += open ? "</mark> " : " "; if (open) open = false; continue; }
+      const inMatch = start >= 0 && pos >= start && pos < start + query.length;
+      if (inMatch && !open) { out += "<mark>"; open = true; }
+      if (!inMatch && open) { out += "</mark>"; open = false; }
+      out += escape(ch);
+      pos++;
+    }
+    return out + (open ? "</mark>" : "");
+  }
+
+  function render(results, query) {
+    items = results;
+    current = -1;
+    if (!results.length) {
+      box.innerHTML = '<div class="plate-suggestions-empty">Ningún vehículo adentro con esa placa. Presiona «Ingresar / buscar» para registrar la entrada.</div>';
+    } else {
+      box.innerHTML = results.map((r, i) => `
+        <a href="${r.url}" data-entry-modal="${r.modal_url}" class="plate-suggestion" role="option" id="plateSuggestion${i}" data-index="${i}">
+          <span class="ps-icon"><i class="bi bi-car-front-fill"></i></span>
+          <span class="text-truncate">
+            <span class="ps-plate">${highlight(r.label, query)}</span>
+            ${r.hook ? `<span class="badge rounded-pill text-bg-warning ms-1"><i class="bi bi-key-fill"></i> ${escape(r.hook)}</span>` : ""}
+            <span class="ps-detail d-block text-truncate">${escape(r.detail)}</span>
+          </span>
+          <span class="ps-go text-success">Salida <i class="bi bi-arrow-right"></i></span>
+        </a>`).join("");
+    }
+    show(true);
+  }
+
+  function show(visible) {
+    box.classList.toggle("d-none", !visible);
+    input.setAttribute("aria-expanded", visible ? "true" : "false");
+  }
+
+  function setCurrent(i) {
+    const links = box.querySelectorAll(".plate-suggestion");
+    links.forEach(a => a.classList.remove("active"));
+    current = i;
+    if (i >= 0 && links[i]) {
+      links[i].classList.add("active");
+      links[i].scrollIntoView({ block: "nearest" });
+      input.setAttribute("aria-activedescendant", links[i].id);
+    } else {
+      input.removeAttribute("aria-activedescendant");
+    }
+  }
+
+  async function search(query) {
+    if (controller) controller.abort();
+    controller = new AbortController();
+    try {
+      const res = await fetch(`${url}?q=${encodeURIComponent(query)}`, {
+        signal: controller.signal,
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (input.value === query) render(data.results, query);
+    } catch (err) {
+      if (err.name !== "AbortError") show(false);
+    }
+  }
+
+  input.addEventListener("input", () => {
+    const query = input.value;
+    clearTimeout(timer);
+    if (query.length < 2) { lastQuery = ""; show(false); return; }
+    if (query === lastQuery) { if (box.innerHTML) show(true); return; }
+    lastQuery = query;
+    timer = setTimeout(() => search(query), 150);
+  });
+
+  input.addEventListener("keydown", e => {
+    if (box.classList.contains("d-none") || !items.length) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setCurrent(Math.min(current + 1, items.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setCurrent(Math.max(current - 1, -1)); }
+    else if (e.key === "Enter" && current >= 0) { e.preventDefault(); show(false); EntryModal.open(items[current].modal_url); }
+    else if (e.key === "Escape") { show(false); }
+  });
+
+  // Se cierra al tocar fuera o al elegir una (la salida se abre en la modal)
+  document.addEventListener("pointerdown", e => {
+    if (!box.contains(e.target) && e.target !== input) show(false);
+  });
+  box.addEventListener("click", () => show(false));
+  input.addEventListener("focus", () => {
+    if (input.value.length >= 2 && box.innerHTML) show(true);
+  });
+})();
+</script>
 {% endblock %}

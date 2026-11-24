@@ -1,0 +1,49 @@
+{# Tarjeta de crear/editar tarifa: página completa o modal. Recibe: form, formset, fee, creating #}
+<div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+    <div class="card-body p-4">
+        <h2 class="h5 mb-3">{% if creating %}Nueva tarifa{% else %}{{ fee.name }}{% endif %}</h2>
+
+        <form method="post" action="{% if creating %}{% url 'fee_create' %}{% else %}{% url 'fee_edit' fee.pk %}{% endif %}" novalidate data-fee-form>
+            {% csrf_token %}
+            {% for error in form.non_field_errors %}<div class="alert alert-danger small">{{ error }}</div>{% endfor %}
+
+            {% include 'tenants/_form_field.html' with field=form.name %}
+            {% include 'tenants/_form_field.html' with field=form.description %}
+
+            <hr>
+            <div class="small text-muted mb-1">Cuánto cobra</div>
+            <div class="form-text text-muted mb-2">
+                Cobra el monto del último rango que alcanzó. Ej.: desde 0 min $1.00 y desde 60 min $1.50
+                → hasta 59 min paga $1.00; de 1 h en adelante, $1.50.
+            </div>
+
+            {{ formset.management_form }}
+            {% for error in formset.non_form_errors %}<div class="alert alert-danger small py-2">{{ error }}</div>{% endfor %}
+
+            <div class="row g-2 small text-muted mb-1">
+                <div class="col-6">Desde el minuto</div>
+                <div class="col-4">Cobra ($)</div>
+            </div>
+            <div data-range-rows>
+                {% for range_form in formset %}
+                    {% include 'parking/partials/_fee_range_row.html' with range_form=range_form %}
+                {% endfor %}
+            </div>
+            <template data-range-template>
+                {% include 'parking/partials/_fee_range_row.html' with range_form=formset.empty_form %}
+            </template>
+
+            <button type="button" class="btn btn-sm btn-outline-light rounded-pill w-100 mb-3" data-add-range>
+                <i class="bi bi-plus-lg me-1"></i>Agregar rango
+            </button>
+
+            <hr>
+            {% include 'tenants/_form_field.html' with field=form.default %}
+            {% include 'tenants/_form_field.html' with field=form.is_active %}
+
+            <button class="btn btn-success w-100 rounded-pill">
+                <i class="bi bi-check-lg me-1"></i>{% if creating %}Crear tarifa{% else %}Guardar cambios{% endif %}
+            </button>
+        </form>
+    </div>
+</div>

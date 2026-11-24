@@ -1,8 +1,10 @@
 from django import forms
 from django.utils import timezone
-from .models import Fee, Entry, PlatePolicy
+from .models import Fee, Entry, PlatePolicy, Range
 from django.core.validators import RegexValidator
 from django.utils.timezone import localdate
+from django.db.models import Q
+from django.forms import BaseInlineFormSet, inlineformset_factory
 
 import re
 
@@ -26,7 +28,10 @@ class ParkingFormMixin:
             self.instance.parking = self.parking
 
         if "fee" in self.fields:
-            self.fields["fee"].queryset = Fee.objects.for_parking(self.parking)
+            # Solo tarifas activas; al editar se conserva la que ya tenía
+            self.fields["fee"].queryset = Fee.objects.for_parking(self.parking).filter(
+                Q(is_active=True) | Q(pk=getattr(self.instance, "fee_id", None))
+            )
 
 
 class EntryForm(ParkingFormMixin, forms.ModelForm):
@@ -36,7 +41,7 @@ class EntryForm(ParkingFormMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         # Buscar tarifa por defecto del parqueo
-        default_fee = Fee.objects.for_parking(self.parking).filter(default=True).first()
+        default_fee = Fee.objects.for_parking(self.parking).filter(default=True, is_active=True).first()
 
         if default_fee:
             self.fields['fee'].initial = default_fee.id
@@ -373,3 +378,78 @@ class ReportFilterByPlateForm(forms.Form):
             'type': 'date'
         })
     )
+
+# ---------------------------------------------------------------- Tarifas
+
+class FeeForm(forms.ModelForm):
+    """Datos de una tarifa del parqueo. Los rangos van en RangeFormSet."""
+
+    def __init__(self, *args, parking, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.parking = parking
+        self.instance.parking = parking
+
+    class Meta:
+        model = Fee
+        fields = ["name", "description", "default", "is_active"]
+        labels = {"default": "Tarifa por defecto", "description": "Descripción (opcional)"}
+        help_texts = {
+            "name": "",
+            "description": "",
+            "default": "Viene seleccionada al registrar una entrada.",
+            "is_active": "Si la desactivas, ya no aparece al registrar entradas.",
+        }
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Normal, Nocturna, Motos…", "maxlength": 50}),
+            "description": forms.Textarea(attrs={"class": "form-control", "rows": 2, "placeholder": "$1 la primera hora, luego…"}),
+            "default": forms.CheckboxInput(attrs={"class": "form-check-input", "role": "switch"}),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input", "role": "switch"}),
+        }
+
+    def clean_name(self):
+        name = self.cleaned_data["name"].strip()
+        duplicated = Fee.objects.for_parking(self.parking).filter(name__iexact=name).exclude(pk=self.instance.pk)
+        if duplicated.exists():
+            raise forms.ValidationError("Ya tienes una tarifa con este nombre.")
+        return name
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get("default") and not cleaned_data.get("is_active"):
+            self.add_error("is_active", "La tarifa por defecto debe estar activa.")
+        return cleaned_data
+
+
+class BaseRangeFormSet(BaseInlineFormSet):
+    """Rangos de la tarifa: uno debe empezar en el minuto 0 y no se repiten minutos."""
+
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        minutes = [
+            form.cleaned_data["start_minute"]
+            for form in self.forms
+            if form.cleaned_data and not form.cleaned_data.get("DELETE")
+        ]
+        if not minutes:
+            raise forms.ValidationError("Agrega al menos un rango con su monto.")
+        if len(minutes) != len(set(minutes)):
+            raise forms.ValidationError("Hay dos rangos que empiezan en el mismo minuto.")
+        if any(form.cleaned_data.get("amount", 0) < 0 for form in self.forms if form.cleaned_data):
+            raise forms.ValidationError("Los montos no pueden ser negativos.")
+        if 0 not in minutes:
+            raise forms.ValidationError("El primer rango debe empezar en el minuto 0 (lo que paga al entrar).")
+
+
+RangeFormSet = inlineformset_factory(
+    Fee, Range,
+    formset=BaseRangeFormSet,
+    fields=["start_minute", "amount"],
+    extra=0,
+    can_delete=True,
+    widgets={
+        "start_minute": forms.NumberInput(attrs={"class": "form-control", "min": 0, "step": 1, "inputmode": "numeric"}),
+        "amount": forms.NumberInput(attrs={"class": "form-control", "min": 0, "step": "0.01", "inputmode": "decimal"}),
+    },
+)

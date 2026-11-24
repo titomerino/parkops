@@ -1,0 +1,593 @@
+{% load static %}<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ParkOps · Control de parqueos desde el celular</title>
+<meta name="description" content="Registra entradas y salidas, cobra con ticket QR, lee placas con IA y controla las llaves de tus clientes. Prueba ParkOps 15 días gratis.">
+<meta name="theme-color" content="#0b0e13">
+<meta property="og:type" content="website">
+<meta property="og:title" content="ParkOps · Tu parqueo bajo control, desde el celular">
+<meta property="og:description" content="Entradas, salidas, ticket QR, placas con IA, llaves y reportes. 15 días gratis con todo incluido.">
+<meta property="og:url" content="{{ request.build_absolute_uri }}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%2322c55e'/><text x='50%' y='54%' font-family='Arial' font-size='40' font-weight='bold' fill='%2304130a' text-anchor='middle' dominant-baseline='middle'>P</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="{% static 'landing/landing.css' %}">
+</head>
+<body>
+
+<!-- Navegación -->
+<nav id="nav">
+  <div class="wrap nav-in">
+    <a href="#" class="logo"><span class="logo-mark"><i class="bi bi-p-square-fill"></i></span>ParkOps</a>
+    <div class="nav-links">
+      <a href="#funciones">Funciones</a>
+      <a href="#recorrido">Ver la app</a>
+      <a href="#como-funciona">Cómo funciona</a>
+      <a href="#planes">Planes</a>
+      <a href="#preguntas">Preguntas</a>
+    </div>
+    <div class="nav-cta">
+      <a href="{% url 'login' %}" class="btn btn-ghost btn-sm">Iniciar sesión</a>
+      <a href="#registro" class="btn btn-primary btn-sm">Prueba gratis</a>
+      <button class="burger" aria-label="Menú" onclick="document.getElementById('mm').classList.toggle('open')"><i class="bi bi-list"></i></button>
+    </div>
+  </div>
+  <div class="mobile-menu" id="mm">
+    <a href="#funciones">Funciones</a>
+    <a href="#recorrido">Ver la app</a>
+    <a href="#como-funciona">Cómo funciona</a>
+    <a href="#planes">Planes</a>
+    <a href="#preguntas">Preguntas</a>
+    <a href="{% url 'login' %}">Iniciar sesión</a>
+  </div>
+</nav>
+
+<!-- Portada -->
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow"><i class="bi bi-stars"></i> 15 días gratis · todo incluido</span>
+      <h1>Tu parqueo bajo control, <span>desde el celular.</span></h1>
+      <p class="lead">Registra entradas y salidas en segundos, cobra con ticket QR, lee placas con inteligencia artificial y sabe cuánto entró hoy sin hacer cuentas a mano.</p>
+      <div class="hero-ctas">
+        <a href="#registro" class="btn btn-primary">Empieza tu prueba gratis <i class="bi bi-arrow-right"></i></a>
+        <a href="#recorrido" class="btn btn-ghost"><i class="bi bi-play-circle"></i> Ver la app por dentro</a>
+      </div>
+      <div class="checks">
+        <span><i class="bi bi-check-circle-fill"></i>Sin tarjeta de crédito</span>
+        <span><i class="bi bi-check-circle-fill"></i>Nada que instalar</span>
+        <span><i class="bi bi-check-circle-fill"></i>Te lo configuramos</span>
+      </div>
+    </div>
+
+    <!-- Celular: el buscador de placas con sus sugerencias -->
+    <div class="phone-wrap" aria-hidden="true">
+      <div class="phone">
+        <div class="screen">
+          <div class="notch"></div>
+          <div class="app-top"><span class="app-brand"><span class="logo-mark sm"><i class="bi bi-p-square-fill"></i></span>ParkOps</span><small>Parqueo Central</small></div>
+          <div class="app-card">
+            <div class="app-tip"><i class="bi bi-lightbulb-fill"></i>Busca una placa o regístrala rápidamente.</div>
+            <small>Placa del vehículo</small>
+            <div class="app-input"><i class="bi bi-search"></i><b>P11</b><span class="caret"></span></div>
+            <div class="app-suggest">
+              <div class="sug"><span class="ic"><i class="bi bi-car-front-fill"></i></span><div><b><em>P 11</em>0 17E</b> <span class="keytag"><i class="bi bi-key-fill"></i>12</span><small>Adentro desde 08:42 AM · Normal</small></div><span class="go">Salida <i class="bi bi-arrow-right"></i></span></div>
+              <div class="sug"><span class="ic"><i class="bi bi-car-front-fill"></i></span><div><b><em>P 11</em>2 300</b><small>Adentro desde 09:15 AM · Normal</small></div><span class="go">Salida <i class="bi bi-arrow-right"></i></span></div>
+              <div class="sug"><span class="ic"><i class="bi bi-car-front-fill"></i></span><div><b>M <em>11</em>4 902</b><small>Adentro desde 09:58 AM · Mensual</small></div><span class="go">Salida <i class="bi bi-arrow-right"></i></span></div>
+            </div>
+            <div class="app-tools">
+              <div><i class="bi bi-camera"></i>Escanear placa</div>
+              <div><i class="bi bi-mic"></i>Dictar placa</div>
+              <div><i class="bi bi-qr-code-scan"></i>Escanear ticket</div>
+            </div>
+            <div class="app-btn"><i class="bi bi-search"></i>Ingresar / buscar</div>
+          </div>
+          <div class="app-tabs">
+            <div><i class="bi bi-house-door"></i>Inicio</div>
+            <div class="on"><i class="bi bi-search"></i>Placa</div>
+            <div><i class="bi bi-key"></i>Llaves<span class="badge">9</span></div>
+            <div><i class="bi bi-clock-history"></i>Historial</div>
+          </div>
+        </div>
+      </div>
+      <div class="float f1"><div class="fi"><i class="bi bi-camera-fill"></i></div><div><small>Placa leída con IA</small><span class="plate-tag">P 11017E</span></div></div>
+      <div class="float f2"><div class="fi"><i class="bi bi-cash-coin"></i></div><div><small>Salida cobrada</small><b>+$3.00</b></div></div>
+    </div>
+  </div>
+</header>
+
+<!-- Cifras -->
+<section class="stats">
+  <div class="wrap stats-in">
+    <div class="stat"><b>3 seg</b><span>para registrar una entrada</span></div>
+    <div class="stat"><b>0</b><span>tickets de papel perdidos</span></div>
+    <div class="stat"><b>24/7</b><span>tus números en la nube</span></div>
+    <div class="stat"><b>1 cuenta</b><span>para varios parqueos</span></div>
+  </div>
+</section>
+
+<!-- Problema / solución -->
+<section class="section">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">¿Te suena familiar?</span>
+      <h2 style="margin-top:16px">Deja de adivinar cuánto entró hoy</h2>
+    </div>
+    <div class="pain-grid">
+      <div class="pain reveal">
+        <h3>Sin ParkOps</h3>
+        <ul>
+          <li><i class="bi bi-x-circle-fill"></i>La caja no cuadra y no sabes por qué.</li>
+          <li><i class="bi bi-x-circle-fill"></i>Tickets de papel que se pierden o se mojan.</li>
+          <li><i class="bi bi-x-circle-fill"></i>Calcular el tiempo y el cobro a mano en la salida.</li>
+          <li><i class="bi bi-x-circle-fill"></i>Llaves de clientes en un gancho sin control.</li>
+          <li><i class="bi bi-x-circle-fill"></i>Tienes que estar en el parqueo para saber cómo va el día.</li>
+        </ul>
+      </div>
+      <div class="gain reveal">
+        <h3>Con ParkOps</h3>
+        <ul>
+          <li><i class="bi bi-check-circle-fill"></i>Cada entrada y cada dólar quedan registrados.</li>
+          <li><i class="bi bi-check-circle-fill"></i>Ticket QR que se escanea con el mismo celular.</li>
+          <li><i class="bi bi-check-circle-fill"></i>El cobro se calcula solo con tus tarifas.</li>
+          <li><i class="bi bi-check-circle-fill"></i>Cada llave con foto y número de gancho.</li>
+          <li><i class="bi bi-check-circle-fill"></i>Ves ingresos y reportes desde donde estés.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Funciones -->
+<section class="section" id="funciones" style="background:var(--bg-2)">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">Funciones</span>
+      <h2 style="margin-top:16px">Todo lo que tu parqueo necesita, en una sola app</h2>
+      <p class="lead">Funciona en cualquier celular, tablet o computadora. Se instala como app desde el navegador.</p>
+    </div>
+    <div class="feat-grid">
+      <div class="feat reveal"><div class="fi"><i class="bi bi-search"></i></div><h3>Buscador de placas</h3><p>Escribe parte de la placa y aparecen los carros que están adentro. Un toque y cobras su salida.</p></div>
+      <div class="feat reveal"><div class="fi"><i class="bi bi-window-stack"></i></div><h3>Entradas y salidas</h3><p>Se registran en una ventana sobre el buscador: nunca sales de la pantalla ni pierdes tiempo regresando.</p></div>
+      <div class="feat reveal"><div class="fi" style="background:rgba(56,189,248,.12);color:var(--cyan)"><i class="bi bi-camera"></i></div><h3>Placas con IA</h3><p>Apunta la cámara a la placa y la IA la escribe en el buscador, con zoom para leer de lejos.</p></div>
+      <div class="feat reveal"><div class="fi"><i class="bi bi-qr-code"></i></div><h3>Ticket QR y voz</h3><p>Escanea el ticket o dicta la placa: también la ponen en el buscador al instante.</p></div>
+      <div class="feat reveal"><div class="fi"><i class="bi bi-calendar-check"></i></div><h3>Suscripciones</h3><p>Clientes mensuales, diarios o por hora con su propia tarifa. Al entrar, la app los reconoce.</p></div>
+      <div class="feat reveal"><div class="fi" style="background:rgba(245,185,66,.12);color:var(--gold)"><i class="bi bi-key"></i></div><h3>Llaves en custodia<span class="tag-new">NUEVO</span></h3><p>Foto de la llave y número de gancho. Se borra sola cuando el carro sale.</p></div>
+      <div class="feat reveal"><div class="fi"><i class="bi bi-bar-chart-line"></i></div><h3>Reportes</h3><p>Reporte del día, del mes o por placa, en PDF o Excel.</p></div>
+      <div class="feat reveal"><div class="fi"><i class="bi bi-people"></i></div><h3>Roles y sucursales</h3><p>Empleados con permisos limitados y varios parqueos en una misma cuenta.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- Recorrido por la app -->
+<section class="section" id="recorrido">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow"><i class="bi bi-phone"></i> Recorrido</span>
+      <h2 style="margin-top:16px">Mira la app por dentro</h2>
+      <p class="lead">Así se ve ParkOps en el celular de tu encargado. Toca cada módulo para verlo en acción.</p>
+    </div>
+
+    <div class="tour" id="tour">
+      <div>
+        <div class="tour-chips" id="tourChips"></div>
+        <div class="tour-list" id="tourList"></div>
+        <p class="tour-hint"><i class="bi bi-hand-index"></i> Toca un módulo o deja que avance solo.</p>
+      </div>
+
+      <div>
+        <div class="dphone" aria-hidden="true">
+          <div class="dscreen">
+            <div class="notch"></div>
+            <div class="dtop"><span class="app-brand"><span class="logo-mark sm"><i class="bi bi-p-square-fill"></i></span>ParkOps</span><small>Parqueo Central</small></div>
+
+            <!-- Panel -->
+            <div class="dview" data-v="panel">
+              <div class="dcard">
+                <div class="drow"><b>Parqueo</b><i class="bi bi-p-circle" style="color:var(--cyan)"></i></div>
+                <div class="dmuted" style="margin-bottom:8px">Resumen del día y mes</div>
+                <div class="dstats">
+                  <div><div class="dmuted">Ingreso hoy</div><b class="dgreen" data-count="412.50">$0.00</b></div>
+                  <div><div class="dmuted">Ingreso mes</div><b style="color:var(--gold)">$9,870</b></div>
+                  <div><div class="dmuted">Carros hoy</div><b style="color:var(--cyan)">168</b></div>
+                </div>
+              </div>
+              <div class="dcard">
+                <div class="drow"><b>Suscripciones mensuales</b><i class="bi bi-p-circle" style="color:var(--cyan)"></i></div>
+                <div class="dstats two">
+                  <div><div class="dmuted">Ingreso mes</div><b style="color:var(--gold)">$1,240.00</b></div>
+                  <div><div class="dmuted">Activas</div><b style="color:var(--cyan)">32</b></div>
+                </div>
+              </div>
+              <div class="dmuted" style="margin:4px 2px 6px">Acciones rápidas</div>
+              <div class="dtile g"><i class="bi bi-p-square"></i><span>Parqueo<small>Entradas y salidas</small></span></div>
+              <div class="dtile"><i class="bi bi-calendar-check-fill"></i><span>Suscripciones de Parqueo<small>Diarias o mensuales</small></span></div>
+              <div class="dtile y"><i class="bi bi-key-fill"></i><span>Llaves<small>9 en custodia</small></span></div>
+              <div class="dtile"><i class="bi bi-file-earmark-pdf"></i><span>Reportes de parqueo<small>Reportes personalizados</small></span></div>
+            </div>
+
+            <!-- Buscar placa -->
+            <div class="dview" data-v="placa">
+              <div class="dsearch">
+                <div class="dalert info"><i class="bi bi-lightbulb-fill"></i>Busca una placa o regístrala rápidamente.</div>
+                <div class="dmuted" style="margin-bottom:5px">Placa del vehículo</div>
+                <div class="dinput"><i class="bi bi-search" style="opacity:.6;font-size:13px"></i><span id="dTyped"></span><span class="caret"></span></div>
+                <div class="dsug" id="dSug">
+                  <div class="sug"><span class="ic"><i class="bi bi-car-front-fill"></i></span><div><b><em>P 11</em>0 17E</b> <span class="keytag"><i class="bi bi-key-fill"></i>12</span><small>Adentro desde 08:42 AM · Normal</small></div><span class="go">Salida <i class="bi bi-arrow-right"></i></span></div>
+                  <div class="sug"><span class="ic"><i class="bi bi-car-front-fill"></i></span><div><b><em>P 11</em>2 300</b><small>Adentro desde 09:15 AM · Normal</small></div><span class="go">Salida <i class="bi bi-arrow-right"></i></span></div>
+                </div>
+                <div class="dtools">
+                  <div class="dtool ai"><i class="bi bi-camera"></i>Escanear placa</div>
+                  <div class="dtool"><i class="bi bi-mic"></i>Dictar placa</div>
+                  <div class="dtool"><i class="bi bi-qr-code-scan"></i>Escanear ticket</div>
+                </div>
+                <button class="dbtn g"><i class="bi bi-search"></i>Ingresar / buscar</button>
+              </div>
+            </div>
+
+            <!-- IA -->
+            <div class="dview" data-v="ia">
+              <div class="dcam" id="dCam">
+                <div class="car"><div class="pl">P 11017E</div></div>
+                <div class="frame"></div>
+                <div class="zchip" id="dZoomTxt">1×</div>
+                <div class="flash"></div>
+              </div>
+              <div class="dzoom"><span id="z1" class="on">1×</span><span id="z2">2×</span><span>3×</span></div>
+              <div class="dmuted" style="text-align:center;margin-bottom:10px">La placa completa dentro del recuadro</div>
+              <div class="dread" id="dRead">
+                <div><div class="dmuted">Placa leída con IA</div><b style="font-size:18px;letter-spacing:.06em">P 11017E</b></div>
+                <span class="dbtn g" style="width:auto;padding:8px 14px"><i class="bi bi-check-lg"></i>Usar placa</span>
+              </div>
+              <div class="dmuted" style="text-align:center;margin-top:10px"><i class="bi bi-arrow-return-left"></i> La placa queda en el buscador</div>
+            </div>
+
+            <!-- Entrada (modal sobre el buscador) -->
+            <div class="dview" data-v="entrada">
+              {% include 'landing/_tour_search_behind.html' %}
+              <div class="dshade"></div>
+              <div class="dmodal" id="dEntryModal">
+                <span class="dclose"><i class="bi bi-x-lg"></i></span>
+                <div class="dhead"><h4>ENTRADA</h4><hr><div class="dmuted">Vehículo</div><div class="dplate">P11017E</div></div>
+                <div class="dbox"><div class="dmuted">20/11/2026</div><div class="dbig dgreen">08:42 AM</div></div>
+                <div class="dmuted">Tarifa aplicada</div>
+                <div class="dselect"><i class="bi bi-cash-coin dgreen"></i><span>Normal</span><i class="bi bi-chevron-down dmuted"></i></div>
+                <button class="dbtn o" style="margin-bottom:8px"><i class="bi bi-printer"></i>Registrar e imprimir</button>
+                <button class="dbtn g"><i class="bi bi-box-arrow-in-right"></i>Registrar</button>
+              </div>
+            </div>
+
+            <!-- Ticket -->
+            <div class="dview" data-v="ticket">
+              {% include 'landing/_tour_search_behind.html' %}
+              <div class="dshade"></div>
+              <div class="dmodal ticket-modal on">
+                <div class="dticket">
+                  <b>PARQUEO CENTRAL</b><br>¡BIENVENIDO!
+                  <div class="dash"></div>
+                  Placa: <b style="letter-spacing:.06em">P11017E</b><br>Hora entrada: <b>08:42 AM</b>
+                  <canvas id="dQr" width="25" height="25"></canvas>
+                  Presente este ticket a la salida
+                </div>
+                <div class="dmuted" style="text-align:center;margin-top:16px">Al escanearlo, la placa aparece en el buscador.</div>
+              </div>
+            </div>
+
+            <!-- Salida (modal sobre el buscador) -->
+            <div class="dview" data-v="salida">
+              {% include 'landing/_tour_search_behind.html' %}
+              <div class="dshade" id="dExitShade"></div>
+              <div class="dmodal" id="dExitModal">
+                <span class="dclose"><i class="bi bi-x-lg"></i></span>
+                <div class="dalert ok" style="margin-bottom:8px"><i class="bi bi-clock-fill"></i>Cobro por horas</div>
+                <div class="dhead"><h4>SALIDA</h4><hr><div class="dmuted">Vehículo</div>
+                  <div style="display:flex;gap:10px;justify-content:center;align-items:center"><span class="dplate">P11017E</span><span class="dkeybtn"><i class="bi bi-key-fill"></i>#12</span></div>
+                </div>
+                <div class="dbox"><div class="dmuted">Total a pagar</div><div class="dgreen" style="font-size:32px;font-weight:800">$3.00</div></div>
+                <div class="drow dmuted" style="margin-bottom:12px"><span><i class="bi bi-clock-history"></i> Entrada<br><b style="color:var(--text)">08:42 AM</b></span><span style="text-align:right"><i class="bi bi-hourglass-split"></i> Tiempo<br><b style="color:var(--text)">2:30 horas</b></span></div>
+                <button class="dbtn g" id="dPay"><i class="bi bi-cash-coin"></i>Cobrar y salir</button>
+              </div>
+              <div class="dtoast" id="dToast"><i class="bi bi-check-circle-fill"></i>Salida registrada para P11017E — $3.00</div>
+            </div>
+
+            <!-- Historial -->
+            <div class="dview" data-v="historial">
+              <div class="dcard" style="padding:10px">
+                <div class="dinput small"><i class="bi bi-search"></i>Buscar placa del día...</div>
+                <div class="dchips"><span class="dchip on">Todos <em>168</em></span><span class="dchip">Activos <em>23</em></span><span class="dchip">Finalizados <em>145</em></span></div>
+              </div>
+              <div class="dentry"><div class="l"><div class="ic"><i class="bi bi-car-front-fill"></i></div><div><b>P 110 17E</b><span class="dot"></span> <span class="dkeybtn sm"><i class="bi bi-key-fill"></i>#12</span><br><span class="dmuted">Normal</span></div></div><div class="r"><span class="dmuted">Monto</span><b>$0.00</b></div></div>
+              <div class="dentry"><div class="l"><div class="ic"><i class="bi bi-car-front-fill"></i></div><div><b>P 555 555</b><span class="dot"></span><br><span class="dmuted">Mensual</span></div></div><div class="r"><span class="dmuted">Monto</span><b>$0.00</b></div></div>
+              <div class="dentry"><div class="l"><div class="ic"><i class="bi bi-car-front-fill"></i></div><div><b>M 482 190</b><span class="dot"></span><br><span class="dmuted">Normal</span></div></div><div class="r"><span class="dmuted">Monto</span><b>$0.00</b></div></div>
+              <div class="dentry"><div class="l"><div class="ic"><i class="bi bi-car-front-fill"></i></div><div><b>P 903 211</b><span class="dot off"></span><br><span class="dmuted">Diario</span></div></div><div class="r"><span class="dmuted">Monto</span><b>$5.00</b></div></div>
+              <div class="dentry"><div class="l"><div class="ic"><i class="bi bi-car-front-fill"></i></div><div><b>C 019 442</b><span class="dot off"></span><br><span class="dmuted">Normal</span></div></div><div class="r"><span class="dmuted">Monto</span><b>$2.00</b></div></div>
+            </div>
+
+            <!-- Llaves -->
+            <div class="dview" data-v="llaves">
+              <div class="drow" style="margin-bottom:8px"><b>Llaves en custodia</b><span class="dpill w">9 llaves</span></div>
+              <div class="dinput small" style="margin-bottom:8px"><i class="bi bi-search"></i>Placa o gancho…</div>
+              <div class="dkeys">
+                <div class="dkey"><div class="ph"><span class="hk">#3</span><i class="bi bi-key-fill"></i></div><div class="p">P 220 114</div><small><i class="bi bi-clock"></i> 07:15 AM</small></div>
+                <div class="dkey" style="transition-delay:.05s"><div class="ph"><span class="hk">#7</span><i class="bi bi-key-fill"></i></div><div class="p">M 482 190</div><small><i class="bi bi-clock"></i> 08:02 AM</small></div>
+                <div class="dkey" style="transition-delay:.1s"><div class="ph"><span class="hk">#12</span><i class="bi bi-key-fill"></i></div><div class="p">P 110 17E</div><small><i class="bi bi-clock"></i> 08:42 AM</small></div>
+                <div class="dkey" style="transition-delay:.15s"><div class="ph"><span class="hk">#15</span><i class="bi bi-key-fill"></i></div><div class="p">P 773 005</div><small><i class="bi bi-clock"></i> 09:10 AM</small></div>
+              </div>
+            </div>
+
+            <!-- Suscripciones -->
+            <div class="dview" data-v="mensual">
+              <div class="dcard" style="padding:10px">
+                <div class="dinput small"><i class="bi bi-search"></i>Buscar suscripción...</div>
+                <div class="dchips"><span class="dchip on">Todos</span><span class="dchip">Activos</span><span class="dchip">Inactivos</span></div>
+              </div>
+              <div class="dsub"><div class="l"><span class="ic"><i class="bi bi-calendar-check"></i></span><div><b>P 100 001</b><span class="dot"></span><br><span class="dmuted">Ana López</span></div></div><div class="r"><span class="dmuted">Mensualidad</span><b>$40.00</b></div></div>
+              <div class="dsub"><div class="l"><span class="ic"><i class="bi bi-calendar-check"></i></span><div><b>M 100 942</b><span class="dot"></span><br><span class="dmuted">Distribuidora El Sol</span></div></div><div class="r"><span class="dmuted">Mensualidad</span><b>$65.00</b></div></div>
+              <div class="dsub"><div class="l"><span class="ic"><i class="bi bi-sun"></i></span><div><b>P 200 001</b><span class="dot"></span><br><span class="dmuted">María Gómez</span></div></div><div class="r"><span class="dmuted">Tarifa diaria</span><b>$3.00</b></div></div>
+              <div class="dsub"><div class="l"><span class="ic"><i class="bi bi-clock"></i></span><div><b>P 300 001</b><span class="dot"></span><br><span class="dmuted">Luis Ramírez</span></div></div><div class="r"><span class="dmuted">Tarifa por hora</span><b>$1.00</b></div></div>
+              <div class="dsub"><div class="l"><span class="ic"><i class="bi bi-calendar-check"></i></span><div><b>P 400 001</b><span class="dot off"></span><br><span class="dmuted">Clínica Central</span></div></div><div class="r"><span class="dmuted">Mensualidad</span><b>$35.00</b></div></div>
+            </div>
+
+            <!-- Reportes -->
+            <div class="dview" data-v="reportes">
+              <div class="dcard">
+                <b style="font-size:16px">Reporte</b>
+                <div class="dmuted">Genera reportes personalizados de parqueo</div>
+                <hr class="dhr">
+                <div class="dtabs" id="dTabs"><span class="on">Del Día</span><span>Mensual</span><span>Por placa</span></div>
+                <div class="dmuted" style="margin:10px 0 5px">Fecha</div>
+                <div class="dinput small" style="justify-content:space-between;color:var(--text)">20/11/2026<i class="bi bi-calendar3"></i></div>
+                <div style="display:flex;gap:8px;margin-top:12px">
+                  <button class="dbtn r"><i class="bi bi-file-earmark-pdf"></i>Generar PDF</button>
+                  <button class="dbtn g"><i class="bi bi-file-earmark-excel"></i>Descargar Excel</button>
+                </div>
+              </div>
+              <div class="dcard">
+                <div class="dstats">
+                  <div><div class="dmuted">Ingreso hoy</div><b class="dgreen">$412.50</b></div>
+                  <div><div class="dmuted">Ingreso mes</div><b style="color:var(--gold)">$9,870</b></div>
+                  <div><div class="dmuted">Carros hoy</div><b style="color:var(--cyan)">168</b></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="dnav">
+              <div data-n="panel"><i class="bi bi-house-door"></i>Inicio</div>
+              <div data-n="placa"><i class="bi bi-search"></i>Placa</div>
+              <div data-n="llaves"><i class="bi bi-key"></i>Llaves<span class="badge">9</span></div>
+              <div data-n="historial"><i class="bi bi-clock-history"></i>Historial</div>
+            </div>
+          </div>
+        </div>
+        <p class="tour-cap" id="tourCap"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Destacados -->
+<section class="section" style="background:var(--bg-2)">
+  <div class="wrap">
+    <div class="spot">
+      <div class="reveal">
+        <span class="eyebrow"><i class="bi bi-cpu"></i> Inteligencia artificial</span>
+        <h2>Apunta, toma la foto y la placa se escribe sola</h2>
+        <p class="lead">Encuadra la placa en el recuadro, aunque estés a varios metros, y ParkOps la lee en un segundo. Menos errores de digitación y más rapidez en horas pico.</p>
+        <ul>
+          <li><i class="bi bi-check2"></i>Zoom con los dedos para leer desde lejos.</li>
+          <li><i class="bi bi-check2"></i>La placa queda en el buscador y ves si el carro está adentro.</li>
+          <li><i class="bi bi-check2"></i>Paquetes de escaneos incluidos según tu plan.</li>
+        </ul>
+      </div>
+      <div class="spot-visual reveal" aria-hidden="true">
+        <div class="cam">
+          <div class="cam-car"><div class="cam-plate">P 11017E</div></div>
+          <div class="cam-frame"><div class="scanline"></div></div>
+        </div>
+        <div class="cam-result">
+          <div><small>Placa leída con IA</small><br><span class="plate-tag" style="font-size:16px">P 11017E</span></div>
+          <span class="btn btn-primary btn-sm"><i class="bi bi-check-lg"></i> Usar placa</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="spot rev">
+      <div class="spot-visual reveal" aria-hidden="true">
+        <div class="keys-grid">
+          <div class="keycard"><div class="ph"><span class="hk">#3</span><i class="bi bi-key-fill"></i></div><div class="pl">P 220 114</div></div>
+          <div class="keycard"><div class="ph"><span class="hk">#7</span><i class="bi bi-key-fill"></i></div><div class="pl">M 482 190</div></div>
+          <div class="keycard"><div class="ph"><span class="hk">#12</span><i class="bi bi-key-fill"></i></div><div class="pl">P 110 17E</div></div>
+          <div class="keycard"><div class="ph"><span class="hk">#15</span><i class="bi bi-key-fill"></i></div><div class="pl">P 773 005</div></div>
+          <div class="keycard"><div class="ph"><span class="hk">A</span><i class="bi bi-key-fill"></i></div><div class="pl">C 019 442</div></div>
+          <div class="keycard"><div class="ph"><span class="hk">B</span><i class="bi bi-key-fill"></i></div><div class="pl">P 640 318</div></div>
+        </div>
+      </div>
+      <div class="reveal">
+        <span class="eyebrow" style="color:var(--gold);background:rgba(245,185,66,.12);border-color:rgba(245,185,66,.3)"><i class="bi bi-key"></i> Llaves en custodia</span>
+        <h2>Nunca más entregues la llave equivocada</h2>
+        <p class="lead">Si tus clientes dejan la llave para mover el carro, tómale una foto y anota el gancho. En la salida la ves con un toque.</p>
+        <ul>
+          <li><i class="bi bi-check2"></i>Pantalla con todas las llaves ordenadas por gancho.</li>
+          <li><i class="bi bi-check2"></i>La foto se elimina sola al cobrar la salida.</li>
+          <li><i class="bi bi-check2"></i>Se activa solo en los parqueos que lo necesitan.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Cómo funciona -->
+<section class="section" id="como-funciona">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">Cómo funciona</span>
+      <h2 style="margin-top:16px">Empiezas a cobrar hoy mismo</h2>
+    </div>
+    <div class="steps">
+      <div class="step reveal"><div class="n">1</div><h3>Déjanos tus datos</h3><p>Llena el formulario en menos de un minuto. No pedimos tarjeta.</p></div>
+      <div class="step reveal"><div class="n">2</div><h3>Te configuramos todo</h3><p>Te escribimos por WhatsApp y dejamos listo tu parqueo, tus tarifas y tus empleados.</p></div>
+      <div class="step reveal"><div class="n">3</div><h3>Pruébalo 15 días</h3><p>Usa todas las funciones, con 500 escaneos de placas con IA, y decide con tus propios números.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- Planes -->
+<section class="section" id="planes" style="background:var(--bg-2)">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">Planes</span>
+      <h2 style="margin-top:16px">Un precio claro por parqueo, sin sorpresas</h2>
+      <p class="lead">Todas las funciones en todos los planes. Solo cambia cuántas placas puedes leer con IA cada mes.</p>
+    </div>
+
+    <div class="trial-banner reveal"><i class="bi bi-gift-fill"></i><span><b>15 días gratis con todo activo</b> y 500 escaneos de IA para que lo pruebes completo.</span></div>
+
+    {% if plans %}
+    <div class="plans plans-{{ plans|length }}">
+      {% for card in plans %}
+      <div class="plan reveal{% if card.plan.featured %} pop{% endif %}">
+        {% if card.plan.featured %}<span class="pop-badge">⭐ Más popular</span>{% endif %}
+        <h3>{{ card.plan.name }}</h3>
+        <p class="for">{{ card.plan.tagline }}</p>
+        <div class="price"><b>${{ card.price }}</b><span>/mes</span></div>
+        {% if card.scans %}
+          <span class="ai-chip"><i class="bi bi-camera"></i> {{ card.scans_label }} escaneos IA</span>
+        {% else %}
+          <span class="ai-chip off"><i class="bi bi-camera"></i> Sin escaneo IA</span>
+        {% endif %}
+        <ul>
+          {% if card.is_base %}
+          <li><i class="bi bi-check-lg"></i>Entradas, salidas y ticket QR</li>
+          <li><i class="bi bi-check-lg"></i>Buscador de placas y dictado por voz</li>
+          <li><i class="bi bi-check-lg"></i>Suscripciones y tarifas</li>
+          <li><i class="bi bi-check-lg"></i>Reportes PDF y Excel</li>
+          <li><i class="bi bi-check-lg"></i>Llaves y baños</li>
+          {% else %}
+          <li><i class="bi bi-check-lg"></i>Todo lo del {{ base_plan.name }}</li>
+          {% endif %}
+          {% if card.scans %}
+          <li><i class="bi bi-check-lg"></i>Lectura de placas con IA</li>
+          <li><i class="bi bi-check-lg"></i>~{{ card.cars_per_day }} carros por día con IA</li>
+          {% endif %}
+        </ul>
+        <a href="#registro" class="btn {% if card.plan.featured %}btn-primary{% else %}btn-ghost{% endif %} btn-block" data-plan="{{ card.plan.pk }}">Probar gratis</a>
+      </div>
+      {% endfor %}
+    </div>
+    {% if top_ups %}
+    <p class="plans-note">¿Te quedaste sin escaneos a mitad de mes? Recarga
+      {% for pkg in top_ups %}{% if not forloop.first %}{% if forloop.last %} o {% else %}, {% endif %}{% endif %}{{ pkg.scans_label }} por ${{ pkg.price|floatformat:"-2" }}{% endfor %}.
+      Precios en USD por parqueo.</p>
+    {% else %}
+    <p class="plans-note">Precios en USD por parqueo.</p>
+    {% endif %}
+    {% else %}
+    <p class="plans-note reveal" style="font-size:16px">Escríbenos y te enviamos los planes y precios para tu parqueo.</p>
+    {% endif %}
+  </div>
+</section>
+
+<!-- Preguntas -->
+<section class="section" id="preguntas">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">Preguntas frecuentes</span>
+      <h2 style="margin-top:16px">Resolvemos tus dudas</h2>
+    </div>
+    <div class="faq">
+      <details class="reveal"><summary>¿Tengo que instalar algo o comprar equipo?<i class="bi bi-plus-lg"></i></summary><p>No. ParkOps funciona desde el navegador de cualquier celular, tablet o computadora, y se puede instalar como app en la pantalla de inicio.</p></details>
+      <details class="reveal"><summary>¿Qué pasa cuando terminan los 15 días?<i class="bi bi-plus-lg"></i></summary><p>Te contactamos para que elijas el plan que mejor te queda. Si decides no continuar, no se te cobra nada.</p></details>
+      <details class="reveal"><summary>¿Qué es un escaneo de IA?<i class="bi bi-plus-lg"></i></summary><p>Cada vez que tomas una foto a una placa para que la app la lea cuenta como un escaneo. Escribir la placa, dictarla por voz o escanear el ticket QR no consume escaneos.</p></details>
+      <details class="reveal"><summary>¿Qué pasa si se me acaban los escaneos?<i class="bi bi-plus-lg"></i></summary><p>Solo se desactiva el botón de escanear placas; todo lo demás sigue funcionando. Puedes hacer una recarga cuando quieras.</p></details>
+      <details class="reveal"><summary>¿Puedo cambiar de plan?<i class="bi bi-plus-lg"></i></summary><p>Sí, puedes subir o bajar de plan cuando lo necesites.</p></details>
+      <details class="reveal"><summary>Tengo más de un parqueo, ¿me sirve?<i class="bi bi-plus-lg"></i></summary><p>Sí. Manejas varios parqueos desde una misma cuenta y cada uno tiene sus propias tarifas, empleados y reportes.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- Registro -->
+<section class="section" id="registro">
+  <div class="wrap">
+    <div class="signup">
+      <div class="reveal" style="position:relative">
+        <span class="eyebrow"><i class="bi bi-rocket-takeoff"></i> Empieza hoy</span>
+        <h2>Prueba ParkOps 15 días gratis</h2>
+        <p class="lead">Déjanos tus datos y te escribimos por WhatsApp para dejar tu parqueo listo.</p>
+        <ul class="perks">
+          <li><i class="bi bi-check-circle-fill"></i>Todas las funciones activas</li>
+          <li><i class="bi bi-check-circle-fill"></i>500 escaneos de placas con IA</li>
+          <li><i class="bi bi-check-circle-fill"></i>Configuración de tarifas y empleados sin costo</li>
+          <li><i class="bi bi-check-circle-fill"></i>Sin tarjeta y sin compromiso</li>
+        </ul>
+      </div>
+
+      <form class="form reveal" id="signupForm" method="post" action="{% url 'lead_create' %}#registro" novalidate>
+        {% csrf_token %}
+        <div id="formBody"{% if sent %} style="display:none"{% endif %}>
+          <h3>Solicita tu prueba</h3>
+          <p class="sub">Toma menos de un minuto.</p>
+          <div class="form-error" id="formError"{% if not form.non_field_errors %} hidden{% endif %}>{{ form.non_field_errors|first }}</div>
+          <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <div class="field{% if form.business_name.errors %} err{% endif %}">
+            <label for="f-biz">Nombre del parqueo</label>
+            <input id="f-biz" name="business_name" value="{{ form.business_name.value|default_if_none:'' }}" placeholder="Ej. Parqueo Central" autocomplete="organization" maxlength="120" required>
+            <div class="msg">{{ form.business_name.errors|first|default:"Escribe el nombre de tu parqueo." }}</div>
+          </div>
+          <div class="field{% if form.contact_name.errors %} err{% endif %}">
+            <label for="f-name">Tu nombre</label>
+            <input id="f-name" name="contact_name" value="{{ form.contact_name.value|default_if_none:'' }}" placeholder="Nombre y apellido" autocomplete="name" maxlength="120" required>
+            <div class="msg">{{ form.contact_name.errors|first|default:"Escribe tu nombre." }}</div>
+          </div>
+          <div class="field{% if form.whatsapp.errors %} err{% endif %}">
+            <label for="f-wa">WhatsApp</label>
+            <div class="phone-in"><span>+503</span><input id="f-wa" name="whatsapp" value="{{ form.whatsapp.value|default_if_none:'' }}" inputmode="tel" placeholder="7000 0000" autocomplete="tel-national" required></div>
+            <div class="msg">{{ form.whatsapp.errors|first|default:"Escribe un número de 8 dígitos." }}</div>
+          </div>
+          {% if plans %}
+          <div class="field">
+            <label for="f-plan">Plan que te interesa</label>
+            <select id="f-plan" name="plan">
+              <option value="">Aún no sé, quiero que me asesoren</option>
+              {% for card in plans %}
+              <option value="{{ card.plan.pk }}"{% if form.plan.value|stringformat:"s" == card.plan.pk|stringformat:"s" %} selected{% endif %}>{{ card.plan.name }} · ${{ card.price }}/mes</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+          <button class="btn btn-primary btn-block" type="submit" id="signupBtn">Solicitar mi prueba gratis <i class="bi bi-arrow-right"></i></button>
+          <p class="legal">Solo usaremos tus datos para contactarte sobre ParkOps.</p>
+        </div>
+        <div class="done" id="formDone"{% if sent %} style="display:block"{% endif %}>
+          <div class="ok"><i class="bi bi-check-lg"></i></div>
+          <h3>¡Solicitud recibida!</h3>
+          <p>Te escribiremos por WhatsApp para configurar <b id="doneBiz">{{ sent|default:"tu parqueo" }}</b> y activar tu prueba de 15 días.</p>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot">
+    <a href="#" class="logo"><span class="logo-mark"><i class="bi bi-p-square-fill"></i></span>ParkOps</a>
+    <nav>
+      <a href="#funciones">Funciones</a>
+      <a href="#planes">Planes</a>
+      <a href="#registro">Prueba gratis</a>
+      <a href="{% url 'login' %}">Iniciar sesión</a>
+    </nav>
+    <span>© {% now "Y" %} ParkOps</span>
+  </div>
+</footer>
+
+{% if whatsapp_url %}
+<a class="wa" href="{{ whatsapp_url }}" target="_blank" rel="noopener" aria-label="Escríbenos por WhatsApp"><i class="bi bi-whatsapp"></i></a>
+{% endif %}
+
+<script src="{% static 'landing/landing.js' %}"></script>
+</body>
+</html>

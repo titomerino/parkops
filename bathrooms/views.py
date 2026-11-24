@@ -8,6 +8,9 @@ from shell.decorators import perm_required
 from .models import BathroomFee, BathroomEntry
 from .forms import BathroomFeeForm
 from tenants.decorators import bathrooms_enabled_required
+from audit.services import Action, diff, record as audit, snapshot
+
+FEE_AUDIT_FIELDS = ["name", "amount", "color", "state"]
 
 
 @perm_required('bathrooms.view_bathroomfee')
@@ -54,6 +57,7 @@ def entry_bathroom_register_view(request, fee_id):
         fee=fee
     )
     bathroom_entry.save()
+    audit(request, Action.BATHROOM_ENTRY, f"Cobró baño · {fee.name} ${fee.amount:.2f}", target=fee.name)
     messages.success(
         request,
         f"El acceso para {bathroom_entry.fee.name} se guardó correctamente."
@@ -70,6 +74,10 @@ def fee_register_view(request):
         form = BathroomFeeForm(request.POST, parking=request.parking)
         if form.is_valid():
             bathroom_fee = form.save()
+            audit(
+                request, Action.BATHROOM_FEE_CREATED,
+                f"Creó la tarifa de baño {bathroom_fee.name} · ${bathroom_fee.amount:.2f}", target=bathroom_fee.name,
+            )
             messages.success(
                 request,
                 f"La tarifa {bathroom_fee.name} se guardó correctamente."
@@ -89,9 +97,17 @@ def fee_edit_view(request, fee_id):
     bathroom_fee = get_object_or_404(BathroomFee, pk=fee_id, parking=request.parking)
 
     if request.method == 'POST':
+        before = snapshot(bathroom_fee, FEE_AUDIT_FIELDS)
         form = BathroomFeeForm(request.POST, instance=bathroom_fee)
         if form.is_valid():
             form.save()
+            changes = diff(before, snapshot(bathroom_fee, FEE_AUDIT_FIELDS))
+            if changes:
+                audit(
+                    request, Action.BATHROOM_FEE_EDITED,
+                    f"Editó la tarifa de baño {bathroom_fee.name}: " + ", ".join(c["field"].lower() for c in changes),
+                    target=bathroom_fee.name, changes=changes,
+                )
             messages.success(
                 request,
                 f"La tarifa {bathroom_fee.name} se actualizó correctamente."
@@ -117,6 +133,10 @@ def toggle_fee_state_view(request, fee_id):
     bathroom_fee = get_object_or_404(BathroomFee, pk=fee_id, parking=request.parking)
     bathroom_fee.state = not bathroom_fee.state
     bathroom_fee.save()
+    audit(
+        request, Action.BATHROOM_FEE_STATUS,
+        f"{'Activó' if bathroom_fee.state else 'Desactivó'} la tarifa de baño {bathroom_fee.name}", target=bathroom_fee.name,
+    )
     state_text = "activada" if bathroom_fee.state else "desactivada"
     messages.success(
         request,

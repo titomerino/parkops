@@ -57,7 +57,7 @@
     <!-- Llaves en custodia -->
     <div class="col-12 col-md-6 col-lg-4">
         <a href="{% url 'keys_list' %}"
-            class="card bg-warning bg-opacity-75 text-dark border-0 shadow-sm rounded-4 text-decoration-none h-100">
+            class="card po-tile po-tile-gold shadow-sm rounded-4 text-decoration-none h-100">
             <div class="card-body d-flex align-items-center py-2 px-3">
                 <i class="bi bi-key-fill fs-4 me-3"></i>
                 <div>
@@ -73,6 +73,51 @@
     <!-- Baños -->
     <div class="col-12 col-md-6 col-lg-4">
         {% include 'partials/_bathrooms_principal_access_button.html' %}
+    </div>
+    {% endif %}
+
+    {% if perms.parking.change_fee and current_parking %}
+    <!-- Tarifas del parqueo -->
+    <div class="col-12 col-md-6 col-lg-4">
+        <a href="{% url 'fees_list' %}" class="card po-tile shadow-sm rounded-4 text-decoration-none h-100">
+            <div class="card-body d-flex align-items-center py-2 px-3">
+                <i class="bi bi-cash-stack fs-4 me-3"></i>
+                <div>
+                    <div class="fw-semibold">Tarifas</div>
+                    <small class="opacity-75">Precios por tiempo</small>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+
+    {% if perms.tenants.manage_employees and current_parking %}
+    <!-- Empleados: solo quien administra el parqueo -->
+    <div class="col-12 col-md-6 col-lg-4">
+        <a href="{% url 'employees_list' %}" class="card po-tile shadow-sm rounded-4 text-decoration-none h-100">
+            <div class="card-body d-flex align-items-center py-2 px-3">
+                <i class="bi bi-people-fill fs-4 me-3"></i>
+                <div>
+                    <div class="fw-semibold">Empleados</div>
+                    <small class="opacity-75">Usuarios y accesos</small>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+
+    {% if perms.audit.view_auditevent and current_parking %}
+    <!-- Auditoría: quién hizo qué -->
+    <div class="col-12 col-md-6 col-lg-4">
+        <a href="{% url 'audit_list' %}" class="card po-tile shadow-sm rounded-4 text-decoration-none h-100">
+            <div class="card-body d-flex align-items-center py-2 px-3">
+                <i class="bi bi-shield-check fs-4 me-3"></i>
+                <div>
+                    <div class="fw-semibold">Auditoría</div>
+                    <small class="opacity-75">Quién hizo qué</small>
+                </div>
+            </div>
+        </a>
     </div>
     {% endif %}
 

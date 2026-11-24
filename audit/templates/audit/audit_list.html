@@ -1,0 +1,158 @@
+{% extends "shell/base.html" %}
+
+{% block title %}ParkOps / Auditoría{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+    <h2 class="h6 mb-0">Auditoría de {{ current_parking.name }}</h2>
+    <button class="btn btn-sm rounded-pill text-nowrap {% if filtered %}btn-success{% else %}btn-outline-light{% endif %}"
+            data-bs-toggle="collapse" data-bs-target="#auditFilters" aria-expanded="false">
+        <i class="bi bi-funnel me-1"></i>Filtros
+    </button>
+</div>
+
+<!-- Filtros -->
+<div class="collapse{% if filtered %} show{% endif %}" id="auditFilters">
+    <form method="get" class="card bg-dark text-light border-0 rounded-4 mb-3">
+        <div class="card-body row g-2">
+            <div class="col-6 col-md-3">
+                <label class="form-label small text-muted mb-1" for="desde">Desde</label>
+                <input type="date" class="form-control" id="desde" name="desde" value="{{ date_from|date:'Y-m-d' }}">
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small text-muted mb-1" for="hasta">Hasta</label>
+                <input type="date" class="form-control" id="hasta" name="hasta" value="{{ date_to|date:'Y-m-d' }}">
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small text-muted mb-1" for="usuario">Usuario</label>
+                <select class="form-select" id="usuario" name="usuario">
+                    <option value="">Todos</option>
+                    {% for name in usernames %}
+                    <option value="{{ name }}"{% if name == username %} selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small text-muted mb-1" for="tipo">Tipo</label>
+                <select class="form-select" id="tipo" name="tipo">
+                    <option value="">Todo</option>
+                    {% for key, label in categories %}
+                    <option value="{{ key }}"{% if key == category %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12">
+                <input type="search" class="form-control" name="buscar" value="{{ text }}"
+                       placeholder="Placa, tarifa o empleado" autocomplete="off">
+            </div>
+            <div class="col-6">
+                <a href="{% url 'audit_list' %}" class="btn btn-outline-light rounded-pill w-100">Limpiar</a>
+            </div>
+            <div class="col-6">
+                <button class="btn btn-success rounded-pill w-100"><i class="bi bi-search me-1"></i>Buscar</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<div class="small text-muted mb-2">
+    {{ date_from|date:"d/m/Y" }} – {{ date_to|date:"d/m/Y" }} · {{ page.paginator.count }} evento{{ page.paginator.count|pluralize }}
+</div>
+
+{% regroup page.object_list by day as days %}
+{% for day in days %}
+<div class="small fw-semibold text-muted mt-3 mb-2">{{ day.grouper }}</div>
+<div class="row g-2 align-items-start">
+    {% for event in day.list %}
+    <div class="col-12 col-lg-6">
+        <div class="card bg-dark text-light border-0 shadow-sm rounded-4{% if event.warning %} border-start border-3 border-warning{% endif %}">
+            <div class="card-body d-flex align-items-start gap-3 py-2 px-3" role="button"
+                 data-bs-toggle="collapse" data-bs-target="#event-{{ event.pk }}" aria-expanded="false">
+                <div class="rounded-circle d-grid flex-shrink-0 mt-1" style="width:36px;height:36px;place-items:center;background:var(--po-surface-2);">
+                    <i class="bi {{ event.icon }}"></i>
+                </div>
+                <div class="flex-grow-1 min-w-0">
+                    <div class="small">{{ event.summary }}</div>
+                    <div class="small text-muted">
+                        <i class="bi bi-person me-1"></i>{{ event.username|default:"—" }} · {{ event.local|date:"H:i" }}
+                    </div>
+                </div>
+                <i class="bi bi-chevron-down text-muted mt-2"></i>
+            </div>
+
+            <div class="collapse" id="event-{{ event.pk }}">
+                <div class="px-3 pb-3 pt-2 border-top small">
+                    <div class="d-flex justify-content-between flex-wrap gap-2 mb-2">
+                        <div><span class="text-muted">Acción</span><br><strong>{{ event.get_action_display }}</strong></div>
+                        <div><span class="text-muted">Fecha</span><br><strong>{{ event.local|date:"d/m/Y H:i:s" }}</strong></div>
+                        {% if event.ip %}<div><span class="text-muted">IP</span><br><strong>{{ event.ip }}</strong></div>{% endif %}
+                    </div>
+                    {% if event.changes %}
+                    <div class="bg-black-custom rounded-3 px-3 py-2">
+                        {% for change in event.changes %}
+                        <div class="py-1{% if not forloop.last %} border-bottom border-secondary border-opacity-25{% endif %}">
+                            <div class="text-muted">{{ change.field }}</div>
+                            <div><span class="text-danger text-decoration-line-through">{{ change.before }}</span>
+                                <i class="bi bi-arrow-right mx-1 text-muted"></i>
+                                <span class="text-success fw-semibold">{{ change.after }}</span></div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% empty %}
+<div class="card bg-dark text-light border-0 rounded-4">
+    <div class="card-body text-center text-muted py-5">
+        <i class="bi bi-shield-check fs-1 d-block mb-2"></i>
+        No hay movimientos en estas fechas.
+        <div class="small mt-1">Aquí verás quién registró, cobró, editó o eliminó cada cosa.</div>
+    </div>
+</div>
+{% endfor %}
+
+{% if page.has_other_pages %}
+<div class="d-flex justify-content-between align-items-center mt-3">
+    {% if page.has_previous %}
+    <a class="btn btn-sm btn-outline-light rounded-pill" href="?{{ query }}{% if query %}&{% endif %}pagina={{ page.previous_page_number }}"><i class="bi bi-chevron-left"></i> Más recientes</a>
+    {% else %}<span></span>{% endif %}
+    <span class="small text-muted">Página {{ page.number }} de {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}
+    <a class="btn btn-sm btn-outline-light rounded-pill" href="?{{ query }}{% if query %}&{% endif %}pagina={{ page.next_page_number }}">Anteriores <i class="bi bi-chevron-right"></i></a>
+    {% else %}<span></span>{% endif %}
+</div>
+{% endif %}
+
+<div class="small text-muted text-center mt-4">
+    <i class="bi bi-lock me-1"></i>Los registros no se pueden editar ni borrar. Se guardan 12 meses.
+</div>
+
+{% endblock %}
+
+{% block menu_bottom %}
+<!-- Barra inferior del módulo de Auditoría -->
+<nav class="position-fixed bottom-0 start-0 w-100 z-3">
+    <div class="bg-dark border-top border-secondary shadow-lg">
+        <div class="d-flex justify-content-around align-items-center text-center py-2">
+            <a href="{% url 'dashboard' %}" class="text-decoration-none">
+                <div class="d-flex flex-column align-items-center px-3">
+                    <i class="bi bi-house-door fs-4 text-light"></i>
+                    <small class="text-light">Inicio</small>
+                </div>
+            </a>
+            <div class="vr text-secondary opacity-50" style="height:32px;"></div>
+            <a href="{% url 'audit_list' %}" class="text-decoration-none">
+                <div class="d-flex flex-column align-items-center px-3">
+                    <i class="bi bi-shield-check fs-4 text-success"></i>
+                    <small class="text-light">Auditoría</small>
+                </div>
+            </a>
+        </div>
+    </div>
+</nav>
+{% endblock %}

@@ -1,0 +1,51 @@
+<script>
+// Rangos de la tarifa: agregar, quitar y mostrar «90 → 1 h 30 min».
+// Delegado en document porque el formulario también se carga dentro de la modal.
+(function () {
+    function label(input) {
+        const out = input.closest("[data-range-row]").querySelector("[data-minute-label]");
+        const value = parseInt(input.value, 10);
+        if (isNaN(value) || value < 60) { out.textContent = value === 0 ? "al entrar" : "min"; return; }
+        const h = Math.floor(value / 60), m = value % 60;
+        out.textContent = m ? `${h} h ${m} min` : `${h} h`;
+    }
+    function labelAll(root) {
+        root.querySelectorAll("[data-range-row] input[name$='-start_minute']").forEach(label);
+    }
+
+    document.addEventListener("input", (event) => {
+        if (event.target.matches("[data-range-row] input[name$='-start_minute']")) label(event.target);
+    });
+
+    document.addEventListener("click", (event) => {
+        const add = event.target.closest("[data-add-range]");
+        if (add) {
+            const form = add.closest("form");
+            const total = form.querySelector("input[name$='-TOTAL_FORMS']");
+            const index = parseInt(total.value, 10);
+            const html = form.querySelector("template[data-range-template]").innerHTML.replace(/__prefix__/g, index);
+            const rows = form.querySelector("[data-range-rows]");
+            rows.insertAdjacentHTML("beforeend", html);
+            total.value = index + 1;
+            // Sugiere el siguiente: 30 minutos después del último
+            const minutes = [...rows.querySelectorAll("[data-range-row]:not([hidden]) input[name$='-start_minute']")]
+                .map((i) => parseInt(i.value, 10)).filter((n) => !isNaN(n));
+            const input = rows.lastElementChild.querySelector("input[name$='-start_minute']");
+            input.value = minutes.length ? Math.max(...minutes) + 30 : 0;
+            label(input);
+            rows.lastElementChild.querySelector("input[name$='-amount']").focus();
+            return;
+        }
+        const remove = event.target.closest("[data-remove-range]");
+        if (remove) {
+            const row = remove.closest("[data-range-row]");
+            row.querySelector("input[name$='-DELETE']").checked = true;
+            row.hidden = true;
+        }
+    });
+
+    // Etiquetas de los rangos al abrir el formulario (página o modal)
+    document.addEventListener("DOMContentLoaded", () => labelAll(document));
+    document.addEventListener("entrymodal:render", (event) => labelAll(event.target));
+})();
+</script>

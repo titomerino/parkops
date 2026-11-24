@@ -23,6 +23,9 @@ python manage.py collectstatic --noinput
 echo "📦 Ejecutando migraciones..."
 python manage.py migrate --noinput
 
+echo "🧹 Borrando auditoría con más de 12 meses..."
+python manage.py purge_audit || echo "⚠️ No se pudo limpiar la auditoría (se intenta en el próximo despliegue)"
+
 echo "👑 Creando superuser si no existe..."
 python manage.py shell <<EOF
 from django.contrib.auth import get_user_model

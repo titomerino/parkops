@@ -1,0 +1,52 @@
+{# Tarjeta del formulario de empleado: página completa o modal (modal=True). Recibe: form, creating, employee #}
+<div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+    <div class="card-body p-4">
+        <h2 class="h5 mb-3">
+            {% if creating %}Nuevo empleado{% else %}{{ employee.get_full_name|default:employee.username }}{% endif %}
+        </h2>
+
+        <form method="post" action="{% if creating %}{% url 'employee_create' %}{% else %}{% url 'employee_edit' employee.pk %}{% endif %}" novalidate>
+            {% csrf_token %}
+            {% for error in form.non_field_errors %}<div class="alert alert-danger small">{{ error }}</div>{% endfor %}
+
+            <div class="row g-2">
+                <div class="col-6">{% include 'tenants/_form_field.html' with field=form.first_name %}</div>
+                <div class="col-6">{% include 'tenants/_form_field.html' with field=form.last_name %}</div>
+            </div>
+            {% include 'tenants/_form_field.html' with field=form.username %}
+            {% include 'tenants/_form_field.html' with field=form.email %}
+
+            <hr>
+            <div class="small text-muted mb-2">Rol y acceso</div>
+            {% include 'tenants/_form_field.html' with field=form.role %}
+            {% include 'tenants/_form_field.html' with field=form.is_active %}
+            {% if form.can_delete_entries %}
+                {% include 'tenants/_form_field.html' with field=form.can_delete_entries %}
+            {% endif %}
+
+            {% if creating %}
+            <div class="alert alert-info small mb-3">
+                <i class="bi bi-info-circle me-1"></i>
+                Al guardar te mostramos una contraseña temporal para dársela. Al entrar, el empleado crea la suya.
+            </div>
+            {% endif %}
+
+            <button class="btn btn-success w-100 rounded-pill">
+                <i class="bi bi-check-lg me-1"></i>{% if creating %}Crear empleado{% else %}Guardar cambios{% endif %}
+            </button>
+        </form>
+
+        {% if not creating and not modal %}
+        {# En la modal esto es el botón «Contraseña» de la tarjeta del empleado #}
+        <hr class="my-4">
+        <form method="post" action="{% url 'employee_reset_password' employee.pk %}"
+              onsubmit="return confirm('¿Generar una contraseña temporal para {{ employee.username|escapejs }}? La actual dejará de funcionar.');">
+            {% csrf_token %}
+            <div class="small text-muted mb-2">¿Olvidó su contraseña?</div>
+            <button class="btn btn-outline-warning w-100 rounded-pill">
+                <i class="bi bi-key me-1"></i>Generar contraseña temporal
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>

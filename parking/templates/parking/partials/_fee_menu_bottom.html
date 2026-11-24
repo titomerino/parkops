@@ -1,0 +1,30 @@
+<!-- Barra inferior del módulo de Tarifas -->
+<nav class="position-fixed bottom-0 start-0 w-100 z-3">
+    <div class="bg-dark border-top border-secondary shadow-lg">
+        <div class="d-flex justify-content-around align-items-center text-center py-2">
+            <a href="{% url 'dashboard' %}" class="text-decoration-none">
+                <div class="d-flex flex-column align-items-center px-3">
+                    <i class="bi bi-house-door fs-4 text-light"></i>
+                    <small class="text-light">Inicio</small>
+                </div>
+            </a>
+            <div class="vr text-secondary opacity-50" style="height:32px;"></div>
+            <a href="{% url 'fees_list' %}" class="text-decoration-none">
+                <div class="d-flex flex-column align-items-center px-3">
+                    <i class="bi bi-cash-stack fs-4 {% if request.resolver_match.url_name == 'fees_list' %}text-success{% else %}text-light{% endif %}"></i>
+                    <small class="text-light">Tarifas</small>
+                </div>
+            </a>
+            {% if perms.parking.add_fee %}
+            <div class="vr text-secondary opacity-50" style="height:32px;"></div>
+            {# En la lista abre la modal; en otras pantallas, la página #}
+            <a href="{% url 'fee_create' %}"{% if request.resolver_match.url_name == 'fees_list' %} data-entry-modal="{% url 'fee_create' %}"{% endif %} class="text-decoration-none">
+                <div class="d-flex flex-column align-items-center px-3">
+                    <i class="bi bi-plus-circle fs-4 {% if request.resolver_match.url_name == 'fee_create' %}text-success{% else %}text-light{% endif %}"></i>
+                    <small class="text-light">Nueva tarifa</small>
+                </div>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</nav>

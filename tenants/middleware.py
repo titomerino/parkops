@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth import logout
 from django.shortcuts import redirect
+from django.urls import reverse
 
 from tenants.models import Parking
 
@@ -57,5 +58,10 @@ class CurrentParkingMiddleware:
                 logout(request)
                 messages.error(request, reason)
                 return redirect("login")
+
+            # Contraseña temporal (se la asignó el dueño o el administrador): primero una propia
+            membership = getattr(request.user, "parking_membership", None)
+            if membership and membership.must_change_password and request.path != reverse("account"):
+                return redirect("account")
 
         return self.get_response(request)

@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.utils.timezone import now, localtime
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -17,7 +18,7 @@ import qrcode, base64
 
 from payment.services.payment_service import notify_pending_payments
 
-from .models import  Entry, KeyDeposit, PlatePolicy, Range
+from .models import  Entry, Fee, KeyDeposit, PlatePolicy, Range
 from .forms import (
     EntryForm, 
     EntryEditForm, 
@@ -26,7 +27,9 @@ from .forms import (
     PlatePolicyForm, 
     ReportFilterByDayForm,
     ReportFilterByMonthForm,
-    ReportFilterByPlateForm
+    ReportFilterByPlateForm,
+    FeeForm,
+    RangeFormSet,
 )
 from parking.utils import (
     minutes_to_hours_and_minutes, format_plate,
@@ -34,11 +37,21 @@ from parking.utils import (
 )
 from parking.services import key_photo, plate_scan
 from tenants.decorators import keys_enabled_required
+from audit.services import Action, diff, record as audit, snapshot
 from parking.services.voice_plate import interpret
 from parking.services.report_service import (
     generate_day_report, generate_month_report,
     generate_plate_report
 )
+
+
+def _is_modal(request):
+    """La pantalla se pidió para mostrarse dentro de una modal (EntryModal)."""
+    return request.headers.get("X-Entry-Modal") == "1"
+
+
+def _modal_error(message, status=409):
+    return JsonResponse({"ok": False, "error": message}, status=status)
 
 
 @perm_required('parking.add_entry')
@@ -75,21 +88,39 @@ def register(request, plate=None):
             if has_subscription:
                 entry.fee = None
 
+            entry.created_by = request.user
+
             try:
                 entry.save()
-                messages.success(
-                    request,
-                    f"La entrada para {entry.plate} se guardó correctamente."
-                )
             except ValueError as e:
+                # Ya está adentro (o se registró dos veces): no hay ticket que imprimir
+                if _is_modal(request):
+                    return _modal_error(str(e))
                 messages.error(request, str(e))
+                return redirect('search_plate')
 
-            action = request.POST.get('action')
+            charge = f"suscripción {policy.get_billing_type_display().lower()}" if has_subscription else (
+                f"tarifa {entry.fee.name}" if entry.fee else "sin tarifa"
+            )
+            audit(request, Action.ENTRY_CREATED, f"Registró entrada de {entry.plate} · {charge}", target=entry.plate)
 
-            if action == 'save_print':
+            message = f"La entrada para {entry.plate} se guardó correctamente."
+            print_ticket = request.POST.get('action') == 'save_print'
+
+            if _is_modal(request):
+                return JsonResponse({
+                    "ok": True,
+                    "message": message,
+                    "entry_id": entry.id,
+                    "print": print_ticket,
+                })
+
+            messages.success(request, message)
+
+            if print_ticket:
                 # redirige a la vista de impresión
                 return redirect(f"/parking/busqueda/?entry_id={entry.id}")
-            
+
             return redirect('search_plate')
     else:
         form = EntryForm(initial={'plate': plate}, parking=request.parking)
@@ -97,7 +128,8 @@ def register(request, plate=None):
         if has_subscription and 'fee' in form.fields:
             form.fields.pop('fee')
 
-    return render(request, "parking/register.html", {
+    template = "parking/partials/_entry_register_card.html" if _is_modal(request) else "parking/register.html"
+    return render(request, template, {
         'form': form,
         'plate': plate,
         'policy': policy,
@@ -140,15 +172,27 @@ def departure(request, pk):
                 return _departure_already_registered(request, entry)
 
             entry.departure_date_hour = now()
+            entry.departure_by = request.user
 
             # Si es mensual o diario, ya no depende de fee
             if billing_type in ["MONTHLY", "DAILY"]:
                 entry.fee_id = None
 
+            # La llave se borra al dar salida: se anota en la auditoría que se entregó
+            key_hook = KeyDeposit.objects.filter(entry=entry).values_list("hook", flat=True).first()
+
             # save() congela final_minutes y final_amount al cambiar la salida
             entry.save()
 
         amount = entry.final_amount
+
+        spent_hours, spent_minutes = minutes_to_hours_and_minutes(entry.final_minutes or 0)
+        summary = f"Dio salida a {entry.plate} · cobró ${amount or 0:.2f} · {spent_hours}:{spent_minutes} h"
+        if billing_type in ["MONTHLY", "DAILY"]:
+            summary += f" ({'mensual' if billing_type == 'MONTHLY' else 'diario'})"
+        if key_hook is not None:
+            summary += f" · entregó la llave{f' (gancho {key_hook})' if key_hook else ''}"
+        audit(request, Action.ENTRY_DEPARTURE, summary, target=entry.plate)
 
         if billing_type == "MONTHLY":
             msg = f"Salida registrada para {entry.plate} (Mensual — $0.00)"
@@ -157,12 +201,12 @@ def departure(request, pk):
         else:
             msg = f"Salida registrada para {entry.plate} — ${amount:.2f}"
 
-        messages.success(request, msg)
+        return_url = _pop_return_url(request, entry.pk)
 
-        return_url = safe_redirect_url(
-            request,
-            request.session.pop("departure_return_url", None)
-        )
+        if _is_modal(request):
+            return JsonResponse({"ok": True, "message": msg, "entry_id": entry.pk})
+
+        messages.success(request, msg)
         return redirect(return_url or "search_plate")
 
     form = EntryExitForm(initial={
@@ -177,7 +221,8 @@ def departure(request, pk):
     if request.parking.keys_enabled:
         key_deposit = KeyDeposit.objects.filter(entry=entry).defer("photo").first()
 
-    return render(request, "parking/departure.html", {
+    template = "parking/partials/_entry_departure_card.html" if _is_modal(request) else "parking/departure.html"
+    return render(request, template, {
         "entry": entry,
         "key_deposit": key_deposit,
         "form": form,
@@ -191,11 +236,25 @@ def departure(request, pk):
 
 def _departure_already_registered(request, entry):
     departure = localtime(entry.departure_date_hour).strftime("%d/%m/%Y %I:%M %p")
-    messages.warning(
-        request,
-        f"La entrada de {entry.plate} ya tiene salida registrada ({departure})."
-    )
+    message = f"La entrada de {entry.plate} ya tiene salida registrada ({departure})."
+
+    if _is_modal(request):
+        return _modal_error(message)
+
+    messages.warning(request, message)
     return redirect("search_plate")
+
+
+def _pop_return_url(request, pk):
+    """Página a la que se vuelve después de cobrar la salida de `pk`.
+
+    Solo vale para la entrada con la que se guardó: si se abrió la salida de
+    otro carro y no se cobró, no debe mandar a esa página.
+    """
+    saved = request.session.pop("departure_return_url", None)
+    if isinstance(saved, dict) and saved.get("pk") == pk:
+        return safe_redirect_url(request, saved.get("url"))
+    return None
 
 @login_required(login_url='login')
 def go_to_departure(request, pk):
@@ -203,9 +262,15 @@ def go_to_departure(request, pk):
     return_url = safe_redirect_url(request, request.META.get('HTTP_REFERER'))
 
     if return_url:
-        request.session['departure_return_url'] = return_url
+        request.session['departure_return_url'] = {"pk": pk, "url": return_url}
+    else:
+        request.session.pop('departure_return_url', None)
 
     return redirect('departure', pk)
+
+# Campos de la entrada que se comparan al editar (antes → después)
+ENTRY_AUDIT_FIELDS = ["plate", "entry_date_hour", "departure_date_hour", "fee", "state", "final_amount"]
+
 
 @perm_required('parking.change_entry')
 def entry_edit_view(request, pk):
@@ -214,20 +279,39 @@ def entry_edit_view(request, pk):
     entry = get_object_or_404(Entry, pk=pk, parking=request.parking)
     policy = PlatePolicy.objects.for_parking(request.parking).filter(plate=entry.plate, active=True).first()
 
+    modal = _is_modal(request)
+
     if request.method == "POST":
+        before = snapshot(entry, ENTRY_AUDIT_FIELDS)
         form = EntryEditForm(request.POST, instance=entry, parking=request.parking)
 
         if form.is_valid():
-            form.save()
+            try:
+                form.save()
+            except ValueError as e:
+                # Quitar la salida de un carro que ya volvió a entrar: dos entradas activas
+                form.add_error(None, str(e))
+            else:
+                changes = diff(before, snapshot(entry, ENTRY_AUDIT_FIELDS))
+                if changes:
+                    audit(
+                        request, Action.ENTRY_EDITED,
+                        f"Editó entrada de {entry.plate}: " + ", ".join(c["field"].lower() for c in changes),
+                        target=entry.plate, changes=changes,
+                    )
+                message = "Entrada actualizada correctamente."
+                if modal:
+                    return JsonResponse({"ok": True, "message": message, "entry_id": entry.pk})
+                messages.success(request, message)
+                return redirect('record')
 
-            messages.success(request, "Entrada actualizada correctamente.")
-            return redirect('record')
-        else:
+        if not modal:
             messages.error(request, "Corrige los errores del formulario.")
     else:
         form = EntryEditForm(instance=entry, parking=request.parking)
 
-    return render(request, "parking/entry_edit_form.html", {
+    template = "parking/partials/_entry_edit_card.html" if modal else "parking/entry_edit_form.html"
+    return render(request, template, {
         "form": form,
         "entry": entry,
         "policy": policy
@@ -257,16 +341,24 @@ def entry_delete_view(request, pk):
         single_object=True,
     )
 
+    audit(request, Action.ENTRY_DELETED, f"Eliminó entrada · {detail}", target=entry.plate)
+
     entry.delete()
 
-    messages.success(request, f"Entrada eliminada: {detail}")
+    message = f"Entrada eliminada: {detail}"
+    if _is_modal(request):
+        return JsonResponse({"ok": True, "message": message})
+
+    messages.success(request, message)
     return redirect('record')
 
 @login_required(login_url='login')
 def search_plate(request):
     """Vista principal: buscar placa y decidir flujo"""
 
-    if request.user.has_perm("parking.view_statistics_entry"):
+    modal = _is_modal(request)
+
+    if not modal and request.user.has_perm("parking.view_statistics_entry"):
         notify_pending_payments(request)
 
     form = PlateSearchForm()
@@ -282,26 +374,87 @@ def search_plate(request):
                 state=True
             ).first()
 
+            if modal:
+                # La búsqueda solo dice qué pantalla abrir en la modal
+                url = reverse('departure', args=[entry.id]) if entry else reverse('register', args=[plate])
+                return JsonResponse({"ok": True, "url": url})
+
             if entry:
                 # Existe → salida
-                save_return_url(request)
+                save_return_url(request, entry.id)
                 return redirect('departure', entry.id)
             else:
                 # No existe → entrada
                 return redirect('register', plate)
-            
+
         else:
             error_message = form.errors.get('plate')
-            
-            if error_message:
-                messages.error(request, error_message[0])
-            else:
-                messages.error(request, "Formulario inválido")
+            error_message = error_message[0] if error_message else "Formulario inválido"
+
+            if modal:
+                return _modal_error(error_message, status=400)
+
+            messages.error(request, error_message)
 
     return render(request, "parking/search_plate.html", {
         'form': form,
         'plate_scan': plate_scan_button(request.parking),
     })
+
+@login_required(login_url='login')
+def ticket_plate(request, pk):
+    """Placa del ticket escaneado: el QR solo llena el buscador.
+
+    `active` dice si el vehículo sigue adentro (si no, el ticket ya se cobró).
+    """
+    entry = Entry.objects.for_parking(request.parking).filter(pk=pk).only("plate", "state").first()
+    if not entry:
+        return _modal_error("Ese ticket no es de este parqueo.", status=404)
+    return JsonResponse({"ok": True, "plate": entry.plate, "active": entry.state})
+
+
+SUGGESTION_LIMIT = 8
+
+
+@perm_required('parking.view_entry')
+def plate_suggestions(request):
+    """Sugerencias mientras se digita una placa en la búsqueda.
+
+    Solo vehículos que están adentro (entradas activas); al elegir uno se va
+    a su salida. Las placas que no están adentro se registran con el botón.
+    """
+    q = "".join(ch for ch in request.GET.get("q", "") if ch.isalnum()).upper()[:10]
+    if len(q) < 2:
+        return JsonResponse({"results": []})
+
+    parking = request.parking
+    active = (
+        Entry.objects.for_parking(parking)
+        .filter(state=True, plate__contains=q)
+        .select_related("fee")
+        .only("plate", "entry_date_hour", "fee__name")
+    )
+    if parking.keys_enabled:
+        active = active.annotate(
+            key_hook=Subquery(KeyDeposit.objects.filter(entry=OuterRef("pk")).values("hook")[:1])
+        )
+
+    # Las que empiezan con lo digitado, primero
+    entries = sorted(active, key=lambda e: (not e.plate.startswith(q), e.plate))[:SUGGESTION_LIMIT]
+
+    return JsonResponse({"results": [
+        {
+            "plate": entry.plate,
+            "label": format_plate(entry.plate),
+            "detail": "Adentro desde " + localtime(entry.entry_date_hour).strftime("%I:%M %p")
+                      + (f" · {entry.fee.name}" if entry.fee else ""),
+            "hook": getattr(entry, "key_hook", None),
+            "url": reverse("go_to_departure", args=[entry.pk]),
+            "modal_url": reverse("departure", args=[entry.pk]),
+        }
+        for entry in entries
+    ]})
+
 
 @perm_required('parking.view_entry')
 def record(request):
@@ -314,7 +467,7 @@ def record(request):
     queryset = (
         Entry.objects.for_parking(request.parking)
         .entries_today_and_active(today)
-        .select_related("fee")
+        .select_related("fee", "created_by", "departure_by")
         .prefetch_related("fee__ranges")
         .only(
             "plate",
@@ -323,7 +476,9 @@ def record(request):
             "fee",
             "state",
             "final_minutes",
-            "final_amount"
+            "final_amount",
+            "created_by__username",
+            "departure_by__username",
         )
         .order_by("-state", "-entry_date_hour")
     )
@@ -395,7 +550,12 @@ def subscription_register(request):
         form = PlatePolicyForm(request.POST, parking=request.parking)
 
         if form.is_valid():
-            form.save()
+            policy = form.save()
+            audit(
+                request, Action.SUBSCRIPTION_CREATED,
+                f"Creó suscripción de {policy.plate} · {policy.get_billing_type_display().lower()} ${policy.amount or 0:.2f}",
+                target=policy.plate,
+            )
             messages.success(
                 request,
                 "Suscripción registrada correctamente"
@@ -413,6 +573,9 @@ def subscription_register(request):
         'form': form
     })
 
+SUBSCRIPTION_AUDIT_FIELDS = ["plate", "owner_name", "billing_type", "amount", "active"]
+
+
 @perm_required('parking.change_platepolicy')
 def subscription_edit(request, pk):
     """ Editar suscripción / política de cobro de una placa """
@@ -420,6 +583,7 @@ def subscription_edit(request, pk):
     policy = get_object_or_404(PlatePolicy, pk=pk, parking=request.parking)
 
     if request.method == 'POST':
+        before = snapshot(policy, SUBSCRIPTION_AUDIT_FIELDS)
         form = PlatePolicyForm(
             request.POST,
             instance=policy,
@@ -428,6 +592,13 @@ def subscription_edit(request, pk):
 
         if form.is_valid():
             form.save()
+            changes = diff(before, snapshot(policy, SUBSCRIPTION_AUDIT_FIELDS))
+            if changes:
+                audit(
+                    request, Action.SUBSCRIPTION_EDITED,
+                    f"Editó suscripción de {policy.plate}: " + ", ".join(c["field"].lower() for c in changes),
+                    target=policy.plate, changes=changes,
+                )
             messages.success(
                 request,
                 "Suscripción actualizada correctamente"
@@ -456,6 +627,11 @@ def toggle_subscription_active(request, pk):
     if request.method == "POST":
         policy.active = not policy.active
         policy.save()
+        audit(
+            request, Action.SUBSCRIPTION_STATUS,
+            f"{'Activó' if policy.active else 'Desactivó'} la suscripción de {policy.plate}",
+            target=policy.plate,
+        )
 
         if policy.active:
             messages.success(
@@ -471,9 +647,9 @@ def toggle_subscription_active(request, pk):
     return redirect('subscription_plate_list')
 
 ## functions ##
-def save_return_url(request):
+def save_return_url(request, pk):
     # Solo se llama desde la búsqueda: al terminar la salida se vuelve aquí
-    request.session['departure_return_url'] = request.get_full_path()
+    request.session['departure_return_url'] = {"pk": pk, "url": request.get_full_path()}
 
 @perm_required('parking.add_entry')
 def imprimir_ticket(request):
@@ -770,7 +946,9 @@ def key_save(request, entry_id):
     if upload is None and deposit is None:
         return JsonResponse({"ok": False, "error": "Toma la foto de la llave."}, status=400)
 
-    if deposit is None:
+    created = deposit is None
+    old_hook = None if created else deposit.hook
+    if created:
         deposit = KeyDeposit(parking=request.parking, entry=entry, created_by=request.user)
 
     if upload is not None:
@@ -781,6 +959,18 @@ def key_save(request, entry_id):
 
     deposit.hook = request.POST.get("hook", "").strip()[:10]
     deposit.save()
+
+    hook = f"gancho {deposit.hook}" if deposit.hook else "sin gancho"
+    if created:
+        audit(request, Action.KEY_RECEIVED, f"Recibió la llave de {entry.plate} · {hook}", target=entry.plate)
+    else:
+        changes = []
+        if upload is not None:
+            changes.append({"field": "Foto", "before": "anterior", "after": "nueva"})
+        if old_hook != deposit.hook:
+            changes.append({"field": "Gancho", "before": old_hook or "—", "after": deposit.hook or "—"})
+        if changes:
+            audit(request, Action.KEY_UPDATED, f"Actualizó la llave de {entry.plate} · {hook}", target=entry.plate, changes=changes)
 
     return JsonResponse({"ok": True, "hook": deposit.hook})
 
@@ -799,3 +989,136 @@ def key_photo_view(request, entry_id):
     response = HttpResponse(bytes(deposit.photo), content_type="image/jpeg")
     response["Cache-Control"] = "private, max-age=300"
     return response
+
+
+# ---------------------------------------------------------------- Tarifas
+#
+# Lista con tarjetas que se despliegan; crear, editar y activar/desactivar se
+# abren en la modal de la app (cabecera X-Entry-Modal: 1). Sin la cabecera
+# funcionan como páginas normales.
+
+def minutes_label(minutes):
+    """90 → «1 h 30 min»."""
+    hours, rest = divmod(minutes, 60)
+    if not hours:
+        return f"{rest} min"
+    return f"{hours} h {rest} min" if rest else f"{hours} h"
+
+
+def ranges_text(fee):
+    """«Al entrar $1.00 · 1 h $1.50 · …» para comparar los precios antes y después."""
+    ranges = sorted(fee.ranges.all(), key=lambda r: r.start_minute) if fee.pk else []
+    return " · ".join(
+        f"{'al entrar' if r.start_minute == 0 else minutes_label(r.start_minute)} ${r.amount:.2f}" for r in ranges
+    ) or "—"
+
+
+FEE_AUDIT_FIELDS = ["name", "description", "default", "is_active"]
+
+
+def _fee_or_404(request, pk):
+    return get_object_or_404(Fee.objects.for_parking(request.parking), pk=pk)
+
+
+@perm_required("parking.change_fee")
+def fees_list(request):
+    fees = (
+        Fee.objects.for_parking(request.parking)
+        .prefetch_related("ranges")
+        .order_by("-is_active", "-default", "name")
+    )
+    for fee in fees:
+        fee.sorted_ranges = [
+            {"label": minutes_label(r.start_minute), "amount": r.amount}
+            for r in sorted(fee.ranges.all(), key=lambda r: r.start_minute)
+        ]
+    return render(request, "parking/fees_list.html", {"fees": fees})
+
+
+@transaction.atomic
+def _save_fee(form, formset):
+    fee = form.save(commit=False)
+    if fee.default:
+        # Solo una tarifa por defecto en el parqueo
+        Fee.objects.for_parking(fee.parking).filter(default=True).exclude(pk=fee.pk).update(default=False)
+    fee.save()
+    formset.instance = fee
+    formset.save()
+    return fee
+
+
+def _fee_form(request, fee=None):
+    creating = fee is None
+    fee = fee or Fee(parking=request.parking, is_active=True)
+    data = request.POST if request.method == "POST" else None
+    before = None if creating else dict(snapshot(fee, FEE_AUDIT_FIELDS), ranges=("Precios", ranges_text(fee)))
+    form = FeeForm(data, instance=fee, parking=request.parking)
+    formset = RangeFormSet(data, instance=fee, prefix="ranges")
+
+    if creating and data is None:
+        # Arranca con el primer rango (lo que paga al entrar)
+        formset = RangeFormSet(instance=fee, prefix="ranges", queryset=Range.objects.none())
+        formset.extra = 1
+        formset.initial_extra = [{"start_minute": 0}]
+
+    if data is not None and form.is_valid() and formset.is_valid():
+        fee = _save_fee(form, formset)
+        if creating:
+            audit(request, Action.FEE_CREATED, f"Creó la tarifa {fee.name} · {ranges_text(fee)}", target=fee.name)
+        else:
+            changes = diff(before, dict(snapshot(fee, FEE_AUDIT_FIELDS), ranges=("Precios", ranges_text(fee))))
+            if changes:
+                audit(
+                    request, Action.FEE_EDITED,
+                    f"Editó la tarifa {fee.name}: " + ", ".join(c["field"].lower() for c in changes),
+                    target=fee.name, changes=changes,
+                )
+        message = f"Tarifa «{fee.name}» {'creada' if creating else 'actualizada'} correctamente."
+        if _is_modal(request):
+            return JsonResponse({"ok": True, "message": message})
+        messages.success(request, message)
+        return redirect("fees_list")
+
+    template = "parking/partials/_fee_form_card.html" if _is_modal(request) else "parking/fee_form.html"
+    return render(request, template, {"form": form, "formset": formset, "fee": fee, "creating": creating})
+
+
+@perm_required("parking.add_fee")
+def fee_create(request):
+    return _fee_form(request)
+
+
+@perm_required("parking.change_fee")
+def fee_edit(request, pk):
+    return _fee_form(request, _fee_or_404(request, pk))
+
+
+@perm_required("parking.change_fee")
+def fee_toggle_active(request, pk):
+    """Activa o desactiva la tarifa. En la modal, el GET muestra la confirmación."""
+    fee = _fee_or_404(request, pk)
+
+    if request.method == "GET":
+        if not _is_modal(request):
+            return redirect("fee_edit", pk=fee.pk)
+        return render(request, "parking/partials/_fee_confirm_card.html", {"fee": fee})
+
+    if request.method != "POST":
+        return HttpResponse(status=405)
+
+    if fee.is_active and fee.default:
+        error = "No puedes desactivar la tarifa por defecto. Elige otra por defecto primero."
+        if _is_modal(request):
+            return _modal_error(error)
+        messages.error(request, error)
+        return redirect("fees_list")
+
+    fee.is_active = not fee.is_active
+    fee.save(update_fields=["is_active"])
+    audit(request, Action.FEE_STATUS, f"{'Activó' if fee.is_active else 'Desactivó'} la tarifa {fee.name}", target=fee.name)
+    message = f"Tarifa «{fee.name}» {'activada' if fee.is_active else 'desactivada'}."
+    if _is_modal(request):
+        return JsonResponse({"ok": True, "message": message})
+    messages.success(request, message)
+    return redirect("fees_list")
+

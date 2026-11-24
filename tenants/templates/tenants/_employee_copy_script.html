@@ -1,0 +1,13 @@
+<script>
+// Botón «Copiar» de la contraseña temporal (también dentro de la modal)
+document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-copy]");
+    if (!button) return;
+    try {
+        await navigator.clipboard.writeText(button.dataset.copy);
+        button.innerHTML = '<i class="bi bi-check-lg me-1"></i>Copiado';
+    } catch (error) {
+        button.innerText = "Cópiala a mano";
+    }
+});
+</script>

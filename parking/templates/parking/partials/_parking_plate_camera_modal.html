@@ -91,7 +91,7 @@
           disabled
         >
           <i class="bi bi-check-lg me-1"></i>
-          Confirmar
+          Usar placa
         </button>
       </div>
 
@@ -444,11 +444,12 @@ const PlateCamera = (function () {
     function confirm() {
         if (!selected) return;
 
-        // Usa el formulario de búsqueda existente: mismo flujo que al digitar
+        // Solo llena el buscador: debajo aparecen las placas que coinciden
         const input = document.getElementById("plateInput");
         input.value = selected;
         close();
-        input.form.requestSubmit ? input.form.requestSubmit() : input.form.submit();
+        bootstrap.Modal.getOrCreateInstance($("plateCameraModal")).hide();
+        input.dispatchEvent(new Event("input", { bubbles: true }));
     }
 
     function close() {

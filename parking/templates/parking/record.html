@@ -23,6 +23,8 @@
                 id="plateSearch"
                 class="form-control bg-dark border border-secondary text-light rounded-end-3"
                 placeholder="Buscar placa del día..."
+                autocomplete="off"
+                inputmode="none"
                 style="box-shadow:none;"
                 maxlength="10"
             >
@@ -226,6 +228,9 @@
 </div>
 
 {% include 'parking/partials/_parking_entry_modal.html' %}
+
+<!-- teclado de placas: aparece al tocar el buscador (celulares y tablets) -->
+{% include 'parking/partials/_parking_plate_keypad.html' with pk_target="plateSearch" pk_mode="filter" %}
 
 {% if current_parking.keys_enabled %}
     {% include 'parking/partials/_parking_key_modal.html' %}

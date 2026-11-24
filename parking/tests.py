@@ -1374,3 +1374,15 @@ class TestTecladoDePlacas:
         main = html[html.index('data-pk-panel="main"'):html.index('data-pk-panel="abc"')]
         keys = set(re.findall(r'data-key="([A-Z0-9])"', main))
         assert keys == set("0123456789ABCDEFPN")
+
+
+@pytest.mark.django_db
+def test_historial_usa_el_teclado_de_placas(admin_client, make_entry):
+    make_entry(plate="P123456")
+    html = admin_client.get("/parking/historial/").content.decode()
+    assert 'data-pk-target="plateSearch"' in html and 'data-pk-mode="filter"' in html
+    keys = html[html.index('id="plateKeypad"'):html.index("<script", html.index('id="plateKeypad"'))]
+    assert "data-pk-done" in keys and "data-pk-search" not in keys   # «Listo», no «Buscar»
+
+    search = admin_client.get("/parking/busqueda/").content.decode()
+    assert 'data-pk-target="plateInput"' in search and 'data-pk-mode="search"' in search

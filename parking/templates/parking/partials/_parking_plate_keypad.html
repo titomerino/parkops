@@ -1,5 +1,10 @@
 {% comment %}
-Teclado de placas (solo celulares y tablets): reemplaza el teclado del teléfono en Buscar.
+Teclado de placas (solo celulares y tablets): reemplaza el teclado del teléfono.
+
+Se incluye con:
+- pk_target: id del campo de placa (por defecto plateInput).
+- pk_mode: "search" (Buscar: siempre visible; «Buscar» envía el formulario) o
+  "filter" (Historial: aparece al tocar el campo; filtra al escribir y «Listo» lo cierra).
 
 Diseñado con 3 meses de placas reales (sep–nov 2026, 10,964 registros):
 - 98 % empieza con P; el 1 % con C (la C del bloque A–F sirve) y casi nada con N.
@@ -11,7 +16,9 @@ El campo usa inputmode="none" para que el teléfono no abra su teclado. Con tecl
 físico (computadora, POS) se escribe normal. «⌨» cambia al teclado del teléfono y se
 recuerda en este dispositivo.
 {% endcomment %}
-<div id="plateKeypad" class="plate-keypad d-none" aria-label="Teclado de placas">
+{% firstof pk_mode "search" as mode %}
+<div id="plateKeypad" class="plate-keypad d-none" aria-label="Teclado de placas"
+     data-pk-target="{% firstof pk_target 'plateInput' %}" data-pk-mode="{{ mode }}">
   <div class="pk-main" data-pk-panel="main">
     <div class="pk-row pk-row-5">
       <button type="button" class="pk-key pk-prefix" data-key="P">P</button>
@@ -44,7 +51,7 @@ recuerda en este dispositivo.
     <div class="pk-row pk-row-5">
       <button type="button" class="pk-key pk-action" data-pk-clear aria-label="Limpiar"><i class="bi bi-x-lg"></i></button>
       <button type="button" class="pk-key" data-key="0">0</button>
-      <button type="button" class="pk-key pk-search" data-pk-search><i class="bi bi-search me-1"></i>Buscar</button>
+      {% if mode == "filter" %}<button type="button" class="pk-key pk-search" data-pk-done><i class="bi bi-check-lg me-1"></i>Listo</button>{% else %}<button type="button" class="pk-key pk-search" data-pk-search><i class="bi bi-search me-1"></i>Buscar</button>{% endif %}
     </div>
   </div>
 
@@ -62,7 +69,7 @@ recuerda en este dispositivo.
     </div>
     <div class="pk-row pk-row-5">
       <button type="button" class="pk-key pk-mode pk-span-2" data-pk-show="main">123</button>
-      <button type="button" class="pk-key pk-search pk-span-3" data-pk-search><i class="bi bi-search me-1"></i>Buscar</button>
+      {% if mode == "filter" %}<button type="button" class="pk-key pk-search pk-span-3" data-pk-done><i class="bi bi-check-lg me-1"></i>Listo</button>{% else %}<button type="button" class="pk-key pk-search pk-span-3" data-pk-search><i class="bi bi-search me-1"></i>Buscar</button>{% endif %}
     </div>
   </div>
 </div>
@@ -136,8 +143,9 @@ recuerda en este dispositivo.
 const PlateKeypad = (function () {
   const PREF_KEY = "parkops.plateKeypad.native";   // el usuario prefiere el teclado del teléfono
   const $ = (id) => document.getElementById(id);
-  const input = $("plateInput");
   const pad = $("plateKeypad");
+  const input = pad && $(pad.dataset.pkTarget);
+  const filter = pad && pad.dataset.pkMode === "filter";   // Historial: se abre al tocar el campo
   const back = $("plateKeypadReturn");
   if (!input || !pad) return null;
 
@@ -158,13 +166,26 @@ const PlateKeypad = (function () {
     document.documentElement.style.setProperty("--pk-height", pad.offsetHeight + "px");
   }
 
+  let active = false;   // el teclado de placas reemplaza al del teléfono
+
+  function setVisible(visible) {
+    pad.classList.toggle("d-none", !visible);
+    document.body.classList.toggle("pk-on", visible);
+    if (visible) layout();
+  }
+
   function enable(on) {
-    pad.classList.toggle("d-none", !on);
+    active = on;
     back.classList.toggle("d-none", on);
-    document.body.classList.toggle("pk-on", on);
     // none: el teléfono no abre su teclado; text: vuelve el del teléfono
     input.setAttribute("inputmode", on ? "none" : "text");
-    if (on) layout();
+    // En Historial solo se ve mientras se escribe
+    setVisible(on && (!filter || document.activeElement === input));
+  }
+
+  function close() {
+    setVisible(false);
+    input.blur();
   }
 
   function insert(text) {
@@ -206,7 +227,11 @@ const PlateKeypad = (function () {
       input.value = "";
       input.dispatchEvent(new Event("input", { bubbles: true }));
     } else if (key.dataset.pkShow) showPanel(key.dataset.pkShow);
-    else if (key.hasAttribute("data-pk-search")) {
+    else if (key.hasAttribute("data-pk-done")) {
+      showPanel("main");
+      close();
+      return;
+    } else if (key.hasAttribute("data-pk-search")) {
       showPanel("main");
       input.form.requestSubmit();
       return;
@@ -225,6 +250,16 @@ const PlateKeypad = (function () {
       if (key) key.classList.remove("pressed");
     });
   });
+
+  if (filter) {
+    // Historial: al tocar el campo aparece; al tocar fuera (la lista, los filtros) se cierra
+    input.addEventListener("focus", () => { if (active) setVisible(true); });
+    document.addEventListener("pointerdown", (event) => {
+      if (!active || pad.classList.contains("d-none")) return;
+      if (pad.contains(event.target) || event.target === input) return;
+      close();
+    });
+  }
 
   back.addEventListener("click", () => {
     savePreference(false);

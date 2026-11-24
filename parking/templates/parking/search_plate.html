@@ -45,6 +45,8 @@
               required
               autofocus
               autocomplete="off"
+              inputmode="none"
+              enterkeyhint="search"
               role="combobox"
               aria-autocomplete="list"
               aria-expanded="false"
@@ -78,8 +80,10 @@
       {% include 'parking/partials/_parking_qr_scanner.html' %}
 
       <!-- Botón -->
+      <!-- Con el teclado de placas, «Buscar» está en el teclado -->
       <button
         type="submit"
+        data-pk-hide
         class="btn btn-success w-100 rounded-pill shadow-sm d-flex align-items-center justify-content-center gap-2"
         style="transition: transform .1s ease, box-shadow .1s ease;"
         onmousedown="this.style.transform='scale(0.98)'; this.style.boxShadow='0 0 0 0 rgba(0,0,0,0)';"
@@ -93,6 +97,9 @@
 
   </div>
 </div>
+
+<!-- teclado de placas (celulares y tablets) -->
+{% include 'parking/partials/_parking_plate_keypad.html' %}
 
 <!-- modal de impresion -->
 {% include 'parking/partials/_parking_print_ticket_modal.html' %}

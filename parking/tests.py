@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 
 import pytest
@@ -1270,7 +1271,9 @@ class TestTicketQrLlenaElBuscador:
 
     def test_camara_voz_y_qr_solo_llenan_el_buscador(self, admin_client, parking):
         html = admin_client.get("/parking/busqueda/").content.decode()
-        assert "requestSubmit" not in html
+        # Solo la tecla «Buscar» del teclado de placas envía la búsqueda
+        keypad = html[html.index('id="plateKeypad"'):html.index("window.PlateKeypad = PlateKeypad;")]
+        assert "requestSubmit" not in html.replace(keypad, "")
         assert "Usar placa" in html
 
 
@@ -1354,3 +1357,32 @@ class TestBuscarScrollYLimpiar:
     def test_boton_limpiar_en_el_buscador(self, admin_client):
         html = admin_client.get("/parking/busqueda/").content.decode()
         assert 'id="plateClear"' in html and 'aria-label="Limpiar placa"' in html
+
+
+@pytest.mark.django_db
+class TestTecladoDePlacas:
+
+    def test_buscar_trae_el_teclado_y_no_abre_el_del_telefono(self, admin_client):
+        html = admin_client.get("/parking/busqueda/").content.decode()
+        assert 'id="plateKeypad"' in html
+        assert 'inputmode="none"' in html          # el JS lo cambia a text sin pantalla táctil
+        assert "data-pk-hide" in html               # «Ingresar / buscar» se oculta con el teclado
+
+    def test_teclas_principales_cubren_las_placas_reales(self, admin_client):
+        """0–9, A–F, P y N en la pantalla principal; sin O ni I (se confunden con 0 y 1)."""
+        html = admin_client.get("/parking/busqueda/").content.decode()
+        main = html[html.index('data-pk-panel="main"'):html.index('data-pk-panel="abc"')]
+        keys = set(re.findall(r'data-key="([A-Z0-9])"', main))
+        assert keys == set("0123456789ABCDEFPN")
+
+
+@pytest.mark.django_db
+def test_historial_usa_el_teclado_de_placas(admin_client, make_entry):
+    make_entry(plate="P123456")
+    html = admin_client.get("/parking/historial/").content.decode()
+    assert 'data-pk-target="plateSearch"' in html and 'data-pk-mode="filter"' in html
+    keys = html[html.index('id="plateKeypad"'):html.index("<script", html.index('id="plateKeypad"'))]
+    assert "data-pk-done" in keys and "data-pk-search" not in keys   # «Listo», no «Buscar»
+
+    search = admin_client.get("/parking/busqueda/").content.decode()
+    assert 'data-pk-target="plateInput"' in search and 'data-pk-mode="search"' in search

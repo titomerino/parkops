@@ -1,0 +1,303 @@
+{% comment %}
+Teclado de placas (solo celulares y tablets): reemplaza el teclado del teléfono.
+
+Se incluye con:
+- pk_target: id del campo de placa (por defecto plateInput).
+- pk_mode: "search" (Buscar: siempre visible; «Buscar» envía el formulario) o
+  "filter" (Historial: aparece al tocar el campo; filtra al escribir y «Listo» lo cierra).
+
+Diseñado con 3 meses de placas reales (sep–nov 2026, 10,964 registros):
+- 98 % empieza con P; el 1 % con C (la C del bloque A–F sirve) y casi nada con N.
+- Después del prefijo, el 98.6 % de las letras son A–F.
+- Con 0–9, A–F, P y N se escribe el 99.5 % de las placas; el resto, con «ABC».
+- Sin O ni I en la pantalla principal: evita confundir 0/O y 1/I (había P124OOD, P9976I7…).
+
+El campo usa inputmode="none" para que el teléfono no abra su teclado. Con teclado
+físico (computadora, POS) se escribe normal. «⌨» cambia al teclado del teléfono y se
+recuerda en este dispositivo.
+{% endcomment %}
+{% firstof pk_mode "search" as mode %}
+<div id="plateKeypad" class="plate-keypad d-none" aria-label="Teclado de placas"
+     data-pk-target="{% firstof pk_target 'plateInput' %}" data-pk-mode="{{ mode }}">
+  <div class="pk-main" data-pk-panel="main">
+    <div class="pk-row pk-row-5">
+      <button type="button" class="pk-key pk-prefix" data-key="P">P</button>
+      <button type="button" class="pk-key pk-prefix" data-key="N">N</button>
+      <button type="button" class="pk-key pk-mode" data-pk-show="abc" aria-label="Todas las letras">ABC</button>
+      <button type="button" class="pk-key pk-mode" data-pk-native aria-label="Usar el teclado del teléfono"><i class="bi bi-keyboard"></i></button>
+      <button type="button" class="pk-key pk-action" data-pk-back aria-label="Borrar"><i class="bi bi-backspace"></i></button>
+    </div>
+    <div class="pk-row pk-row-5">
+      <button type="button" class="pk-key" data-key="1">1</button>
+      <button type="button" class="pk-key" data-key="2">2</button>
+      <button type="button" class="pk-key" data-key="3">3</button>
+      <button type="button" class="pk-key pk-letter" data-key="A">A</button>
+      <button type="button" class="pk-key pk-letter" data-key="B">B</button>
+    </div>
+    <div class="pk-row pk-row-5">
+      <button type="button" class="pk-key" data-key="4">4</button>
+      <button type="button" class="pk-key" data-key="5">5</button>
+      <button type="button" class="pk-key" data-key="6">6</button>
+      <button type="button" class="pk-key pk-letter" data-key="C">C</button>
+      <button type="button" class="pk-key pk-letter" data-key="D">D</button>
+    </div>
+    <div class="pk-row pk-row-5">
+      <button type="button" class="pk-key" data-key="7">7</button>
+      <button type="button" class="pk-key" data-key="8">8</button>
+      <button type="button" class="pk-key" data-key="9">9</button>
+      <button type="button" class="pk-key pk-letter" data-key="E">E</button>
+      <button type="button" class="pk-key pk-letter" data-key="F">F</button>
+    </div>
+    <div class="pk-row pk-row-5">
+      <button type="button" class="pk-key pk-action" data-pk-clear aria-label="Limpiar"><i class="bi bi-x-lg"></i></button>
+      <button type="button" class="pk-key" data-key="0">0</button>
+      {% if mode == "filter" %}<button type="button" class="pk-key pk-search" data-pk-done><i class="bi bi-check-lg me-1"></i>Listo</button>{% else %}<button type="button" class="pk-key pk-search" data-pk-search><i class="bi bi-search me-1"></i>Buscar</button>{% endif %}
+    </div>
+  </div>
+
+  <!-- Todas las letras: placas extranjeras o raras (~20 al mes) -->
+  <div class="pk-abc d-none" data-pk-panel="abc">
+    <div class="pk-row pk-row-10">
+      {% for ch in "QWERTYUIOP" %}<button type="button" class="pk-key pk-small" data-key="{{ ch }}">{{ ch }}</button>{% endfor %}
+    </div>
+    <div class="pk-row pk-row-9">
+      {% for ch in "ASDFGHJKL" %}<button type="button" class="pk-key pk-small" data-key="{{ ch }}">{{ ch }}</button>{% endfor %}
+    </div>
+    <div class="pk-row pk-row-9">
+      {% for ch in "ZXCVBNM" %}<button type="button" class="pk-key pk-small" data-key="{{ ch }}">{{ ch }}</button>{% endfor %}
+      <button type="button" class="pk-key pk-small pk-action pk-span-2" data-pk-back aria-label="Borrar"><i class="bi bi-backspace"></i></button>
+    </div>
+    <div class="pk-row pk-row-5">
+      <button type="button" class="pk-key pk-mode pk-span-2" data-pk-show="main">123</button>
+      {% if mode == "filter" %}<button type="button" class="pk-key pk-search pk-span-3" data-pk-done><i class="bi bi-check-lg me-1"></i>Listo</button>{% else %}<button type="button" class="pk-key pk-search pk-span-3" data-pk-search><i class="bi bi-search me-1"></i>Buscar</button>{% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Volver al teclado de placas cuando se eligió el del teléfono -->
+<button type="button" id="plateKeypadReturn" class="plate-keypad-return d-none" aria-label="Usar el teclado de placas">
+  <i class="bi bi-grid-3x3-gap-fill me-1"></i>Teclado de placas
+</button>
+
+<style>
+  .plate-keypad {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--pk-bottom, 72px);   /* encima del menú inferior */
+    z-index: 1020;
+    padding: 8px 10px 10px;
+    background: var(--po-surface);
+    border-top: 1px solid var(--po-line);
+    box-shadow: 0 -16px 32px -16px rgba(0, 0, 0, .8);
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;       /* sin zoom por doble toque */
+  }
+  .pk-row { display: grid; gap: 6px; margin-bottom: 6px; }
+  .pk-row:last-child { margin-bottom: 0; }
+  .pk-row-5 { grid-template-columns: repeat(5, 1fr); }
+  .pk-row-9 { grid-template-columns: repeat(9, 1fr); }
+  .pk-row-10 { grid-template-columns: repeat(10, 1fr); }
+  .pk-span-2 { grid-column: span 2; }
+  .pk-span-3 { grid-column: span 3; }
+  .pk-key {
+    height: 46px;
+    border: 1px solid var(--po-line);
+    border-radius: 12px;
+    background: var(--po-surface-2);
+    color: var(--po-text);
+    font-size: 1.25rem;
+    font-weight: 600;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform .06s ease, background .1s ease;
+  }
+  .pk-key:active, .pk-key.pressed { transform: scale(.94); background: var(--po-line-strong); }
+  .pk-small { height: 44px; font-size: 1rem; padding: 0; border-radius: 10px; }
+  .pk-letter { color: var(--po-green); }
+  .pk-prefix { color: var(--po-gold); font-weight: 800; }
+  .pk-mode, .pk-action { font-size: 1rem; color: var(--po-muted); background: var(--po-inset); }
+  .pk-search { grid-column: span 3; background: var(--po-green); border-color: var(--po-green); color: #052e16; font-size: 1rem; font-weight: 700; }
+  .pk-search:active, .pk-search.pressed { background: #16a34a; }
+  .plate-keypad-return {
+    position: fixed;
+    right: 12px;
+    bottom: calc(var(--pk-bottom, 72px) + 10px);
+    z-index: 1020;
+    padding: 8px 14px;
+    border: 1px solid var(--po-line-strong);
+    border-radius: 999px;
+    background: var(--po-surface-2);
+    color: var(--po-text);
+    font-size: .8rem;
+    box-shadow: 0 10px 24px -10px rgba(0, 0, 0, .9);
+  }
+  /* Espacio para que el contenido se pueda ver por encima del teclado */
+  body.pk-on .container { margin-bottom: calc(var(--pk-height, 290px) + var(--pk-bottom, 72px) + 16px) !important; }
+  body.pk-on [data-pk-hide] { display: none !important; }
+  .plate-keypad.pk-hidden { visibility: hidden; }
+</style>
+
+<script>
+// Teclado de placas: escribe en #plateInput como si fuera el teclado del teléfono
+const PlateKeypad = (function () {
+  const PREF_KEY = "parkops.plateKeypad.native";   // el usuario prefiere el teclado del teléfono
+  const $ = (id) => document.getElementById(id);
+  const pad = $("plateKeypad");
+  const input = pad && $(pad.dataset.pkTarget);
+  const filter = pad && pad.dataset.pkMode === "filter";   // Historial: se abre al tocar el campo
+  const back = $("plateKeypadReturn");
+  if (!input || !pad) return null;
+
+  const touch = window.matchMedia("(pointer: coarse)").matches;
+
+  function prefersNative() {
+    try { return localStorage.getItem(PREF_KEY) === "1"; } catch (error) { return false; }
+  }
+  function savePreference(native) {
+    try { native ? localStorage.setItem(PREF_KEY, "1") : localStorage.removeItem(PREF_KEY); } catch (error) {}
+  }
+
+  // Ubica el teclado justo encima del menú inferior y reserva su espacio
+  function layout() {
+    const nav = document.querySelector("nav.bottom-0");
+    const bottom = nav ? nav.getBoundingClientRect().height : 0;
+    document.documentElement.style.setProperty("--pk-bottom", bottom + "px");
+    document.documentElement.style.setProperty("--pk-height", pad.offsetHeight + "px");
+  }
+
+  let active = false;   // el teclado de placas reemplaza al del teléfono
+
+  function setVisible(visible) {
+    pad.classList.toggle("d-none", !visible);
+    document.body.classList.toggle("pk-on", visible);
+    if (visible) layout();
+  }
+
+  function enable(on) {
+    active = on;
+    back.classList.toggle("d-none", on);
+    // none: el teléfono no abre su teclado; text: vuelve el del teléfono
+    input.setAttribute("inputmode", on ? "none" : "text");
+    // En Historial solo se ve mientras se escribe
+    setVisible(on && (!filter || document.activeElement === input));
+  }
+
+  function close() {
+    setVisible(false);
+    input.blur();
+  }
+
+  function insert(text) {
+    const max = parseInt(input.getAttribute("maxlength") || "10", 10);
+    let start = input.selectionStart ?? input.value.length;
+    let end = input.selectionEnd ?? input.value.length;
+    if (text === "") {
+      // Borrar: lo seleccionado, o el carácter antes del cursor
+      if (start === end && start > 0) start -= 1;
+    } else if (input.value.length - (end - start) >= max) {
+      return;
+    }
+    input.setRangeText(text, start, end, "end");
+    input.dispatchEvent(new Event("input", { bubbles: true }));  // sugerencias, «X», mayúsculas
+  }
+
+  function vibrate() {
+    if (navigator.vibrate) navigator.vibrate(8);
+  }
+
+  function showPanel(name) {
+    pad.querySelectorAll("[data-pk-panel]").forEach((panel) => {
+      panel.classList.toggle("d-none", panel.dataset.pkPanel !== name);
+    });
+    layout();
+  }
+
+  // pointerdown + preventDefault: el campo no pierde el foco (ni el cursor) al tocar una tecla
+  pad.addEventListener("pointerdown", (event) => {
+    const key = event.target.closest(".pk-key");
+    if (!key) return;
+    event.preventDefault();
+    key.classList.add("pressed");
+    vibrate();
+
+    if (key.dataset.key) insert(key.dataset.key);
+    else if (key.hasAttribute("data-pk-back")) insert("");
+    else if (key.hasAttribute("data-pk-clear")) {
+      input.value = "";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    } else if (key.dataset.pkShow) showPanel(key.dataset.pkShow);
+    else if (key.hasAttribute("data-pk-done")) {
+      showPanel("main");
+      close();
+      return;
+    } else if (key.hasAttribute("data-pk-search")) {
+      showPanel("main");
+      input.form.requestSubmit();
+      return;
+    } else if (key.hasAttribute("data-pk-native")) {
+      savePreference(true);
+      enable(false);
+      input.blur();
+      input.focus();   // abre el teclado del teléfono
+      return;
+    }
+    if (document.activeElement !== input) input.focus({ preventScroll: true });
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((type) => {
+    pad.addEventListener(type, (event) => {
+      const key = event.target.closest(".pk-key");
+      if (key) key.classList.remove("pressed");
+    });
+  });
+
+  if (filter) {
+    // Historial: al tocar el campo aparece; al tocar fuera (la lista, los filtros) se cierra
+    input.addEventListener("focus", () => { if (active) setVisible(true); });
+    document.addEventListener("pointerdown", (event) => {
+      if (!active || pad.classList.contains("d-none")) return;
+      if (pad.contains(event.target) || event.target === input) return;
+      close();
+    });
+  }
+
+  back.addEventListener("click", () => {
+    savePreference(false);
+    input.blur();
+    enable(true);
+  });
+
+  // Las sugerencias no deben quedar debajo del teclado
+  const box = $("plateSuggestions");
+  if (box) {
+    new MutationObserver(() => {
+      if (box.classList.contains("d-none") || pad.classList.contains("d-none")) {
+        box.style.maxHeight = "";
+        return;
+      }
+      const room = pad.getBoundingClientRect().top - box.getBoundingClientRect().top - 8;
+      box.style.maxHeight = Math.max(room, 120) + "px";
+    }).observe(box, { attributes: true, attributeFilter: ["class"] });
+  }
+
+  // Con una modal abierta (entrada, salida, cámara…) el teclado se esconde
+  document.addEventListener("show.bs.modal", () => pad.classList.add("pk-hidden"));
+  document.addEventListener("hidden.bs.modal", () => {
+    if (!document.querySelector(".modal.show")) pad.classList.remove("pk-hidden");
+  });
+
+  if (touch) {
+    enable(!prefersNative());
+    // El menú inferior se dibuja después de este script: se vuelve a medir al terminar de cargar
+    document.addEventListener("DOMContentLoaded", layout);
+    window.addEventListener("load", layout);
+    window.addEventListener("resize", layout);
+  } else {
+    // Computadora o POS con teclado físico: el teclado de placas no se muestra
+    input.setAttribute("inputmode", "text");
+  }
+
+  return { enable, insert };
+})();
+window.PlateKeypad = PlateKeypad;
+</script>

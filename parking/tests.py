@@ -1337,3 +1337,20 @@ class TestEditarEntradaEnModal:
         entry = make_entry(plate="P11017E")
         html = admin_client.get("/parking/historial/").content.decode()
         assert f'data-entry-modal="/parking/editar/{entry.pk}/"' in html
+
+
+@pytest.mark.django_db
+class TestBuscarScrollYLimpiar:
+
+    def test_sugerencias_hasta_30_con_scroll(self, admin_client, make_entry):
+        for i in range(35):
+            make_entry(plate=f"P5{i:05d}")
+        results = admin_client.get("/parking/busqueda/sugerencias/?q=P5").json()["results"]
+        assert len(results) == 30
+
+        html = admin_client.get("/parking/busqueda/").content.decode()
+        assert "overflow-y: auto" in html and "plate-suggestions-count" in html
+
+    def test_boton_limpiar_en_el_buscador(self, admin_client):
+        html = admin_client.get("/parking/busqueda/").content.decode()
+        assert 'id="plateClear"' in html and 'aria-label="Limpiar placa"' in html

@@ -1,0 +1,12 @@
+{# Confirmación de una acción sobre un empleado (en la modal). Recibe: employee, title, text, action, button, button_class, icon #}
+<div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+    <div class="card-body p-4">
+        <h2 class="h5 mb-1"><i class="bi {{ icon }} me-2"></i>{{ title }}</h2>
+        <div class="small text-muted mb-3">{{ employee.get_full_name|default:employee.username }} · @{{ employee.username }}</div>
+        <p class="small mb-4">{{ text }}</p>
+        <form method="post" action="{{ action }}">
+            {% csrf_token %}
+            <button class="btn {{ button_class }} w-100 rounded-pill">{{ button }}</button>
+        </form>
+    </div>
+</div>

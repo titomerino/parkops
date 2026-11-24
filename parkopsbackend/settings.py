@@ -46,6 +46,8 @@ INSTALLED_APPS = [
     'bathrooms',
     'payment',
     'tenants',
+    'landing',
+    'audit',
 ]
 
 # MIDDLEWARE

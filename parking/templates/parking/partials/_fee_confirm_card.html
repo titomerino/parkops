@@ -1,0 +1,31 @@
+{# Confirmar activar o desactivar una tarifa (en la modal). Recibe: fee #}
+<div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+    <div class="card-body p-4">
+        {% if fee.is_active %}
+            <h2 class="h5 mb-1"><i class="bi bi-pause-circle me-2"></i>Desactivar tarifa</h2>
+            <div class="small text-muted mb-3">{{ fee.name }}</div>
+            {% if fee.default %}
+                <div class="alert alert-warning small mb-0">
+                    Es la tarifa por defecto. Para desactivarla, primero marca otra como «Tarifa por defecto».
+                </div>
+            {% else %}
+                <p class="small mb-4">
+                    Ya no aparecerá al registrar entradas. Los carros que ya están adentro con esta tarifa
+                    se cobran igual al salir. Puedes activarla cuando quieras.
+                </p>
+                <form method="post" action="{% url 'fee_toggle_active' fee.pk %}">
+                    {% csrf_token %}
+                    <button class="btn btn-danger w-100 rounded-pill">Sí, desactivar</button>
+                </form>
+            {% endif %}
+        {% else %}
+            <h2 class="h5 mb-1"><i class="bi bi-play-circle me-2"></i>Activar tarifa</h2>
+            <div class="small text-muted mb-3">{{ fee.name }}</div>
+            <p class="small mb-4">Volverá a aparecer al registrar entradas.</p>
+            <form method="post" action="{% url 'fee_toggle_active' fee.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-success w-100 rounded-pill">Sí, activar</button>
+            </form>
+        {% endif %}
+    </div>
+</div>

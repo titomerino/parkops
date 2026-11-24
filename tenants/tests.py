@@ -250,7 +250,11 @@ def test_reporte_por_placa_de_otro_parqueo_no_encuentra_nada(client_a, world):
 @pytest.mark.django_db
 def test_alerta_de_pago_solo_del_parqueo(client_a, world):
     messages = [str(m) for m in client_a.get("/").context["messages"]]
-    assert len([m for m in messages if "Pago" in m]) == 1
+    # Desde el día 22 también avisa del mes en curso: se cuentan los pendientes de A, nunca los de B
+    from payment.services.payment_service import get_pending_payments
+    expected = len(get_pending_payments(world["A"]))
+    assert expected >= 1
+    assert len([m for m in messages if "Pago" in m]) == expected
     assert Payment.objects.filter(subscription__parking=world["B"]).count() == 1
 
 
@@ -272,7 +276,7 @@ def test_parqueo_suspendido_cierra_la_sesion(client_a, world):
     response = client_a.get("/parking/historial/")
 
     assert response.status_code == 302 and response.url == "/login/"
-    assert client_a.get("/").status_code == 302  # ya no tiene sesión
+    assert client_a.get("/parking/historial/").status_code == 302  # ya no tiene sesión
 
 
 @pytest.mark.django_db
@@ -315,7 +319,12 @@ def test_crear_cuenta_de_parqueo(client, db):
     assert fee.default and fee.ranges.count() == 11
     assert fee.calculate_fee(30) == Decimal("1.00") and fee.calculate_fee(400) == Decimal("6.00")
 
+    # Su contraseña se la diste tú: primero crea la suya
     client.force_login(owner)
+    assert client.get("/").url == "/cuenta/"
+    client.post("/cuenta/", {
+        "old_password": "Clave-segura-123", "new_password1": "Otra-clave-456", "new_password2": "Otra-clave-456",
+    })
     response = client.get("/")
     assert response.status_code == 200
     assert response.context["total_daily_income"] == 0

@@ -19,6 +19,17 @@ class Plan(models.Model):
     description = models.TextField("Descripción", blank=True)
     active = models.BooleanField("Disponible", default=True)
 
+    # Página web (precios públicos)
+    show_on_website = models.BooleanField(
+        "Mostrar en la página web", default=False,
+        help_text="Aparece en la sección de planes y en el formulario de prueba gratis",
+    )
+    featured = models.BooleanField("Destacado («Más popular»)", default=False)
+    tagline = models.CharField(
+        "Frase en la web", max_length=120, blank=True,
+        help_text="Ej.: El ideal para parqueos con alto movimiento",
+    )
+
     class Meta:
         verbose_name = "Plan"
         verbose_name_plural = "Planes"

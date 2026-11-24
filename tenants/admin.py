@@ -21,7 +21,7 @@ class ParkingAccountForm(forms.ModelForm):
     owner_password = forms.CharField(
         label="Contraseña del dueño",
         widget=forms.PasswordInput(render_value=False),
-        help_text="El dueño podrá cambiarla después.",
+        help_text="Es temporal: al iniciar sesión el dueño debe crear la suya.",
     )
     with_default_fee = forms.BooleanField(
         label="Crear tarifa inicial",
@@ -187,6 +187,14 @@ class UserAdmin(BaseUserAdmin):
         # Garantiza que existan los grupos de roles para asignarlos
         ensure_role_groups()
         return super().changelist_view(request, extra_context)
+
+    def user_change_password(self, request, id, form_url=""):
+        response = super().user_change_password(request, id, form_url)
+        # Le asignaste una contraseña a otra persona: al entrar debe poner una suya
+        if request.method == "POST" and response.status_code == 302 and str(request.user.pk) != str(id):
+            ParkingMember.objects.filter(user_id=id).update(must_change_password=True)
+            messages.info(request, "Al iniciar sesión se le pedirá crear su propia contraseña.")
+        return response
 
 
 # ---------------------------------------------------------------- IA

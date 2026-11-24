@@ -38,10 +38,6 @@
         <div id="voicePlateStatus" class="small text-muted mt-2">
           Toca el micrófono y di la placa
         </div>
-        <div id="voicePlateHint" class="small text-secondary">
-          Ej.: «pe ciento setenta y uno, setecientos treinta y siete».
-          Si una letra no se capta, di «letra» antes de ella (ej.: «letra e»).
-        </div>
 
         <!-- Resultado -->
         <div id="voicePlateResult" class="mt-4 d-none">
@@ -57,10 +53,6 @@
           ></div>
 
           <span id="voicePlateAction" class="badge rounded-pill fs-6"></span>
-
-          <div id="voicePlateAppendHint" class="small text-secondary mt-2 d-none">
-            ¿Faltó la letra final? Toca el micrófono y di solo «letra e» (o la letra que falte).
-          </div>
 
           <!-- Placas conocidas parecidas -->
           <div id="voicePlateCandidates" class="mt-3 d-none">
@@ -92,7 +84,7 @@
           disabled
         >
           <i class="bi bi-check-lg me-1"></i>
-          Confirmar
+          Usar placa
         </button>
       </div>
 
@@ -221,12 +213,10 @@ const VoicePlate = (function () {
 
     function reset() {
         selected = null;
-        $("voicePlateAppendHint").classList.add("d-none");
         $("voicePlateResult").classList.add("d-none");
         $("voicePlateCandidates").classList.add("d-none");
         $("voicePlateError").classList.add("d-none");
         $("voicePlateConfirmBtn").disabled = true;
-        $("voicePlateHint").classList.remove("d-none");
         setStatus("Toca el micrófono y di la placa");
     }
 
@@ -423,7 +413,6 @@ const VoicePlate = (function () {
             select(data.plate, data.formatted, data.action, data.entry_time);
             renderCandidates(data.candidates || []);
             setStatus("Confirma la placa o descártala");
-            $("voicePlateAppendHint").classList.remove("d-none");
 
         } catch (error) {
             showError("No se pudo interpretar la placa. Revisa la conexión.");
@@ -436,7 +425,6 @@ const VoicePlate = (function () {
 
         $("voicePlateResult").classList.remove("d-none");
         $("voicePlateError").classList.add("d-none");
-        $("voicePlateHint").classList.add("d-none");
         $("voicePlateValue").innerText = formatted;
 
         const badge = $("voicePlateAction");
@@ -473,11 +461,12 @@ const VoicePlate = (function () {
     function confirm() {
         if (!selected) return;
 
-        // Usa el formulario de búsqueda existente: mismo flujo que al digitar
+        // Solo llena el buscador: debajo aparecen las placas que coinciden
         const input = document.getElementById("plateInput");
         input.value = selected;
         cancel();
-        input.form.requestSubmit ? input.form.requestSubmit() : input.form.submit();
+        bootstrap.Modal.getOrCreateInstance($("voicePlateModal")).hide();
+        input.dispatchEvent(new Event("input", { bubbles: true }));
     }
 
     function discard() {

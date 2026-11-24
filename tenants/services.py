@@ -21,6 +21,8 @@ ROLE_PERMISSIONS = {
         ("bathrooms", "view_bathroomentry"),
     ],
     OWNER_GROUP: [
+        ("tenants", "manage_employees"),
+        ("audit", "view_auditevent"),
         ("parking", "add_entry"),
         ("parking", "change_entry"),
         ("parking", "view_entry"),
@@ -29,6 +31,8 @@ ROLE_PERMISSIONS = {
         ("parking", "change_platepolicy"),
         ("parking", "view_platepolicy"),
         ("parking", "view_statistics_placepolicy"),
+        ("parking", "add_fee"),
+        ("parking", "change_fee"),
         ("parking", "view_fee"),
         ("bathrooms", "add_bathroomentry"),
         ("bathrooms", "view_bathroomentry"),
@@ -82,7 +86,8 @@ def create_parking_account(*, owner_username, owner_password, with_default_fee=T
 
     owner = get_user_model().objects.create_user(username=owner_username, password=owner_password)
     owner.groups.add(ensure_role_groups()[OWNER_GROUP])
-    ParkingMember.objects.create(user=owner, parking=parking)
+    # El dueño recibe la contraseña de ti: al entrar pone una suya
+    ParkingMember.objects.create(user=owner, parking=parking, must_change_password=True)
 
     if with_default_fee:
         create_default_fee(parking)

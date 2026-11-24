@@ -1,0 +1,8 @@
+{% if employee.is_active %}
+    <span class="badge rounded-pill text-bg-success">Con acceso</span>
+{% else %}
+    <span class="badge rounded-pill text-bg-secondary">Sin acceso</span>
+{% endif %}
+{% if row.pending %}
+    <span class="badge rounded-pill text-bg-warning">Contraseña temporal</span>
+{% endif %}

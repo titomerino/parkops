@@ -64,7 +64,7 @@
 </div>
 
 <style>
-    .key-card { background-color: #1f2a44; }
+    .key-card { background-color: var(--po-surface-2); }
     .key-thumb { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: .75rem; background: #000; }
     .key-hook-badge {
         position: absolute; top: .5rem; left: .5rem; background: #ffc107; color: #000; font-weight: 800;
@@ -92,6 +92,12 @@
 </script>
 
 {% include 'parking/partials/_parking_key_modal.html' %}
+{% include 'parking/partials/_parking_entry_modal.html' %}
+
+<script>
+    // Al cobrar en la modal, la llave sale de la lista
+    EntryModal.configure({ reload: true });
+</script>
 
 {% endblock %}
 

@@ -417,7 +417,7 @@ class TestEliminarEntrada:
         response = admin_client.post(self.url(entry))
 
         assert response.status_code == 302
-        assert response.url == "/parking/historial/"
+        assert response.url.endswith("/parking/historial/")
         assert not Entry.objects.filter(pk=entry.pk).exists()
 
         log = LogEntry.objects.get(action_flag=DELETION)
@@ -488,12 +488,12 @@ class TestEliminarEntrada:
         client.force_login(user)
         html = client.get(f"/parking/editar/{entry.pk}/").content.decode()
         assert "Eliminar entrada" not in html
-        assert "deleteEntryModal" not in html
+        assert "deleteEntryConfirm" not in html
 
         user.user_permissions.add(Permission.objects.get(codename="delete_entry"))
         user = django_user_model.objects.get(pk=user.pk)  # limpia la caché de permisos
         client.force_login(user)
-        assert "deleteEntryModal" in client.get(f"/parking/editar/{entry.pk}/").content.decode()
+        assert "deleteEntryConfirm" in client.get(f"/parking/editar/{entry.pk}/").content.decode()
 
 
 @pytest.mark.django_db
@@ -1039,3 +1039,301 @@ class TestLlaves:
 
         assert self.save(client, foreign).status_code == 404
         assert client.get(f"/parking/llaves/{foreign.pk}/foto/").status_code == 404
+
+
+@pytest.mark.django_db
+class TestSugerenciasPlaca:
+
+    URL = "/parking/busqueda/sugerencias/"
+
+    def suggest(self, client, q):
+        response = client.get(self.URL, {"q": q})
+        assert response.status_code == 200
+        return response.json()["results"]
+
+    def test_vehiculo_adentro_va_a_su_salida(self, admin_client, make_entry):
+        entry = make_entry(plate="P11017E")
+
+        [result] = self.suggest(admin_client, "110")
+
+        assert result["label"] == "P 110 17E"
+        assert result["url"] == f"/parking/go-to-departure/{entry.pk}/"
+        assert "Normal" in result["detail"]
+
+    def test_primero_las_que_empiezan_con_lo_digitado(self, admin_client, make_entry):
+        make_entry(plate="AP12345")
+        make_entry(plate="P123000")
+        make_entry(plate="M999999")
+
+        plates = [r["plate"] for r in self.suggest(admin_client, "P12")]
+        assert plates == ["P123000", "AP12345"]
+
+    def test_solo_vehiculos_adentro(self, admin_client, make_entry, monthly_policy):
+        # Suscripción sin entrada y visita que ya salió: no aparecen
+        make_entry(plate="P100002", minutes_ago=300, duration=60, state=False)
+        make_entry(plate="P100003")
+
+        assert [r["plate"] for r in self.suggest(admin_client, "P1000")] == ["P100003"]
+
+    def test_suscripcion_adentro_si_aparece(self, admin_client, make_entry, monthly_policy):
+        make_entry(plate="P100001")
+        assert [r["plate"] for r in self.suggest(admin_client, "P100")] == ["P100001"]
+
+    def test_menos_de_dos_caracteres_no_busca(self, admin_client, make_entry):
+        make_entry(plate="P11017E")
+        assert self.suggest(admin_client, " P") == []
+        assert self.suggest(admin_client, "P-1") != []
+
+    def test_muestra_el_gancho_de_la_llave(self, admin_client, parking, make_entry):
+        from parking.models import KeyDeposit
+
+        parking.keys_enabled = True
+        parking.save()
+        entry = make_entry(plate="P11017E")
+        KeyDeposit.objects.create(parking=parking, entry=entry, hook="12", photo=b"x")
+
+        assert self.suggest(admin_client, "P11")[0]["hook"] == "12"
+
+    def test_aislamiento_entre_parqueos(self, client, django_user_model, member, make_entry, other_parking):
+        from django.contrib.auth.models import Permission
+
+        make_entry(plate="P11017E")
+        user = django_user_model.objects.create_user("norte", password="x")
+        user.user_permissions.add(Permission.objects.get(codename="view_entry"))
+        member(user, to=other_parking)
+        client.force_login(user)
+
+        assert self.suggest(client, "P11") == []
+
+    def test_sin_permiso_de_ver_entradas(self, client, django_user_model, member, make_entry):
+        make_entry(plate="P11017E")
+        user = django_user_model.objects.create_user("sinpermiso", password="x")
+        member(user)
+        client.force_login(user)
+
+        assert client.get(self.URL, {"q": "P11"}).status_code == 403
+        assert "data-suggest-url" not in client.get("/parking/busqueda/").content.decode()
+
+    def test_la_busqueda_trae_el_buscador_con_sugerencias(self, admin_client):
+        html = admin_client.get("/parking/busqueda/").content.decode()
+        assert 'data-suggest-url="/parking/busqueda/sugerencias/"' in html
+        # Orden: aviso, placa, botones de captura y registrar
+        assert html.index("Busca una placa") < html.index('id="plateInput"') \
+            < html.index('id="voicePlateOpenBtn"') < html.index("Ingresar / buscar")
+
+
+@pytest.mark.django_db
+class TestModalEntradasSalidas:
+    """Buscar, Historial y Llaves abren la entrada y la salida en una modal."""
+
+    MODAL = {"HTTP_X_ENTRY_MODAL": "1"}
+
+    def test_buscar_dice_que_pantalla_abrir(self, admin_client, make_entry):
+        entry = make_entry(plate="P11017E")
+
+        response = admin_client.post("/parking/busqueda/", {"plate": "p11017e"}, **self.MODAL)
+        assert response.json() == {"ok": True, "url": f"/parking/salida/{entry.pk}"}
+
+        response = admin_client.post("/parking/busqueda/", {"plate": "P999"}, **self.MODAL)
+        assert response.json() == {"ok": True, "url": "/parking/registro/P999"}
+
+    def test_buscar_placa_invalida(self, admin_client):
+        response = admin_client.post("/parking/busqueda/", {"plate": "P-1"}, **self.MODAL)
+        assert response.status_code == 400
+        assert response.json()["ok"] is False
+
+    def test_la_modal_recibe_solo_la_tarjeta(self, admin_client, make_entry):
+        entry = make_entry(plate="P11017E")
+
+        html = admin_client.get(f"/parking/salida/{entry.pk}", **self.MODAL).content.decode()
+        assert "SALIDA" in html and f'action="/parking/salida/{entry.pk}"' in html
+        assert "<html" not in html and "Toque una vez" not in html
+
+        html = admin_client.get("/parking/registro/P555", **self.MODAL).content.decode()
+        assert "ENTRADA" in html and 'action="/parking/registro/P555"' in html
+        assert "<html" not in html
+
+    def test_registrar_en_modal(self, admin_client, fee):
+        response = admin_client.post("/parking/registro/P555", {
+            "plate": "P555", "fee": fee.pk, "action": "save_print",
+        }, **self.MODAL)
+
+        data = response.json()
+        entry = Entry.objects.get(plate="P555", state=True)
+        assert data == {
+            "ok": True,
+            "message": "La entrada para P555 se guardó correctamente.",
+            "entry_id": entry.pk,
+            "print": True,
+        }
+        # El mensaje no queda guardado para la siguiente página
+        assert "se guardó" not in admin_client.get("/parking/busqueda/").content.decode()
+
+    def test_registrar_placa_que_ya_esta_adentro(self, admin_client, fee, make_entry):
+        make_entry(plate="P555")
+        response = admin_client.post("/parking/registro/P555", {"plate": "P555", "fee": fee.pk}, **self.MODAL)
+        assert response.status_code == 409
+        assert "Ya existe una entrada activa" in response.json()["error"]
+
+    def test_cobrar_en_modal(self, admin_client, make_entry):
+        entry = make_entry(plate="P11017E", minutes_ago=90)
+
+        response = admin_client.post(f"/parking/salida/{entry.pk}", **self.MODAL)
+
+        entry.refresh_from_db()
+        assert not entry.state
+        assert response.json() == {
+            "ok": True,
+            "message": "Salida registrada para P11017E — $2.00",
+            "entry_id": entry.pk,
+        }
+
+    def test_salida_ya_cobrada(self, admin_client, make_entry):
+        entry = make_entry(minutes_ago=90, duration=30, state=False)
+
+        response = admin_client.get(f"/parking/salida/{entry.pk}", **self.MODAL)
+        assert response.status_code == 409
+        assert "ya tiene salida registrada" in response.json()["error"]
+
+    def test_sin_permiso_no_devuelve_json(self, client, django_user_model, member, make_entry):
+        # La modal recibe 403 y abre la página completa (que muestra el error de siempre)
+        user = member(django_user_model.objects.create_user("lector", password="x"))
+        client.force_login(user)
+        entry = make_entry()
+        assert client.get(f"/parking/salida/{entry.pk}", **self.MODAL).status_code == 403
+
+    def test_pantallas_con_la_modal(self, admin_client, parking, make_entry):
+        entry = make_entry(plate="P11017E")
+        parking.keys_enabled = True
+        parking.save()
+
+        for url in ["/parking/busqueda/", "/parking/historial/", "/parking/llaves/"]:
+            assert 'id="entryModal"' in admin_client.get(url).content.decode(), url
+
+        html = admin_client.get("/parking/historial/").content.decode()
+        assert f'data-entry-modal="/parking/salida/{entry.pk}"' in html
+        assert f'data-key-departure-modal="/parking/salida/{entry.pk}"' in html
+
+    def test_sugerencia_trae_la_url_de_la_modal(self, admin_client, make_entry):
+        entry = make_entry(plate="P11017E")
+        [result] = admin_client.get("/parking/busqueda/sugerencias/", {"q": "P11"}).json()["results"]
+        assert result["modal_url"] == f"/parking/salida/{entry.pk}"
+
+
+@pytest.mark.django_db
+class TestErroresCorregidos:
+
+    def test_imprimir_sin_entrada_guardada_no_abre_ticket(self, admin_client, fee, make_entry):
+        make_entry(plate="P555")
+        response = admin_client.post("/parking/registro/P555", {
+            "plate": "P555", "fee": fee.pk, "action": "save_print",
+        })
+        assert response.url == "/parking/busqueda/"   # antes: ?entry_id=None
+
+    def test_regreso_solo_para_la_salida_abierta(self, admin_client, make_entry):
+        historial = make_entry(plate="P111111")
+        otro = make_entry(plate="P222222")
+
+        # Abre la salida desde el Historial y no cobra
+        admin_client.get(f"/parking/go-to-departure/{historial.pk}/", HTTP_REFERER="http://testserver/parking/historial/")
+        # Cobra otro carro (p. ej. escaneando su ticket): vuelve a Buscar, no al Historial
+        response = admin_client.post(f"/parking/salida/{otro.pk}")
+        assert response.url == "/parking/busqueda/"
+
+    def test_regreso_a_la_pagina_de_origen(self, admin_client, make_entry):
+        entry = make_entry(plate="P111111")
+        admin_client.get(f"/parking/go-to-departure/{entry.pk}/", HTTP_REFERER="http://testserver/parking/historial/")
+        response = admin_client.post(f"/parking/salida/{entry.pk}")
+        assert response.url.endswith("/parking/historial/")
+
+
+@pytest.mark.django_db
+class TestTicketQrLlenaElBuscador:
+
+    def test_devuelve_la_placa_del_ticket(self, admin_client, make_entry):
+        entry = make_entry(plate="P11017E")
+        response = admin_client.get(f"/parking/busqueda/ticket/{entry.pk}/")
+        assert response.json() == {"ok": True, "plate": "P11017E", "active": True}
+
+    def test_ticket_ya_cobrado(self, admin_client, make_entry):
+        entry = make_entry(plate="P11017E", minutes_ago=90, duration=30, state=False)
+        assert admin_client.get(f"/parking/busqueda/ticket/{entry.pk}/").json()["active"] is False
+
+    def test_ticket_de_otro_parqueo(self, client, django_user_model, member, make_entry, other_parking):
+        entry = make_entry(plate="P11017E")
+        user = member(django_user_model.objects.create_user("norte", password="x"), to=other_parking)
+        client.force_login(user)
+
+        response = client.get(f"/parking/busqueda/ticket/{entry.pk}/")
+        assert response.status_code == 404
+        assert response.json()["ok"] is False
+
+    def test_camara_voz_y_qr_solo_llenan_el_buscador(self, admin_client, parking):
+        html = admin_client.get("/parking/busqueda/").content.decode()
+        assert "requestSubmit" not in html
+        assert "Usar placa" in html
+
+
+@pytest.mark.django_db
+class TestEditarEntradaEnModal:
+
+    MODAL = {"HTTP_X_ENTRY_MODAL": "1"}
+
+    def data(self, entry, fee, **extra):
+        data = {
+            "plate": entry.plate,
+            "fee": fee.pk,
+            "entry_date_hour": localtime(entry.entry_date_hour).strftime("%Y-%m-%dT%H:%M"),
+            "departure_date_hour": "",
+        }
+        data.update(extra)
+        return data
+
+    def test_la_modal_recibe_solo_la_tarjeta(self, admin_client, make_entry):
+        entry = make_entry(plate="P11017E")
+        html = admin_client.get(f"/parking/editar/{entry.pk}/", **self.MODAL).content.decode()
+        assert "Editar Entrada" in html and f'action="/parking/editar/{entry.pk}/"' in html
+        assert f'action="/parking/eliminar/{entry.pk}/"' in html
+        assert "<html" not in html
+
+    def test_guardar_en_modal(self, admin_client, make_entry, fee):
+        entry = make_entry(plate="P11017E")
+        response = admin_client.post(f"/parking/editar/{entry.pk}/", self.data(entry, fee, plate="P11017F"), **self.MODAL)
+
+        assert response.json() == {"ok": True, "message": "Entrada actualizada correctamente.", "entry_id": entry.pk}
+        entry.refresh_from_db()
+        assert entry.plate == "P11017F"
+        # El mensaje no queda guardado para la siguiente página
+        assert "actualizada" not in admin_client.get("/parking/historial/").content.decode()
+
+    def test_errores_vuelven_a_la_modal(self, admin_client, make_entry, fee):
+        entry = make_entry(plate="P11017E")
+        response = admin_client.post(f"/parking/editar/{entry.pk}/", self.data(entry, fee, entry_date_hour=""), **self.MODAL)
+        assert response["Content-Type"].startswith("text/html")
+        assert "<html" not in response.content.decode()
+
+    def test_dos_entradas_activas_no_da_error_500(self, admin_client, make_entry, fee):
+        old = make_entry(plate="P555", minutes_ago=300, duration=60, state=False)
+        make_entry(plate="P555")
+
+        # Quitar la salida de la entrada vieja dejaría dos entradas activas
+        response = admin_client.post(f"/parking/editar/{old.pk}/", self.data(old, fee), **self.MODAL)
+        assert response.status_code == 200
+        assert "Ya existe una entrada activa" in response.content.decode()
+
+        response = admin_client.post(f"/parking/editar/{old.pk}/", self.data(old, fee))
+        assert response.status_code == 200
+        assert "Ya existe una entrada activa" in response.content.decode()
+
+    def test_eliminar_en_modal(self, admin_client, make_entry):
+        entry = make_entry(plate="P11017E")
+        response = admin_client.post(f"/parking/eliminar/{entry.pk}/", **self.MODAL)
+
+        assert response.json()["ok"] is True
+        assert "Entrada eliminada: Placa P11017E" in response.json()["message"]
+        assert not Entry.objects.filter(pk=entry.pk).exists()
+
+    def test_historial_abre_editar_en_la_modal(self, admin_client, make_entry):
+        entry = make_entry(plate="P11017E")
+        html = admin_client.get("/parking/historial/").content.decode()
+        assert f'data-entry-modal="/parking/editar/{entry.pk}/"' in html

@@ -113,7 +113,33 @@ const QrScanner = (function () {
         handled = true;
         setStatus("Ticket detectado ✔");
         stop();
-        window.location.href = `/parking/salida/${entryId}`;
+        fillFromTicket(parseInt(entryId, 10));
+    }
+
+    // El ticket solo llena el buscador con su placa: debajo aparecen las coincidencias
+    async function fillFromTicket(entryId) {
+        try {
+            const response = await fetch(`{% url 'ticket_plate' 0 %}`.replace("/0/", `/${entryId}/`), {
+                credentials: "same-origin",
+            });
+            const data = await response.json();
+            if (!data.ok) throw new Error(data.error);
+
+            modal.hide();
+            const input = document.getElementById("plateInput");
+            input.value = data.plate;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+
+            if (!data.active && window.EntryModal) {
+                EntryModal.toast(`El ticket de ${data.plate} ya tiene salida registrada.`, "warning");
+            }
+        } catch (error) {
+            showError(error.message && error.message !== "Failed to fetch"
+                ? error.message
+                : "No se pudo leer el ticket. Intenta de nuevo.");
+            handled = false;
+            start();
+        }
     }
 
     function stop() {

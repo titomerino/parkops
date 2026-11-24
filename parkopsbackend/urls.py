@@ -22,8 +22,10 @@ handler404 = 'shell.views.error_404'
 
 urlpatterns = [
     path('', include('shell.urls')),
+    path('', include('landing.urls')),
     path('admin/', admin.site.urls),
     path('parking/', include('parking.urls')),
     path('baños/', include('bathrooms.urls')),
     path('cuenta/', include('tenants.urls')),
+    path('auditoria/', include('audit.urls')),
 ]

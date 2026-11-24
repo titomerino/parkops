@@ -1,0 +1,331 @@
+{% comment %}
+Modal de entradas y salidas (EntryModal): muestra la tarjeta de registro de entrada
+o de salida sin salir de la pantalla actual (Buscar, Historial, Llaves).
+También la usan Empleados y Tarifas para sus formularios.
+
+- Un enlace con data-entry-modal="<url>" abre esa pantalla en la modal; su href
+  queda como respaldo (página completa).
+- Las vistas reciben la cabecera X-Entry-Modal: 1 y responden con la tarjeta (HTML)
+  o con JSON {ok, message, error, ...} al guardar.
+- Si algo falla (sesión vencida, sin permiso, error del servidor) se abre la
+  página completa, que se encarga como siempre.
+- El botón «atrás» del celular cierra la modal en lugar de salir de la pantalla.
+- Una pantalla con data-modal-dirty (p. ej. la contraseña temporal recién creada)
+  hace que la lista se recargue al cerrar la modal.
+{% endcomment %}
+<div class="modal fade" id="entryModal" tabindex="-1" aria-label="Entrada o salida">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-light border border-secondary rounded-4 overflow-hidden">
+      <div class="d-flex justify-content-end px-3 pt-3">
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div id="entryModalBody"></div>
+    </div>
+  </div>
+</div>
+
+<div id="entryToast" class="entry-toast" role="status" aria-live="polite"></div>
+
+<style>
+  #entryModalBody > .card { box-shadow: none !important; border-radius: 0 !important; }
+  #entryModalBody > .card > .card-body { padding-top: .25rem !important; }
+  .entry-toast {
+    position: fixed;
+    top: 76px;
+    left: 50%;
+    z-index: 1100;
+    width: min(92vw, 460px);
+    transform: translate(-50%, -12px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+  }
+  .entry-toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  .entry-toast .alert {
+    margin: 0;
+    /* Fondo sólido: el color suave de la alerta va encima de la tarjeta */
+    background-color: var(--po-surface);
+    background-image: linear-gradient(var(--bs-alert-bg), var(--bs-alert-bg));
+    border: 1px solid var(--bs-alert-border-color);
+    box-shadow: 0 16px 40px -12px rgba(0, 0, 0, .9);
+  }
+</style>
+
+<script>
+const EntryModal = (function () {
+
+    const FLASH_KEY = "parkops.entryModal.flash";
+
+    let modal = null;
+    let currentUrl = null;
+    let busy = false;
+    let pushed = false;        // hay una entrada en el historial para el botón «atrás»
+    let afterHide = null;
+    let afterPop = null;
+    let dirty = false;         // cambió algo (p. ej. la llave) y la página debe actualizarse
+    let options = { onDone: null, reload: false };
+    let toastTimer = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    function instance() {
+        if (!modal) {
+            modal = new bootstrap.Modal($("entryModal"));
+            $("entryModal").addEventListener("hidden.bs.modal", onHidden);
+        }
+        return modal;
+    }
+
+    // Cada página dice qué hacer al terminar: Buscar sigue en Buscar;
+    // Historial y Llaves recargan su lista.
+    function configure(opts) {
+        options = Object.assign(options, opts || {});
+    }
+
+    function isOpen() {
+        return $("entryModal").classList.contains("show");
+    }
+
+    // Pide la pantalla en modo modal. Devuelve {json} o {html}; lanza error si
+    // hay que usar la página completa.
+    async function load(url, init) {
+        const response = await fetch(url, Object.assign({
+            credentials: "same-origin",
+            headers: { "X-Entry-Modal": "1" },
+        }, init || {}));
+
+        // Sesión vencida (redirige al login), sin permiso o error del servidor
+        if (response.redirected || response.status === 403 || response.status >= 500) {
+            throw new Error("fallback");
+        }
+        const type = response.headers.get("Content-Type") || "";
+        if (type.includes("application/json")) return { json: await response.json() };
+        if (!response.ok) throw new Error("fallback");
+        return { html: await response.text() };
+    }
+
+    async function open(url) {
+        if (busy) return;
+        busy = true;
+        try {
+            const result = await load(url);
+            if (result.json) {
+                if (!result.json.ok) toast(result.json.error || "No se pudo abrir.", "warning");
+                else if (result.json.url) { busy = false; return open(result.json.url); }
+                return;
+            }
+            currentUrl = url;
+            render(result.html);
+            instance().show();
+            if (!pushed) {
+                history.pushState({ entryModal: true }, "");
+                pushed = true;
+            }
+        } catch (error) {
+            window.location.href = url;
+        } finally {
+            busy = false;
+        }
+    }
+
+    // Vuelve a cargar la pantalla abierta (p. ej. después de guardar la llave)
+    async function refresh() {
+        if (!currentUrl || !isOpen()) return;
+        dirty = true;
+        try {
+            const result = await load(currentUrl);
+            if (result.html) render(result.html);
+            else close();
+        } catch (error) {
+            window.location.href = currentUrl;
+        }
+    }
+
+    function render(html) {
+        const body = $("entryModalBody");
+        body.innerHTML = html;
+        // Editar entrada trae dos formularios: guardar y eliminar
+        body.querySelectorAll("form").forEach((form) => form.addEventListener("submit", submit));
+        if (body.querySelector("[data-modal-dirty]")) dirty = true;
+        // Las pantallas que necesitan preparar su contenido (p. ej. tarifas) escuchan este evento
+        body.dispatchEvent(new Event("entrymodal:render", { bubbles: true }));
+    }
+
+    async function submit(event) {
+        if (event.defaultPrevented) return;   // p. ej. un confirm() cancelado
+        event.preventDefault();
+        const form = event.target;
+        if (busy) return;
+        busy = true;
+
+        const data = new FormData(form);
+        // El botón presionado (Registrar / Registrar e imprimir) no viene en FormData
+        if (event.submitter && event.submitter.name) {
+            data.append(event.submitter.name, event.submitter.value);
+        }
+        const buttons = form.querySelectorAll("button");
+        buttons.forEach((b) => b.disabled = true);
+
+        try {
+            // getAttribute: el botón name="action" de la entrada tapa form.action
+            const result = await load(form.getAttribute("action"), { method: "POST", body: data });
+            if (result.html) {
+                render(result.html);          // formulario con errores
+            } else if (!result.json.ok) {
+                showError(result.json.error || "No se pudo guardar.");
+            } else {
+                finish(result.json);
+            }
+        } catch (error) {
+            window.location.href = currentUrl;
+        } finally {
+            busy = false;
+            buttons.forEach((b) => b.disabled = false);
+        }
+    }
+
+    function finish(data) {
+        dirty = false;
+        close(() => {
+            if (options.onDone) {
+                options.onDone(data);
+            } else if (options.reload) {
+                flash(data.message);
+                window.location.reload();
+            } else {
+                toast(data.message, "success");
+            }
+        });
+    }
+
+    function close(then) {
+        afterHide = then || null;
+        if (isOpen()) instance().hide();
+        else onHidden();
+    }
+
+    function onHidden() {
+        $("entryModalBody").innerHTML = "";
+        currentUrl = null;
+
+        let next = afterHide;
+        afterHide = null;
+
+        // Cerrada sin terminar, pero algo cambió (la llave): actualiza la lista
+        if (!next && dirty && options.reload) {
+            next = () => window.location.reload();
+        }
+        dirty = false;
+
+        if (pushed) {
+            // Quita la entrada del historial; sigue cuando el navegador vuelva
+            pushed = false;
+            afterPop = next;
+            history.back();
+        } else if (next) {
+            next();
+        }
+    }
+
+    window.addEventListener("popstate", () => {
+        if (pushed) {
+            // Botón «atrás»: cierra la modal (y la de la llave, si está encima)
+            pushed = false;
+            document.querySelectorAll(".modal.show").forEach((el) => {
+                const m = bootstrap.Modal.getInstance(el);
+                if (m) m.hide();
+            });
+        }
+        if (afterPop) {
+            const fn = afterPop;
+            afterPop = null;
+            fn();
+        }
+    });
+
+    function showError(text) {
+        const body = $("entryModalBody");
+        let alert = body.querySelector(".entry-modal-error");
+        if (!alert) {
+            alert = document.createElement("div");
+            alert.className = "alert alert-warning small mx-3 mb-0 entry-modal-error";
+            body.prepend(alert);
+        }
+        alert.innerText = text;
+    }
+
+    function toast(text, kind) {
+        if (!text) return;
+        const box = $("entryToast");
+        box.innerHTML = "";
+        const alert = document.createElement("div");
+        alert.className = `alert alert-${kind || "success"} d-flex align-items-center gap-2 small py-2`;
+        alert.innerHTML = `<i class="bi ${kind === "success" ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill"}"></i>`;
+        alert.append(document.createTextNode(text));
+        box.append(alert);
+        box.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => box.classList.remove("show"), 4000);
+    }
+
+    // Mensaje que se muestra después de recargar la página
+    function flash(text) {
+        try { sessionStorage.setItem(FLASH_KEY, text || ""); } catch (error) {}
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        let text = null;
+        try {
+            text = sessionStorage.getItem(FLASH_KEY);
+            sessionStorage.removeItem(FLASH_KEY);
+        } catch (error) {}
+        if (text) toast(text, "success");
+    });
+
+    // Enlaces con data-entry-modal
+    document.addEventListener("click", (event) => {
+        const link = event.target.closest("[data-entry-modal]");
+        if (!link) return;
+        event.preventDefault();
+        event.stopPropagation();
+        open(link.dataset.entryModal);
+    });
+
+    // Modal sobre modal (la llave encima de la salida): la nueva va arriba
+    document.addEventListener("show.bs.modal", (event) => {
+        const openCount = document.querySelectorAll(".modal.show").length;
+        if (!openCount) return;
+        event.target.style.zIndex = 1055 + openCount * 10;
+        setTimeout(() => {
+            const backdrops = document.querySelectorAll(".modal-backdrop");
+            const last = backdrops[backdrops.length - 1];
+            if (last) last.style.zIndex = 1050 + openCount * 10;
+        });
+    });
+    document.addEventListener("hidden.bs.modal", (event) => {
+        event.target.style.zIndex = "";
+        if (document.querySelector(".modal.show")) document.body.classList.add("modal-open");
+    });
+
+    // Lo que se despliega dentro de la modal (p. ej. confirmar eliminar) queda a la vista
+    document.addEventListener("shown.bs.collapse", (event) => {
+        if ($("entryModal").contains(event.target)) {
+            event.target.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+    });
+
+    // Abre otra modal cuando la actual terminó de cerrarse (evita que se crucen)
+    function openAfter(modalElement, url) {
+        if (modalElement && modalElement.classList.contains("show")) {
+            modalElement.addEventListener("hidden.bs.modal", () => open(url), { once: true });
+            bootstrap.Modal.getInstance(modalElement).hide();
+        } else {
+            open(url);
+        }
+    }
+
+    return { open, openAfter, refresh, close, configure, isOpen, toast, load };
+
+})();
+window.EntryModal = EntryModal;
+</script>

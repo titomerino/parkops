@@ -37,7 +37,9 @@ class TestLogout:
     def test_post_cierra_sesion(self, admin_client):
         response = admin_client.post("/logout/")
         assert response.url == "/login/"
-        assert admin_client.get("/").status_code == 302
+        # Sin sesión, `/` muestra la página de ParkOps (no el panel)
+        assert admin_client.get("/parking/historial/").status_code == 302
+        assert "Prueba ParkOps 15 días gratis" in admin_client.get("/").content.decode()
 
 
 @pytest.mark.django_db

@@ -1,0 +1,20 @@
+<!-- Barra inferior del módulo de Empleados (Mi cuenta se abre desde el menú superior) -->
+<nav class="position-fixed bottom-0 start-0 w-100 z-3">
+    <div class="bg-dark border-top border-secondary shadow-lg">
+        <div class="d-flex justify-content-around align-items-center text-center py-2">
+            <a href="{% url 'dashboard' %}" class="text-decoration-none">
+                <div class="d-flex flex-column align-items-center px-3">
+                    <i class="bi bi-house-door fs-4 text-light"></i>
+                    <small class="text-light">Inicio</small>
+                </div>
+            </a>
+            <div class="vr text-secondary opacity-50" style="height:32px;"></div>
+            <a href="{% url 'employees_list' %}" class="text-decoration-none">
+                <div class="d-flex flex-column align-items-center px-3">
+                    <i class="bi bi-people fs-4 {% if 'employee' in request.resolver_match.url_name %}text-success{% else %}text-light{% endif %}"></i>
+                    <small class="text-light">Empleados</small>
+                </div>
+            </a>
+        </div>
+    </div>
+</nav>

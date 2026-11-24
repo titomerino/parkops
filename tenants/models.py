@@ -53,10 +53,19 @@ class ParkingMember(models.Model):
         related_name="members",
         verbose_name="Parqueo",
     )
+    must_change_password = models.BooleanField(
+        "Debe cambiar su contraseña",
+        default=False,
+        help_text="Al iniciar sesión se le pide una contraseña nueva. Se marca solo "
+                  "cuando otra persona le asigna una contraseña temporal.",
+    )
 
     class Meta:
         verbose_name = "Usuario del parqueo"
         verbose_name_plural = "Usuarios del parqueo"
+        permissions = [
+            ("manage_employees", "Puede administrar los empleados de su parqueo"),
+        ]
 
     def __str__(self):
         return f"{self.user} → {self.parking}"

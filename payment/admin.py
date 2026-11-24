@@ -10,8 +10,13 @@ from payment.services.invoice_service import balance_due, generate_invoice, mont
 
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
-    list_display = ('name', 'price', 'ai_package', 'active', 'subscriptions_count')
-    list_filter = ('active',)
+    list_display = ('name', 'price', 'ai_package', 'active', 'show_on_website', 'featured', 'subscriptions_count')
+    list_filter = ('active', 'show_on_website')
+    list_editable = ('show_on_website', 'featured')
+    fieldsets = (
+        (None, {'fields': ('name', 'price', 'ai_package', 'description', 'active')}),
+        ('Página web', {'fields': ('show_on_website', 'featured', 'tagline')}),
+    )
     list_select_related = ('ai_package',)
 
     @admin.display(description="Parqueos activos")

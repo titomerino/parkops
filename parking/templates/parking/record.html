@@ -58,7 +58,7 @@
 
 
 <!-- Lista de entradas -->
-<div class="row g-3">
+<div class="row g-3 align-items-start">
 
     {% for entry in entries %}
         <div class="col-12 col-lg-4 col-md-6">
@@ -164,10 +164,25 @@
                             </div>
                         </div>
 
+                        {% if entry.created_by or entry.departure_by %}
+                        <!-- Quién la registró y quién cobró (auditoría) -->
+                        <div class="d-flex justify-content-between small flex-wrap mb-2">
+                            <div class="me-3">
+                                <span class="text-muted">Registró</span><br>
+                                <strong>{{ entry.created_by.get_username|default:"—" }}</strong>
+                            </div>
+                            <div>
+                                <span class="text-muted">Salida por</span><br>
+                                <strong>{{ entry.departure_by.get_username|default:"—" }}</strong>
+                            </div>
+                        </div>
+                        {% endif %}
+
                         <!-- Botón separado, no colapsa -->
                         <div class="d-flex gap-2">
                             {% if entry.state %}
                             <a href="{% url 'go_to_departure' entry.id %}"
+                            data-entry-modal="{% url 'departure' entry.id %}"
                             class="btn btn-sm btn-success rounded-pill w-100">
                                 <i class="bi bi-box-arrow-right me-1"></i>
                                 Dar salida
@@ -176,6 +191,7 @@
 
                             {% if perms.parking.change_entry %}
                             <a href="{% url 'edit_entry' entry.id %}"
+                            data-entry-modal="{% url 'edit_entry' entry.id %}"
                             class="btn btn-sm btn-warning rounded-pill w-100">
                                 <i class="bi bi-box-arrow-right me-1"></i>
                                 Editar
@@ -209,9 +225,16 @@
     </div>
 </div>
 
+{% include 'parking/partials/_parking_entry_modal.html' %}
+
 {% if current_parking.keys_enabled %}
     {% include 'parking/partials/_parking_key_modal.html' %}
 {% endif %}
+
+<script>
+    // Al cobrar en la modal, la lista se recarga con la salida registrada
+    EntryModal.configure({ reload: true });
+</script>
 
 {% endblock %}
 

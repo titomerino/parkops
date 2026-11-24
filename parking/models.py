@@ -178,6 +178,23 @@ class Entry(models.Model):
         related_name='entry_fee'
     )
     state = models.BooleanField("Estado", default=True)
+    # Quién registró la entrada y quién cobró la salida (desde la auditoría; antes, vacío)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Registrada por",
+    )
+    departure_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name="Salida por",
+    )
     final_minutes = models.PositiveIntegerField(
         "Minutos finales",
         null=True,

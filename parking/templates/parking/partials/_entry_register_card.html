@@ -1,0 +1,99 @@
+{% comment %}
+Tarjeta de registro de entrada: la usan la página completa y la modal de entradas y salidas (EntryModal).
+{% endcomment %}
+<!-- Card principal -->
+<div class="card bg-dark text-light border-0 shadow-lg rounded-4">
+
+    <div class="card-body p-4">
+
+    {% if policy %}
+    <div class="alert 
+        {% if policy.billing_type == 'MONTHLY' %}alert-warning
+        {% elif policy.billing_type == 'DAILY' %}alert-info
+        {% endif %}
+        d-flex justify-content-between align-items-center small py-2">
+
+        <div class="d-flex align-items-center">
+            <i class="bi bi-check-circle-fill me-2"></i>
+
+            <span>
+                {% if policy.billing_type == 'MONTHLY' %}
+                    Suscripción mensual activa
+                {% elif policy.billing_type == 'DAILY' %}
+                    Suscripción diaria activa
+                {% endif %}
+            </span>
+        </div>
+
+        <strong class="ms-2">
+            ${{ policy.amount|floatformat:2 }}
+        </strong>
+    </div>
+    {% endif %}
+
+        <!-- Placa -->
+        <div class="text-center mb-3">
+            <h2 class="text-warning"> ENTRADA </h2>
+            <hr>
+            <div class="text-muted small">Vehículo</div>
+            <div class="display-6 fw-bold tracking-wide">
+                {{ plate }}
+            </div>
+        </div>
+
+        <!-- Hora de entrada -->
+        <div class="bg-black-custom rounded-4 p-3 text-center mb-3">
+            <!-- Fecha -->
+            <div class="text-muted small mb-1">
+                {% now "d/m/Y" %}
+            </div>
+
+            <!-- Hora destacada -->
+            <div class="fw-bold display-5 text-success">
+                {% now "h:i A" %}
+            </div>
+        </div>
+
+        <!-- Form -->
+        <form method="POST" action="{% url 'register' plate %}">
+            {% csrf_token %}
+
+            <!-- Tarifa -->
+            {% if form.fee %}
+            <div class="mb-3">
+                <label class="form-label small text-muted">
+                    Tarifa aplicada
+                </label>
+
+                <div class="bg-black-custom rounded-3 p-2 d-flex align-items-center input-group-lg">
+                    <i class="bi bi-cash-coin fs-5 text-success me-2"></i>
+                    {{ form.fee }}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Hidden placa -->
+            <input type="hidden" name="plate" value="{{ plate }}">
+            
+            <div class="row">
+                <div class="col-12 col-md-6 mb-3">
+                    <button
+                        name="action"
+                        value="save_print"
+                        class="btn btn-outline-light w-100 rounded-pill shadow-sm"
+                    >
+                        <i class="bi bi-printer me-1"></i>
+                        Registrar e imprimir
+                    </button>
+                </div>
+                <div class="col-12 col-md-6">
+                    <button name="action" value="save" class="btn btn-success w-100 rounded-pill shadow-sm">
+                        <i class="bi bi-box-arrow-in-right me-1"></i>
+                        Registrar
+                    </button>
+                </div>
+            </div>
+        </form>
+
+    </div>
+</div>

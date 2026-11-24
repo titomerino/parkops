@@ -1,0 +1,21 @@
+{# Un rango de la tarifa (minuto inicial y monto). Recibe: range_form #}
+<div class="row g-2 align-items-start mb-2" data-range-row{% if range_form.DELETE.value %} hidden{% endif %}>
+    {{ range_form.id }}{{ range_form.fee }}
+    <div class="col-6">
+        <div class="input-group">
+            {{ range_form.start_minute }}
+            <span class="input-group-text small text-muted px-2" data-minute-label style="font-size:.75rem;"></span>
+        </div>
+        {% for error in range_form.start_minute.errors %}<div class="small text-danger">{{ error }}</div>{% endfor %}
+    </div>
+    <div class="col-4">
+        {{ range_form.amount }}
+        {% for error in range_form.amount.errors %}<div class="small text-danger">{{ error }}</div>{% endfor %}
+    </div>
+    <div class="col-2 text-end">
+        <span class="d-none">{{ range_form.DELETE }}</span>
+        <button type="button" class="btn btn-outline-danger rounded-circle" data-remove-range aria-label="Quitar rango">
+            <i class="bi bi-trash"></i>
+        </button>
+    </div>
+</div>

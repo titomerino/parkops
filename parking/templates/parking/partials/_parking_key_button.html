@@ -12,6 +12,7 @@ compact (en listas muestra solo el ícono cuando no hay llave).
   data-key-set="{% if has_key %}1{% endif %}"
   data-key-version="{{ version|date:'U' }}"
   data-key-departure="{% url 'go_to_departure' entry_id %}"
+  data-key-departure-modal="{% url 'departure' entry_id %}"
   onclick="event.stopPropagation(); KeyDeposit.action(this)"
   title="{% if has_key %}Ver la llave{% else %}Agregar llave{% endif %}"
 >

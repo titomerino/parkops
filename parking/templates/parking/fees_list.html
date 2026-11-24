@@ -29,7 +29,7 @@
                 <div class="flex-grow-1 min-w-0">
                     <div class="fw-semibold text-truncate">{{ fee.name }}</div>
                     <div class="small text-muted text-truncate">
-                        {{ fee.description|default:"" }}{% if not fee.description %}{{ fee.sorted_ranges|length }} rango{{ fee.sorted_ranges|length|pluralize }}{% endif %}
+                        {{ fee.sorted_ranges|length }} rango{{ fee.sorted_ranges|length|pluralize }}{% if fee.sorted_ranges %} · desde ${{ fee.sorted_ranges.0.amount|floatformat:2 }}{% endif %}
                     </div>
                     <div class="mt-1">
                         {% if fee.is_active %}
@@ -48,6 +48,9 @@
             <!-- Rangos y acciones -->
             <div class="collapse" id="fee-{{ fee.pk }}">
                 <div class="px-3 pb-3 pt-2 border-top">
+                    {% if fee.description %}
+                    <div class="small text-muted mb-2">{{ fee.description }}</div>
+                    {% endif %}
                     <div class="bg-black-custom rounded-3 px-3 py-2 mb-2 small">
                         {% for range in fee.sorted_ranges %}
                         <div class="d-flex justify-content-between py-1{% if not forloop.last %} border-bottom border-secondary border-opacity-25{% endif %}">

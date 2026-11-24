@@ -137,3 +137,13 @@ class TestTarifaInactivaAlRegistrar:
         entry = make_entry(fee=vieja)
         assert vieja in EntryEditForm(instance=entry).fields["fee"].queryset
         assert vieja not in EntryEditForm(instance=make_entry(plate="P2")).fields["fee"].queryset
+
+
+@pytest.mark.django_db
+def test_tarjeta_no_se_desborda_con_descripcion_larga(owner_client, fee):
+    """La descripción va al desplegar; arriba solo un resumen corto que se recorta."""
+    fee.description = "$1 la primera hora, luego +$0.50 cada media hora hasta $6"
+    fee.save()
+    html = owner_client.get("/parking/tarifas/").content.decode()
+    assert "3 rangos · desde $1.00" in html
+    assert html.index("3 rangos") < html.index('id="fee-') < html.index("cada media hora")

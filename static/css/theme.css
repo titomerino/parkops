@@ -274,3 +274,7 @@ nav.position-fixed.bottom-0 small { color: #cbd3dd !important; }
 }
 
 .badge.bg-light.text-dark { background-color: var(--po-text) !important; color: #111 !important; }
+
+/* Deja que un texto dentro de una fila flex se recorte con «…» (text-truncate)
+   en vez de ensanchar la tarjeta y toda la página en el celular */
+.min-w-0 { min-width: 0; }

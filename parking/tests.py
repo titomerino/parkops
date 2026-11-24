@@ -987,7 +987,7 @@ class TestLlaves:
         assert order == sorted(order)
         assert "4 llaves" in html
 
-    def test_botones_en_salida_historial_menu_y_dashboard(self, admin_client, make_entry):
+    def test_botones_en_salida_historial_y_menu_no_en_el_panel(self, admin_client, make_entry):
         entry = make_entry(plate="P11017E")
 
         departure = admin_client.get(f"/parking/salida/{entry.pk}").content.decode()
@@ -1000,9 +1000,9 @@ class TestLlaves:
         record = admin_client.get("/parking/historial/").content.decode()
         assert 'data-key-hook="9"' in record
 
-        dashboard = admin_client.get("/").content.decode()
-        assert "1 en custodia" in dashboard
-        assert "/parking/llaves/" in record  # menú inferior
+        # Es parte de Parqueo: está en su menú inferior, no como módulo del panel
+        assert "/parking/llaves/" in record
+        assert "/parking/llaves/" not in admin_client.get("/").content.decode()
 
     def test_parqueo_sin_el_modulo(self, admin_client, parking, make_entry):
         parking.keys_enabled = False

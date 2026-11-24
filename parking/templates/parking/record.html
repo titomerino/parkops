@@ -7,6 +7,17 @@
 
 {% include 'shell/partials/_messages_alert.html' with messages=messages %}
 
+<style>
+    /* En celulares angostos (360 px) «Finalizados» bajaba a otra línea */
+    .record-chips .btn { min-width: 0; padding-left: .6rem; padding-right: .6rem; font-size: .82rem; }
+    .record-chips .badge { font-size: .7rem; }
+    @media (max-width: 359px) {
+        .record-chips { gap: .3rem !important; }
+        .record-chips .btn { padding-left: .45rem; padding-right: .45rem; font-size: .74rem; }
+        .record-chips .badge { padding: .25em .45em; }
+    }
+</style>
+
 <!-- Buscador + Chips de estado -->
 <div class="card bg-dark text-light border-0 shadow-lg rounded-4 mb-3">
     <div class="card-body">
@@ -29,23 +40,23 @@
 
         </div>
 
-        <!-- Chips -->
-        <div class="d-flex gap-2 flex-wrap">
-            <button class="btn btn-sm rounded-pill btn-success d-flex align-items-center gap-2" data-filter="all">
+        <!-- Chips: siempre en una línea, se reparten el ancho -->
+        <div class="d-flex gap-2 flex-nowrap record-chips">
+            <button class="btn btn-sm rounded-pill btn-success d-flex align-items-center justify-content-center gap-1 flex-fill text-nowrap" data-filter="all">
                 Todos
                 <span class="badge rounded-pill bg-light text-dark small">
                     {{ total_entries }}
                 </span>
             </button>
 
-            <button class="btn btn-sm rounded-pill btn-dark d-flex align-items-center gap-2" data-filter="active">
+            <button class="btn btn-sm rounded-pill btn-dark d-flex align-items-center justify-content-center gap-1 flex-fill text-nowrap" data-filter="active">
                 Activos
                 <span class="badge rounded-pill bg-light text-dark small">
                     {{ active_entries }}
                 </span>
             </button>
 
-            <button class="btn btn-sm rounded-pill btn-dark d-flex align-items-center gap-2" data-filter="finished">
+            <button class="btn btn-sm rounded-pill btn-dark d-flex align-items-center justify-content-center gap-1 flex-fill text-nowrap" data-filter="finished">
                 Finalizados
                 <span class="badge rounded-pill bg-light text-dark small">
                     {{ finished_entries }}

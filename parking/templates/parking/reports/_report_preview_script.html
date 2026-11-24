@@ -1,0 +1,51 @@
+<style>
+  .report-box { background: var(--po-surface-2); border: 1px solid var(--po-line); }
+  .report-scroll { max-height: min(45vh, 22rem); overflow: auto; border: 1px solid var(--po-line); overscroll-behavior: contain; }
+  .report-scroll thead th { position: sticky; top: 0; background: var(--po-surface-2); z-index: 1; }
+  .report-preview .table { --bs-table-bg: transparent; }
+  .report-scroll .table { font-size: .78rem; }
+  .report-scroll .table > :not(caption) > * > * { padding: .3rem .35rem; }
+</style>
+<script>
+// Botones de la vista previa del reporte (también dentro de la modal)
+(function () {
+  // PDF del mes con o sin el detalle de entradas
+  document.addEventListener("change", (event) => {
+    if (!event.target.matches("[data-report-detail]")) return;
+    const box = event.target.closest(".report-preview");
+    const withDetail = (url) => url.replace(/&detalle=1/, "") + (event.target.checked ? "&detalle=1" : "");
+    box.querySelectorAll("[data-report-pdf]").forEach((a) => a.href = withDetail(a.getAttribute("href")));
+    box.querySelectorAll("[data-report-print]").forEach((b) => b.dataset.reportPrint = withDetail(b.dataset.reportPrint));
+  });
+
+  // Imprimir: en computadora, el PDF directo; en el celular, se abre el PDF (ahí se imprime o comparte)
+  let frame = null;
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-report-print]");
+    if (!button) return;
+    const url = button.dataset.reportPrint;
+    if (window.matchMedia("(pointer: coarse)").matches) {
+      window.open(url, "_blank", "noopener");
+      return;
+    }
+    const label = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparando…';
+    if (frame) frame.remove();
+    frame = document.createElement("iframe");
+    frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+    frame.onload = () => {
+      button.disabled = false;
+      button.innerHTML = label;
+      try {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+      } catch (error) {
+        window.open(url, "_blank", "noopener");   // el navegador no deja imprimir el PDF incrustado
+      }
+    };
+    frame.src = url;
+    document.body.appendChild(frame);
+  });
+})();
+</script>

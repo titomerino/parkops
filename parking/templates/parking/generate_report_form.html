@@ -86,11 +86,11 @@
                             <button
                                 type="submit"
                                 name="format"
-                                value="pdf"
-                                class="btn btn-danger flex-fill">
-                                
-                                <i class="bi bi-file-earmark-pdf me-1"></i>
-                                Generar PDF
+                                value="preview"
+                                class="btn btn-primary flex-fill">
+
+                                <i class="bi bi-eye me-1"></i>
+                                Ver reporte
 
                             </button>
 
@@ -143,11 +143,11 @@
                             <button
                                 type="submit"
                                 name="format"
-                                value="pdf"
-                                class="btn btn-danger flex-fill">
-                                
-                                <i class="bi bi-file-earmark-pdf me-1"></i>
-                                Generar PDF
+                                value="preview"
+                                class="btn btn-primary flex-fill">
+
+                                <i class="bi bi-eye me-1"></i>
+                                Ver reporte
 
                             </button>
 
@@ -236,11 +236,11 @@
                             <button
                                 type="submit"
                                 name="format"
-                                value="pdf"
-                                class="btn btn-danger flex-fill">
-                                
-                                <i class="bi bi-file-earmark-pdf me-1"></i>
-                                Generar PDF
+                                value="preview"
+                                class="btn btn-primary flex-fill">
+
+                                <i class="bi bi-eye me-1"></i>
+                                Ver reporte
 
                             </button>
 
@@ -302,11 +302,26 @@
 
 </nav>
 
+<!-- La vista previa del reporte se abre en la modal de la app -->
+{% include 'parking/partials/_parking_entry_modal.html' %}
+{% include 'parking/reports/_report_preview_script.html' %}
+
 {% endblock %}
 
 {% block extra_js %}
 
 <script>
+
+// «Ver reporte» abre la vista previa en la modal; «Excel» descarga como siempre
+document.querySelectorAll("#tab-todays form, #tab-monthly form, #tab-plate form").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+        if (!event.submitter || event.submitter.value !== "preview") return;
+        event.preventDefault();
+        const params = new URLSearchParams(new FormData(form));
+        params.set("format", "preview");
+        EntryModal.open(`${form.getAttribute("action")}?${params}`);
+    });
+});
 
 document.addEventListener("DOMContentLoaded", function () {
 

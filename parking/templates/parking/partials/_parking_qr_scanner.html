@@ -20,8 +20,6 @@
   .capture-tile i { font-size: 1.5rem; }
   .capture-tile:hover { border-color: #3a4452; color: #fff; }
   .capture-tile:active { transform: scale(.96); }
-  .capture-tile.capture-ai i { color: #38bdf8; }
-  .capture-tile.capture-ai:hover { border-color: #38bdf8; }
   .capture-tile:disabled { opacity: .5; cursor: not-allowed; }
 </style>
 
@@ -36,7 +34,7 @@
       Paquete de IA agotado
     </button>
     {% else %}
-    <button type="button" id="plateCameraOpenBtn" class="capture-tile capture-ai" onclick="PlateCamera.open()">
+    <button type="button" id="plateCameraOpenBtn" class="capture-tile" onclick="PlateCamera.open()">
       <i class="bi bi-camera"></i>
       Escanear placa
     </button>

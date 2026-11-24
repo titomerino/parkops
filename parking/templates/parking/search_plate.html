@@ -40,7 +40,7 @@
               name="plate"
               id="plateInput"
               value="{{ form.plate.value|default_if_none:'' }}"
-              class="form-control bg-dark border border-secondary text-light rounded-end-3"
+              class="form-control bg-dark border border-secondary border-end-0 text-light"
               placeholder="P123ABC"
               required
               autofocus
@@ -55,6 +55,13 @@
               oninput="this.value = this.value.replace(/\s/g, '').toUpperCase()"
               {% if perms.parking.view_entry %}data-suggest-url="{% url 'plate_suggestions' %}"{% endif %}
             >
+
+            <!-- Limpiar lo escrito -->
+            <button type="button" id="plateClear"
+                    class="btn bg-dark border border-secondary border-start-0 text-muted rounded-end-3 plate-clear{% if not form.plate.value %} invisible-x{% endif %}"
+                    aria-label="Limpiar placa" title="Limpiar">
+              <i class="bi bi-x-circle-fill"></i>
+            </button>
           </div>
 
           <!-- Sugerencias mientras se digita -->
@@ -116,14 +123,23 @@
 
 {% block extra_css %}
 <style>
+  .plate-clear { color: var(--po-muted) !important; }
+  .plate-clear:hover, .plate-clear:focus-visible { color: var(--po-text) !important; }
+  /* Sin texto la X no se ve ni se toca, pero el borde del campo sigue completo */
+  .plate-clear.invisible-x i { visibility: hidden; }
+  .plate-clear.invisible-x { pointer-events: none; }
   .plate-suggestions {
     position: absolute;
     top: calc(100% + 6px);
     left: 0;
     right: 0;
     z-index: 20;
-    max-height: 22rem;
+    /* Unas 4 placas a la vista; la quinta asoma para que se note el scroll */
+    max-height: min(19rem, 55vh);
     overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--po-line-strong) transparent;
     padding: 6px;
     border: 1px solid var(--po-line-strong);
     border-radius: 14px;
@@ -153,6 +169,9 @@
   .plate-suggestion .ps-plate mark { padding: 0; background: none; color: var(--po-green); }
   .plate-suggestion .ps-detail { color: var(--po-muted); font-size: .75rem; }
   .plate-suggestion .ps-go { margin-left: auto; flex: none; font-size: .75rem; font-weight: 600; }
+  .plate-suggestions::-webkit-scrollbar { width: 6px; }
+  .plate-suggestions::-webkit-scrollbar-thumb { background: var(--po-line-strong); border-radius: 6px; }
+  .plate-suggestions-count { padding: 4px 10px 6px; color: var(--po-muted); font-size: .72rem; }
   .plate-suggestions-empty { padding: 10px; color: var(--po-muted); font-size: .8rem; text-align: center; }
 </style>
 {% endblock %}
@@ -234,7 +253,8 @@
     if (!results.length) {
       box.innerHTML = '<div class="plate-suggestions-empty">Ningún vehículo adentro con esa placa. Presiona «Ingresar / buscar» para registrar la entrada.</div>';
     } else {
-      box.innerHTML = results.map((r, i) => `
+      const count = `<div class="plate-suggestions-count">${results.length} vehículo${results.length === 1 ? "" : "s"} adentro</div>`;
+      box.innerHTML = count + results.map((r, i) => `
         <a href="${r.url}" data-entry-modal="${r.modal_url}" class="plate-suggestion" role="option" id="plateSuggestion${i}" data-index="${i}">
           <span class="ps-icon"><i class="bi bi-car-front-fill"></i></span>
           <span class="text-truncate">
@@ -245,6 +265,7 @@
           <span class="ps-go text-success">Salida <i class="bi bi-arrow-right"></i></span>
         </a>`).join("");
     }
+    box.scrollTop = 0;
     show(true);
   }
 
@@ -307,6 +328,21 @@
   input.addEventListener("focus", () => {
     if (input.value.length >= 2 && box.innerHTML) show(true);
   });
+})();
+
+// «X» para limpiar el buscador: solo se ve cuando hay algo escrito
+(function () {
+  const input = document.getElementById("plateInput");
+  const clear = document.getElementById("plateClear");
+  if (!input || !clear) return;
+  const sync = () => { clear.classList.toggle("invisible-x", !input.value); };
+  input.addEventListener("input", sync);
+  clear.addEventListener("click", () => {
+    input.value = "";
+    input.dispatchEvent(new Event("input"));   // cierra las sugerencias
+    input.focus();
+  });
+  sync();
 })();
 </script>
 {% endblock %}

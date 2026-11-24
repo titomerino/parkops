@@ -413,7 +413,7 @@ def ticket_plate(request, pk):
     return JsonResponse({"ok": True, "plate": entry.plate, "active": entry.state})
 
 
-SUGGESTION_LIMIT = 8
+SUGGESTION_LIMIT = 30  # el listado tiene scroll
 
 
 @perm_required('parking.view_entry')

@@ -71,11 +71,11 @@
           <div class="notch"></div>
           <div class="app-top"><span class="app-brand"><span class="logo-mark sm"><i class="bi bi-p-square-fill"></i></span>ParkOps</span><small>Parqueo Central</small></div>
           <div class="app-card">
-            <div class="app-tip"><i class="bi bi-lightbulb-fill"></i>Busca una placa o regístrala rápidamente.</div>
             <small>Placa del vehículo</small>
-            <div class="app-input"><i class="bi bi-search"></i><b>P11</b><span class="caret"></span></div>
+            <div class="app-input"><i class="bi bi-search"></i><b>P11</b><span class="caret"></span><i class="bi bi-x-circle-fill x"></i></div>
             <div class="app-suggest">
-              <div class="sug"><span class="ic"><i class="bi bi-car-front-fill"></i></span><div><b><em>P 11</em>0 17E</b> <span class="keytag"><i class="bi bi-key-fill"></i>12</span><small>Adentro desde 08:42 AM · Normal</small></div><span class="go">Salida <i class="bi bi-arrow-right"></i></span></div>
+              <div class="sug-count">3 vehículos adentro</div>
+              <div class="sug on"><span class="ic"><i class="bi bi-car-front-fill"></i></span><div><b><em>P 11</em>0 17E</b> <span class="keytag"><i class="bi bi-key-fill"></i>12</span><small>Adentro desde 08:42 AM · Normal</small></div><span class="go">Salida <i class="bi bi-arrow-right"></i></span></div>
               <div class="sug"><span class="ic"><i class="bi bi-car-front-fill"></i></span><div><b><em>P 11</em>2 300</b><small>Adentro desde 09:15 AM · Normal</small></div><span class="go">Salida <i class="bi bi-arrow-right"></i></span></div>
               <div class="sug"><span class="ic"><i class="bi bi-car-front-fill"></i></span><div><b>M <em>11</em>4 902</b><small>Adentro desde 09:58 AM · Mensual</small></div><span class="go">Salida <i class="bi bi-arrow-right"></i></span></div>
             </div>
@@ -84,8 +84,8 @@
               <div><i class="bi bi-mic"></i>Dictar placa</div>
               <div><i class="bi bi-qr-code-scan"></i>Escanear ticket</div>
             </div>
-            <div class="app-btn"><i class="bi bi-search"></i>Ingresar / buscar</div>
           </div>
+          {% include 'landing/_keypad.html' %}
           <div class="app-tabs">
             <div><i class="bi bi-house-door"></i>Inicio</div>
             <div class="on"><i class="bi bi-search"></i>Placa</div>
@@ -151,14 +151,14 @@
       <p class="lead">Funciona en cualquier celular, tablet o computadora. Se instala como app desde el navegador.</p>
     </div>
     <div class="feat-grid">
-      <div class="feat reveal"><div class="fi"><i class="bi bi-search"></i></div><h3>Buscador de placas</h3><p>Escribe parte de la placa y aparecen los carros que están adentro. Un toque y cobras su salida.</p></div>
+      <div class="feat reveal"><div class="fi"><i class="bi bi-grid-3x3-gap"></i></div><h3>Teclado de placas<span class="tag-new">NUEVO</span></h3><p>P, números y A–F siempre a la mano, sin el teclado del celular tapando la pantalla. Escribes y aparecen los carros que están adentro.</p></div>
       <div class="feat reveal"><div class="fi"><i class="bi bi-window-stack"></i></div><h3>Entradas y salidas</h3><p>Se registran en una ventana sobre el buscador: nunca sales de la pantalla ni pierdes tiempo regresando.</p></div>
       <div class="feat reveal"><div class="fi" style="background:rgba(56,189,248,.12);color:var(--cyan)"><i class="bi bi-camera"></i></div><h3>Placas con IA</h3><p>Apunta la cámara a la placa y la IA la escribe en el buscador, con zoom para leer de lejos.</p></div>
       <div class="feat reveal"><div class="fi"><i class="bi bi-qr-code"></i></div><h3>Ticket QR y voz</h3><p>Escanea el ticket o dicta la placa: también la ponen en el buscador al instante.</p></div>
       <div class="feat reveal"><div class="fi"><i class="bi bi-calendar-check"></i></div><h3>Suscripciones</h3><p>Clientes mensuales, diarios o por hora con su propia tarifa. Al entrar, la app los reconoce.</p></div>
-      <div class="feat reveal"><div class="fi" style="background:rgba(245,185,66,.12);color:var(--gold)"><i class="bi bi-key"></i></div><h3>Llaves en custodia<span class="tag-new">NUEVO</span></h3><p>Foto de la llave y número de gancho. Se borra sola cuando el carro sale.</p></div>
-      <div class="feat reveal"><div class="fi"><i class="bi bi-bar-chart-line"></i></div><h3>Reportes</h3><p>Reporte del día, del mes o por placa, en PDF o Excel.</p></div>
-      <div class="feat reveal"><div class="fi"><i class="bi bi-people"></i></div><h3>Roles y sucursales</h3><p>Empleados con permisos limitados y varios parqueos en una misma cuenta.</p></div>
+      <div class="feat reveal"><div class="fi" style="background:rgba(245,185,66,.12);color:var(--gold)"><i class="bi bi-key"></i></div><h3>Llaves en custodia</h3><p>Foto de la llave y número de gancho. Se borra sola cuando el carro sale.</p></div>
+      <div class="feat reveal"><div class="fi"><i class="bi bi-bar-chart-line"></i></div><h3>Reportes al instante</h3><p>Del día, del mes o por placa: los ves en pantalla con el resumen por día y los imprimes o descargas en PDF o Excel.</p></div>
+      <div class="feat reveal"><div class="fi"><i class="bi bi-people"></i></div><h3>Tarifas, empleados y auditoría</h3><p>Tus tarifas por tiempo, cada empleado con su usuario y el registro de quién cobró, editó o eliminó cada cosa.</p></div>
     </div>
   </div>
 </section>
@@ -188,8 +188,7 @@
             <!-- Panel -->
             <div class="dview" data-v="panel">
               <div class="dcard">
-                <div class="drow"><b>Parqueo</b><i class="bi bi-p-circle" style="color:var(--cyan)"></i></div>
-                <div class="dmuted" style="margin-bottom:8px">Resumen del día y mes</div>
+                <div class="drow" style="margin-bottom:6px"><b>Parqueo</b><i class="bi bi-p-circle" style="color:var(--cyan)"></i></div>
                 <div class="dstats">
                   <div><div class="dmuted">Ingreso hoy</div><b class="dgreen" data-count="412.50">$0.00</b></div>
                   <div><div class="dmuted">Ingreso mes</div><b style="color:var(--gold)">$9,870</b></div>
@@ -206,27 +205,29 @@
               <div class="dmuted" style="margin:4px 2px 6px">Acciones rápidas</div>
               <div class="dtile g"><i class="bi bi-p-square"></i><span>Parqueo<small>Entradas y salidas</small></span></div>
               <div class="dtile"><i class="bi bi-calendar-check-fill"></i><span>Suscripciones de Parqueo<small>Diarias o mensuales</small></span></div>
-              <div class="dtile y"><i class="bi bi-key-fill"></i><span>Llaves<small>9 en custodia</small></span></div>
+              <div class="dtile"><i class="bi bi-cash-stack"></i><span>Tarifas<small>Precios por tiempo</small></span></div>
+              <div class="dtile"><i class="bi bi-people-fill"></i><span>Empleados<small>Usuarios y accesos</small></span></div>
+              <div class="dtile"><i class="bi bi-shield-check"></i><span>Auditoría<small>Quién hizo qué</small></span></div>
               <div class="dtile"><i class="bi bi-file-earmark-pdf"></i><span>Reportes de parqueo<small>Reportes personalizados</small></span></div>
             </div>
 
             <!-- Buscar placa -->
             <div class="dview" data-v="placa">
               <div class="dsearch">
-                <div class="dalert info"><i class="bi bi-lightbulb-fill"></i>Busca una placa o regístrala rápidamente.</div>
                 <div class="dmuted" style="margin-bottom:5px">Placa del vehículo</div>
-                <div class="dinput"><i class="bi bi-search" style="opacity:.6;font-size:13px"></i><span id="dTyped"></span><span class="caret"></span></div>
+                <div class="dinput"><i class="bi bi-search" style="opacity:.6;font-size:13px"></i><span id="dTyped"></span><span class="caret"></span><i class="bi bi-x-circle-fill x"></i></div>
                 <div class="dsug" id="dSug">
-                  <div class="sug"><span class="ic"><i class="bi bi-car-front-fill"></i></span><div><b><em>P 11</em>0 17E</b> <span class="keytag"><i class="bi bi-key-fill"></i>12</span><small>Adentro desde 08:42 AM · Normal</small></div><span class="go">Salida <i class="bi bi-arrow-right"></i></span></div>
+                  <div class="sug-count">2 vehículos adentro</div>
+                  <div class="sug on"><span class="ic"><i class="bi bi-car-front-fill"></i></span><div><b><em>P 11</em>0 17E</b> <span class="keytag"><i class="bi bi-key-fill"></i>12</span><small>Adentro desde 08:42 AM · Normal</small></div><span class="go">Salida <i class="bi bi-arrow-right"></i></span></div>
                   <div class="sug"><span class="ic"><i class="bi bi-car-front-fill"></i></span><div><b><em>P 11</em>2 300</b><small>Adentro desde 09:15 AM · Normal</small></div><span class="go">Salida <i class="bi bi-arrow-right"></i></span></div>
                 </div>
                 <div class="dtools">
-                  <div class="dtool ai"><i class="bi bi-camera"></i>Escanear placa</div>
+                  <div class="dtool"><i class="bi bi-camera"></i>Escanear placa</div>
                   <div class="dtool"><i class="bi bi-mic"></i>Dictar placa</div>
                   <div class="dtool"><i class="bi bi-qr-code-scan"></i>Escanear ticket</div>
                 </div>
-                <button class="dbtn g"><i class="bi bi-search"></i>Ingresar / buscar</button>
               </div>
+              <div id="dKeypad">{% include 'landing/_keypad.html' %}</div>
             </div>
 
             <!-- IA -->
@@ -332,27 +333,56 @@
               <div class="dsub"><div class="l"><span class="ic"><i class="bi bi-calendar-check"></i></span><div><b>P 400 001</b><span class="dot off"></span><br><span class="dmuted">Clínica Central</span></div></div><div class="r"><span class="dmuted">Mensualidad</span><b>$35.00</b></div></div>
             </div>
 
-            <!-- Reportes -->
+            <!-- Reportes: «Ver reporte» abre la vista previa en una modal -->
             <div class="dview" data-v="reportes">
               <div class="dcard">
                 <b style="font-size:16px">Reporte</b>
                 <div class="dmuted">Genera reportes personalizados de parqueo</div>
                 <hr class="dhr">
-                <div class="dtabs" id="dTabs"><span class="on">Del Día</span><span>Mensual</span><span>Por placa</span></div>
-                <div class="dmuted" style="margin:10px 0 5px">Fecha</div>
-                <div class="dinput small" style="justify-content:space-between;color:var(--text)">20/11/2026<i class="bi bi-calendar3"></i></div>
+                <div class="dtabs"><span>Del Día</span><span class="on">Mensual</span><span>Por placa</span></div>
+                <div class="dmuted" style="margin:10px 0 5px">Mes</div>
+                <div class="dinput small" style="justify-content:space-between;color:var(--text)">Noviembre de 2026<i class="bi bi-calendar3"></i></div>
                 <div style="display:flex;gap:8px;margin-top:12px">
-                  <button class="dbtn r"><i class="bi bi-file-earmark-pdf"></i>Generar PDF</button>
-                  <button class="dbtn g"><i class="bi bi-file-earmark-excel"></i>Descargar Excel</button>
+                  <button class="dbtn b" id="dSeeReport"><i class="bi bi-eye"></i>Ver reporte</button>
+                  <button class="dbtn g"><i class="bi bi-file-earmark-excel"></i>Excel</button>
                 </div>
               </div>
-              <div class="dcard">
-                <div class="dstats">
-                  <div><div class="dmuted">Ingreso hoy</div><b class="dgreen">$412.50</b></div>
-                  <div><div class="dmuted">Ingreso mes</div><b style="color:var(--gold)">$9,870</b></div>
-                  <div><div class="dmuted">Carros hoy</div><b style="color:var(--cyan)">168</b></div>
+              <div class="dshade" id="dReportShade" style="opacity:0"></div>
+              <div class="dmodal" id="dReportModal" style="top:14px">
+                <span class="dclose"><i class="bi bi-x-lg"></i></span>
+                <div style="text-align:center"><div class="dmuted">Parqueo Central</div><b style="font-size:15px">Reporte del mes</b><div class="dmuted">11/2026</div></div>
+                <div class="drep-total"><div class="dmuted">Total ingresos</div><div class="dgreen" style="font-size:24px;font-weight:800">$9,870.00</div></div>
+                <div class="drep-boxes">
+                  <div><span class="dmuted">Tarifas</span><b>$8,215.50</b><span class="dmuted">2,813</span></div>
+                  <div><span class="dmuted">Susc. diaria</span><b>$669.00</b><span class="dmuted">277</span></div>
+                  <div><span class="dmuted">Susc. mensual</span><b>$985.50</b><span class="dmuted">32</span></div>
+                </div>
+                <div class="dmuted" style="font-weight:600;color:var(--text);margin-bottom:2px">Ingresos por día</div>
+                <table class="drep-days">
+                  <tr><th>Día</th><th>Entradas</th><th>Total</th></tr>
+                  <tr><td>Sáb 01/11</td><td>132</td><td>$298.50</td></tr>
+                  <tr><td>Dom 02/11</td><td>97</td><td>$214.00</td></tr>
+                  <tr><td>Lun 03/11</td><td>161</td><td>$352.50</td></tr>
+                  <tr><td>Mar 04/11</td><td>158</td><td>$341.00</td></tr>
+                </table>
+                <button class="dbtn g" id="dPrint"><i class="bi bi-printer"></i>Imprimir</button>
+                <div class="drep-actions">
+                  <button class="dbtn o"><i class="bi bi-file-earmark-pdf"></i>Abrir PDF</button>
+                  <button class="dbtn o"><i class="bi bi-file-earmark-excel"></i>Excel</button>
                 </div>
               </div>
+            </div>
+
+            <!-- Auditoría (solo el dueño) -->
+            <div class="dview" data-v="auditoria">
+              <div class="drow" style="margin-bottom:8px"><b>Auditoría de Parqueo Central</b><span class="dpill w"><i class="bi bi-funnel"></i> Filtros</span></div>
+              <div class="daud-day">Hoy · 20/11/2026</div>
+              <div class="daud"><span class="ic" style="color:var(--cyan)"><i class="bi bi-car-front-fill"></i></span><div>Dio salida a P11017E · cobró $3.00 · 2:30 h<small><i class="bi bi-person"></i> ana · 11:12</small></div></div>
+              <div class="daud warn" style="transition-delay:.08s"><span class="ic" style="color:var(--cyan)"><i class="bi bi-car-front-fill"></i></span><div>Editó entrada de P903211: monto<small><i class="bi bi-person"></i> luis · 10:47</small>
+                <div class="daud-chg">Monto <s>$5.00</s> <i class="bi bi-arrow-right"></i> <b>$3.00</b></div></div></div>
+              <div class="daud" style="transition-delay:.16s"><span class="ic" style="color:var(--green)"><i class="bi bi-cash-coin"></i></span><div>Editó la tarifa Normal: precios<small><i class="bi bi-person"></i> dueño · 09:30</small></div></div>
+              <div class="daud" style="transition-delay:.24s"><span class="ic" style="color:var(--gold)"><i class="bi bi-key-fill"></i></span><div>Recibió la llave de P11017E · gancho 12<small><i class="bi bi-person"></i> ana · 08:42</small></div></div>
+              <div class="daud warn" style="transition-delay:.32s"><span class="ic" style="color:var(--muted)"><i class="bi bi-box-arrow-in-right"></i></span><div>Contraseña incorrecta<small><i class="bi bi-person"></i> luis · 07:58</small></div></div>
             </div>
 
             <div class="dnav">

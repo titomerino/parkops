@@ -82,7 +82,6 @@ nav.scrolled{border-color:var(--line)}
 .app-tools{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0;opacity:.35}
 .app-tools div{background:#1b212b;border-radius:10px;padding:8px 2px;text-align:center;font-size:9.5px;color:#cbd3dd}
 .app-tools i{display:block;font-size:16px;margin-bottom:2px}
-.app-tools div:first-child i{color:var(--cyan)}
 .app-btn{display:flex;align-items:center;justify-content:center;gap:6px;background:var(--green);color:#04130a;border-radius:999px;padding:9px;font-weight:600;opacity:.35}
 .app-tabs{position:absolute;left:0;right:0;bottom:0;background:#151a22;border-top:1px solid #232b36;display:flex;justify-content:space-around;padding:10px 0 12px;font-size:10px;color:#cbd3dd}
 .app-tabs div{display:flex;flex-direction:column;align-items:center;gap:2px;position:relative}
@@ -394,7 +393,6 @@ footer{border-top:1px solid var(--line);padding:40px 0;color:var(--muted);font-s
 .dsearch{background:#151a22;border-radius:16px;padding:12px}
 .dsug{opacity:0;transform:translateY(-6px);transition:all .3s;margin-bottom:-4px}
 .dsug.on{opacity:1;transform:none}
-.dtool.ai i{color:var(--cyan)}
 .dbehind{filter:blur(1px)}
 .dshade{position:absolute;inset:0;background:rgba(0,0,0,.6);transition:opacity .3s}
 .dmodal{position:absolute;left:8px;right:8px;top:40px;background:#151a22;border:1px solid #2a323e;border-radius:18px;padding:14px;box-shadow:0 30px 60px -20px rgba(0,0,0,.95);opacity:0;transform:translateY(20px) scale(.98);transition:opacity .35s,transform .35s}
@@ -430,3 +428,58 @@ footer{border-top:1px solid var(--line);padding:40px 0;color:var(--muted);font-s
 .sug>div{flex:1;min-width:0}
 .sug small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .screen{min-height:600px}
+
+/* ===== App actualizada (nov 2026): buscador sin aviso, «X», conteo y teclado de placas ===== */
+.app-input b,.dinput #dTyped{flex:none}
+.app-input .x,.dinput .x{margin-left:auto;color:var(--muted);font-size:13px}
+.sug-count{padding:2px 8px 5px;color:var(--muted);font-size:10px}
+.sug:first-child{background:none}
+.sug.on{background:#1b212b}
+/* Teclado de placas: P, N, 0–9, A–F (como en la app) */
+.kp{position:absolute;left:0;right:0;bottom:50px;background:#151a22;border-top:1px solid #232b36;padding:6px 8px 7px;display:grid;grid-template-columns:repeat(5,1fr);gap:4px;z-index:2}
+.kp span{height:25px;border-radius:7px;background:#1b212b;border:1px solid #232b36;display:grid;place-items:center;font-weight:700;font-size:11px;color:#e6ebf1;transition:transform .08s,background .08s}
+.kp .p{color:var(--gold);font-weight:800}
+.kp .l{color:var(--green)}
+.kp .m{background:#05070a;color:var(--muted);font-size:9px;font-weight:600}
+.kp .s{grid-column:span 3;background:var(--green);border-color:var(--green);color:#04130a;font-size:10.5px}
+.kp span.hit{background:#3a4452;transform:scale(.92)}
+.dview .kp{bottom:0;left:0;right:0;padding:8px 10px 10px;gap:6px}
+.dview .kp span{height:36px;border-radius:10px;font-size:14px}
+.dview .kp .m{font-size:11px}
+.dview .kp .s{font-size:13px}
+/* Panel: más módulos del dueño */
+.dtile{padding:8px 12px;margin-bottom:5px}
+/* Reportes: vista previa en modal */
+.dbtn.b{background:#3b82f6;color:#fff}
+.drep-total{background:#05070a;border-radius:12px;text-align:center;padding:10px;margin:8px 0}
+.drep-boxes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px}
+.drep-boxes div{background:#1b212b;border:1px solid #232b36;border-radius:9px;padding:6px 4px;text-align:center;font-size:10px;line-height:1.3}
+.drep-boxes b{display:block;font-size:12.5px}
+.drep-days{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:10px}
+.drep-days th{color:var(--muted);font-weight:600;text-align:right;padding:3px 4px;border-bottom:1px solid #2a323e}
+.drep-days td{text-align:right;padding:4px;border-bottom:1px solid #1f2630}
+.drep-days th:first-child,.drep-days td:first-child{text-align:left}
+.drep-days td:last-child{font-weight:700}
+.drep-actions{display:flex;gap:6px;margin-top:6px}
+.drep-actions .dbtn{padding:8px;font-size:11px}
+/* Auditoría */
+.daud-day{color:var(--muted);font-size:11px;font-weight:600;margin:4px 2px 6px}
+.daud{display:flex;gap:9px;align-items:flex-start;background:#151a22;border-radius:12px;padding:8px 10px;margin-bottom:6px;font-size:11.5px;line-height:1.35;opacity:0;transform:translateY(6px);transition:all .35s}
+.dview.on .daud{opacity:1;transform:none}
+.daud.warn{box-shadow:inset 3px 0 0 var(--gold)}
+.daud .ic{flex:none;width:28px;height:28px;border-radius:50%;background:#1b212b;display:grid;place-items:center;font-size:13px}
+.daud small{display:block;color:var(--muted);font-size:10px}
+.daud-chg{margin-top:6px;background:#05070a;border-radius:8px;padding:6px 8px;font-size:10.5px}
+.daud-chg s{color:#f87171}.daud-chg b{color:var(--green)}
+/* Modales y avisos del recorrido por encima del teclado; las sugerencias flotan sobre los botones */
+.dview .dshade,.dview .dmodal{z-index:3}
+.dsearch{position:relative}
+.dsearch .dsug{position:absolute;left:12px;right:12px;top:78px;z-index:3;margin:0}
+.kp span{display:flex;align-items:center;justify-content:center;gap:4px}
+/* Panel del recorrido: entran las 6 fichas del dueño */
+[data-v=panel] .dcard{padding:10px 14px;margin-bottom:8px}
+[data-v=panel] .dtile{padding:6px 12px;margin-bottom:5px}
+/* El teclado de fondo se desenfoca él mismo (un filtro en un contenedor lo movería arriba) */
+.dsearch.dbehind ~ .kp{filter:blur(1px)}
+[data-v=panel] .dtile{padding:5px 12px;margin-bottom:4px}
+.screen .kp{bottom:56px}

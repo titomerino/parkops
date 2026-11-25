@@ -83,7 +83,7 @@ document.querySelectorAll("[data-plan]").forEach(b => b.addEventListener("click"
 (function () {
   const MODS = [
     {v: "panel", nav: "panel", i: "bi-speedometer2", n: "Panel", d: "Al abrir la app ves lo que entró hoy, lo del mes y accesos directos a cada módulo."},
-    {v: "placa", nav: "placa", i: "bi-search", n: "Buscador de placas", d: "Escribe parte de la placa y aparecen los carros que están adentro. Un toque y abres su salida."},
+    {v: "placa", nav: "placa", i: "bi-grid-3x3-gap", n: "Teclado de placas", d: "Un teclado hecho para placas: P, números y A–F a la mano. Escribes y aparecen los carros que están adentro."},
     {v: "ia", nav: "placa", i: "bi-camera", n: "Placa con IA", d: "Encuadra la placa, usa el zoom si estás lejos y la IA la escribe en el buscador."},
     {v: "entrada", nav: "placa", i: "bi-box-arrow-in-right", n: "Registrar entrada", d: "Se abre en una ventana sobre el buscador: la hora se pone sola, eliges la tarifa y listo."},
     {v: "ticket", nav: "placa", i: "bi-qr-code", n: "Ticket QR", d: "Imprime el ticket con su código QR. Al escanearlo, la placa aparece en el buscador."},
@@ -91,7 +91,8 @@ document.querySelectorAll("[data-plan]").forEach(b => b.addEventListener("click"
     {v: "historial", nav: "historial", i: "bi-clock-history", n: "Historial", d: "Todos los vehículos del día, filtrados por activos o finalizados, con buscador por placa."},
     {v: "llaves", nav: "llaves", i: "bi-key", n: "Llaves en custodia", d: "Cada llave con su foto y número de gancho. Se borra sola cuando el carro sale."},
     {v: "mensual", nav: "panel", i: "bi-calendar-check", n: "Suscripciones", d: "Clientes mensuales, diarios o por hora con su propia tarifa. Al entrar, la app los reconoce."},
-    {v: "reportes", nav: "panel", i: "bi-bar-chart-line", n: "Reportes", d: "Reporte del día, del mes o por placa, en PDF o Excel."},
+    {v: "reportes", nav: "panel", i: "bi-bar-chart-line", n: "Reportes", d: "Ves el reporte del día, del mes o por placa al instante, con el resumen por día. Lo imprimes o lo descargas en PDF o Excel."},
+    {v: "auditoria", nav: "panel", i: "bi-shield-check", n: "Tarifas, empleados y auditoría", d: "Creas tus tarifas por tiempo, das acceso a tus empleados y ves quién registró, cobró o editó cada cosa."},
   ];
   const DUR = 7000;
   const tour = document.getElementById("tour");
@@ -132,8 +133,20 @@ document.querySelectorAll("[data-plan]").forEach(b => b.addEventListener("click"
     if (v === "placa") {
       const out = $("dTyped"), sug = $("dSug"), txt = "P11";
       out.textContent = ""; sug.classList.remove("on");
-      [...txt].forEach((ch, i) => later(() => out.textContent += ch, 500 + i * 300));
-      later(() => sug.classList.add("on"), 600 + txt.length * 300);
+      [...txt].forEach((ch, i) => later(() => {
+        out.textContent += ch;
+        const key = document.querySelector(`#dKeypad [data-k="${ch}"]`);
+        if (key) { key.classList.add("hit"); later(() => key.classList.remove("hit"), 180); }
+      }, 500 + i * 380));
+      later(() => sug.classList.add("on"), 650 + txt.length * 380);
+    }
+    if (v === "reportes") {
+      const modal = $("dReportModal"), shade = $("dReportShade"), see = $("dSeeReport"), print = $("dPrint");
+      modal.classList.remove("on"); shade.style.opacity = 0; see.style.transform = ""; print.style.transform = "";
+      later(() => see.style.transform = "scale(.95)", 700);
+      later(() => { see.style.transform = ""; shade.style.opacity = 1; modal.classList.add("on"); }, 900);
+      later(() => print.style.transform = "scale(.96)", 4200);
+      later(() => print.style.transform = "", 4450);
     }
     if (v === "ia") {
       const cam = $("dCam"), read = $("dRead"), zt = $("dZoomTxt");

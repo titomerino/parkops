@@ -1,12 +1,11 @@
 {# Pantalla de Buscar detrás de las modales de entrada, ticket y salida del recorrido #}
 <div class="dsearch dbehind">
-  <div class="dalert info"><i class="bi bi-lightbulb-fill"></i>Busca una placa o regístrala rápidamente.</div>
   <div class="dmuted" style="margin-bottom:5px">Placa del vehículo</div>
-  <div class="dinput"><i class="bi bi-search" style="opacity:.6;font-size:13px"></i>P11017E</div>
+  <div class="dinput"><i class="bi bi-search" style="opacity:.6;font-size:13px"></i>P11017E<i class="bi bi-x-circle-fill x"></i></div>
   <div class="dtools">
-    <div class="dtool ai"><i class="bi bi-camera"></i>Escanear placa</div>
+    <div class="dtool"><i class="bi bi-camera"></i>Escanear placa</div>
     <div class="dtool"><i class="bi bi-mic"></i>Dictar placa</div>
     <div class="dtool"><i class="bi bi-qr-code-scan"></i>Escanear ticket</div>
   </div>
-  <button class="dbtn g"><i class="bi bi-search"></i>Ingresar / buscar</button>
 </div>
+{% include 'landing/_keypad.html' %}

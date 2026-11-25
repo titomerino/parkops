@@ -180,6 +180,11 @@ LOGGING = {
         "handlers": ["console"],
         "level": "INFO",
     },
+    "loggers": {
+        # WeasyPrint (facturas) recorta las fuentes con fontTools, que escribía
+        # cientos de líneas por cada PDF en los logs de Railway
+        "fontTools": {"level": "WARNING"},
+    },
 }
 
 X_FRAME_OPTIONS = 'SAMEORIGIN'

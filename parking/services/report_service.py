@@ -107,6 +107,32 @@ def _summarize(parking, entries):
 
     return stats
 
+DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+
+
+def _daily_breakdown(entries):
+    """Una fila por día de salida: cantidad e ingresos por tipo de cobro (entradas ya preparadas)."""
+    days = {}
+    for entry in entries:
+        if not entry.departure_date_hour:
+            continue
+        day = localtime(entry.departure_date_hour).date()
+        row = days.setdefault(day, {
+            "date": day,
+            "label": f"{DAYS[day.weekday()]} {day:%d/%m}",
+            "count": 0,
+            "normal": Decimal("0"),
+            "daily": Decimal("0"),
+            "total": Decimal("0"),
+        })
+        row["count"] += 1
+        key = _STATS_KEY[entry.type]
+        if key in ("normal", "daily"):
+            row[key] += entry.final_amount
+        row["total"] += entry.final_amount
+    return [days[day] for day in sorted(days)]
+
+
 def _report_context(entries, stats, **extra):
 
     return {
@@ -147,6 +173,8 @@ def generate_month_report(parking, date):
         stats,
         parking=parking,
         date=date.strftime('%m/%Y'),
+        days=_daily_breakdown(entries),
+        monthly_income=monthly_income,
     )
 
 def generate_plate_report(parking, n_plate, start_date, end_date):

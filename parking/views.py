@@ -33,9 +33,10 @@ from .forms import (
 )
 from parking.utils import (
     minutes_to_hours_and_minutes, format_plate,
-    render_pdf_response, export_report_excel
+    export_report_excel
 )
 from parking.services import key_photo, plate_scan
+from parking.services.report_pdf import build_report_pdf
 from tenants.decorators import keys_enabled_required
 from audit.services import Action, diff, record as audit, snapshot
 from parking.services.voice_plate import interpret
@@ -714,75 +715,82 @@ def parking_generate_reports_form(request):
         context
     )
 
+# ---------------------------------------------------------------- Reportes
+#
+# Cada reporte se pide con ?format=:
+#   preview → vista previa en la modal (X-Entry-Modal) o en una página
+#   pdf     → PDF con ReportLab, se abre en otra pestaña (el mes: ?detalle=1 agrega cada entrada)
+#   xlsx    → Excel con todo el detalle
+
+def _report_error(request, message):
+    if _is_modal(request):
+        return _modal_error(message, status=400)
+    messages.error(request, message)
+    return redirect("parking_reports")
+
+
+def _report_response(request, kind, context, filename, excel):
+    match request.GET.get("format"):
+        case "preview":
+            query = request.GET.copy()
+            query.pop("format", None)
+            query.pop("detalle", None)
+            context = dict(
+                context,
+                kind=kind,
+                pdf_url=f"{request.path}?{query.urlencode()}&format=pdf",
+                xlsx_url=f"{request.path}?{query.urlencode()}&format=xlsx",
+            )
+            template = "parking/reports/_report_preview.html" if _is_modal(request) else "parking/reports/report_preview_page.html"
+            return render(request, template, context)
+
+        case "pdf":
+            include_detail = kind != "month" or request.GET.get("detalle") == "1"
+            response = HttpResponse(build_report_pdf(kind, context, include_detail), content_type="application/pdf")
+            # inline: se ve en el visor del navegador (otra pestaña) y se puede imprimir
+            response["Content-Disposition"] = f'inline; filename="{filename}.pdf"'
+            return response
+
+        case "xlsx":
+            return excel()
+
+        case _:
+            return _report_error(request, "Formato no soportado para el reporte")
+
+
 @perm_required('parking.view_statistics_entry')
 def report_day(request):
 
     form = ReportFilterByDayForm(request.GET)
 
     if not form.is_valid():
-        messages.error(request, "Formulario inválido para el reporte")
-        return redirect("parking_reports")
+        return _report_error(request, "Elige la fecha del reporte.")
 
     report_date = form.cleaned_data["date"]
-
     context = generate_day_report(request.parking, report_date)
 
-    match request.GET.get("format"):
-        case "pdf":
+    return _report_response(
+        request, "day", context, f"reporte-dia-{report_date}",
+        lambda: export_report_excel(context, report_date, type="day"),
+    )
 
-            return render_pdf_response(
-                request,
-                "parking/reports/parking_day_report_pdf.html",
-                context,
-                f"reporte-dia-{report_date}.pdf"
-            )
-        
-        case "xlsx":
 
-            return export_report_excel(
-                context,
-                report_date,
-                type="day"
-            )
-        
-        case _:
-            messages.error(request, "Formato no soportado para el reporte")
-            return redirect("parking_reports")
-    
 @perm_required('parking.view_statistics_entry')
 def report_month(request):
-    
+
     form = ReportFilterByMonthForm(request.GET)
 
     if not form.is_valid():
-        messages.error(request, "Formulario inválido para el reporte")
-        return redirect("parking_reports")
+        return _report_error(request, "Elige el mes del reporte.")
 
     month = form.cleaned_data["month_date"]
-
     context = generate_month_report(request.parking, month)
 
-    match request.GET.get("format"):
-        case "pdf":
+    return _report_response(
+        request, "month", context, f"reporte-mes-{month:%Y-%m}",
+        lambda: export_report_excel(context, month, type="monthly"),
+    )
 
-            return render_pdf_response(
-                request,
-                "parking/reports/parking_month_report_pdf.html",
-                context,
-                f"reporte-mes-{month}.pdf"
-            )
-        
-        case "xlsx":
-
-            return export_report_excel(
-                context,
-                month,
-                type="monthly"
-            )
-        
-        case _:
-            messages.error(request, "Formato no soportado para el reporte")
-            return redirect("parking_reports")
 
 @perm_required('parking.view_statistics_entry')
 def report_plate(request):
@@ -790,44 +798,23 @@ def report_plate(request):
     form = ReportFilterByPlateForm(request.GET)
 
     if not form.is_valid():
-        messages.error(request, "Formulario inválido para el reporte")
-        return redirect("parking_reports")
-    
+        return _report_error(request, "Revisa la placa y las fechas del reporte.")
+
     plate = form.cleaned_data["plate"].strip().upper()
 
     exists = Entry.objects.for_parking(request.parking).filter(plate=plate).exists()
     if not exists:
-        messages.error(request, f"No se encontraron registros para la placa {plate}")
-        return redirect("parking_reports")
+        return _report_error(request, f"No se encontraron registros para la placa {plate}")
 
     start_date = form.cleaned_data["start_date"]
     end_date = form.cleaned_data["end_date"]
 
     context = generate_plate_report(request.parking, plate, start_date, end_date)
 
-    match request.GET.get("format"):
-        case "pdf":
-
-            return render_pdf_response(
-                request,
-                "parking/reports/parking_plate_report_pdf.html",
-                context,
-                f"reporte-placa-{plate}.pdf"
-            )
-
-        case "xlsx":
-
-            return export_report_excel(
-                context,
-                start_date,
-                end_date,
-                "plate",
-                plate=plate
-            )
-
-        case _:
-            messages.error(request, "Formato no soportado para el reporte")
-            return redirect("parking_reports")
+    return _report_response(
+        request, "plate", context, f"reporte-placa-{plate}",
+        lambda: export_report_excel(context, start_date, end_date, "plate", plate=plate),
+    )
 
 
 @require_POST
